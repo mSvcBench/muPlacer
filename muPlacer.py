@@ -1,13 +1,10 @@
 import os
 import time
 from kubernetes import client, config
-import matlab.engine
 from prometheus_api_client import PrometheusConnect
 import numpy as np
 import subprocess
 import numpy
-import json
-import sys
 import threading
 import csv
 import random
@@ -30,7 +27,7 @@ TRAFFIC = 0 # Cloud-edge traffic
 RCPU = np.array([]) # CPU provided to each microservice
 RCPU_EDGE = 0 # CPU provided to each microservice in the edge cluster
 RCPU_CLOUD = 0 # CPU provided to each microservice in the cloud cluster
-SAVE_RESULTS = 1 # Save results in csv file (0 = don't save, 1 = save)
+SAVE_RESULTS = 0 # Save results in csv file (0 = don't save, 1 = save)
 POSITIONING_TYPE = "mfu" # Type of positioning strategy used (autoplacer, only_cloud, random, mfu, IA)
 FOLDER = "temporary" # Folder where to save the results
 
