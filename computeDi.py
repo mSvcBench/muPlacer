@@ -1,6 +1,6 @@
 import numpy as np 
 
-#    Compute the internal microservices function delay matrix Di
+#   Compute the internal microservices function delay matrix Di
 
 #   M/G/1 processor sharing
 #   Rcpu : cpu requested by microservice i
