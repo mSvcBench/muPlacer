@@ -1,24 +1,20 @@
-import os
 import time
 from kubernetes import client, config
 from prometheus_api_client import PrometheusConnect
 import numpy as np
 import subprocess
-import numpy
 import threading
 import csv
-import random
-from autoplacer_offload import autoplacer_offload
-from autoplacer_unoffload import autoplacer_unoffload
+from conf import *
+from OE_PAMP_unoff import *
+from OE_PAMP_off import *
+from IA_placement import *
+from random_placement import *
+from mfu_placement import *
 
 
-PROMETHEUS_URL = "http://160.80.223.198:30000"
-CTX_CLUSTER2 = "kubernetes-admin1@cluster1.local"
 PERIOD = 3 # Rate of queries in minutes
-SLO = 70 # Service Level Objective (SLO) in ms
-NAMESPACE = "edge" # Namespace of the application
 #SLO_MARGIN_OFFLOAD = 0.9 # SLO increase margin
-SLO_MARGIN_UNOFFLOAD = 0.8 # SLO increase margin
 HPA_STATUS = 0 # Initialization HPA status (0 = HPA Not running, 1 = HPA running)
 HPA_MARGIN = 1.05 # HPA margin
 RTT = 86e-3 #  Initialization Round Trip Time in seconds
@@ -27,9 +23,6 @@ TRAFFIC = 0 # Cloud-edge traffic
 RCPU = np.array([]) # CPU provided to each microservice
 RCPU_EDGE = 0 # CPU provided to each microservice in the edge cluster
 RCPU_CLOUD = 0 # CPU provided to each microservice in the cloud cluster
-SAVE_RESULTS = 0 # Save results in csv file (0 = don't save, 1 = save)
-POSITIONING_TYPE = "mfu" # Type of positioning strategy used (autoplacer, only_cloud, random, mfu, IA)
-FOLDER = "temporary" # Folder where to save the results
 
 # Connect to Prometheus
 prom = PrometheusConnect(url=PROMETHEUS_URL, disable_ssl=True)
@@ -253,432 +246,6 @@ def get_Rs():
                 Rs[app_names.index(result["metric"]["destination_app"])] = float(Rs_value)
     return Rs
 
-# Autoplacer function to offload
-def autoplacer_off():
-    global RTT
-    global AVG_DELAY
-    global APP_EDGE
-    global RCPU
-    Rmem = get_Rmem() # Memory provided of each microservice
-    Pcm = get_Pcm() # Calling probabilities between each microservice
-    Rs = get_Rs() # Response size of each microservice
-    M = len(RCPU)/2 # Number of microservices
-    lambda_value = get_lamba() # Requests per second
-    #app_edge = get_app_edge() # Microservice already in the edge
-    min_delay_delta = (AVG_DELAY - SLO) / 1000.0 # Minimum delay delta to satisfy SLO
-    #best_S_edge, delta_delay = np.array(autoplacer_offload(Rcpu, Rmem, Pcm, M, lambda_value, Rs, app_edge, min_delay_delta)) # Running matlab autoplacer
-    output = autoplacer_offload(RCPU, Rmem, Pcm, int(M), lambda_value, Rs, APP_EDGE, min_delay_delta, RTT) # Running matlab autoplacer
-    best_S_edge = np.array(output[0])
-    #print("delta_delay:",output[1])
-    best_S_edge = np.delete(best_S_edge, -1) # Remove the last value (user) from best_S_edge
-    #print(numpy.around(best_S_edge, decimals=0)) # This is the new sequence of microservice that must stay in the edge cluster to reduce the delay
-    
-    # Reshape the best_S_edge array to match the shape of APP_EDGE if they are different
-    if best_S_edge.shape != APP_EDGE.shape:
-        # Reshape best_S_edge to match the shape of APP_EDGE
-        best_S_edge = np.reshape(best_S_edge, APP_EDGE.shape)
-    
-    # Get the new microservice that must stay in the edge cluster
-    if not np.array_equal(best_S_edge, APP_EDGE):
-        new_edge = numpy.subtract(best_S_edge, APP_EDGE) # This is the new microservice that must stay in the edge cluster to reduce the delay
-    new_edge_names = np.array(np.array(get_app_names()))[new_edge == 1] # New microsrvices that must stay in the edge cluster according to PAMP algorithm
-    
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/automate/edge'
-
-    # List to store the matching files
-    matching_files = []
-
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if any(name in filename for name in new_edge_names):
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-
-    ## OFFLOADING MICROSERVICES TO EDGE CLUSTER ##
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "apply", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-    
-
-    ## SET THE SAME NUMBER OF REPLICAS AS THE CLOUD CLUSTER ##
-    config.load_kube_config() # Load the kube config file
-
-    api = client.AppsV1Api() # Create the API object
-
-    for name in new_edge_names:
-        name_cloud = f"{name}-cloud"
-        deployment = api.read_namespaced_deployment(name=name_cloud, namespace=NAMESPACE)
-        
-        replicas = deployment.spec.replicas
-        if replicas > 0 and replicas != 1:
-            name_edge = f"{name}-edge"
-            subprocess.run(["kubectl", "scale", "-n", NAMESPACE,"--context",CTX_CLUSTER2, f"deployment/{name_edge}", "--replicas", str(replicas)], check=True)
-    
-
-    ## APPLY HPA TO MICROSERVICES OFFLOADED ##
-    time.sleep(5)
-    # List to store the matching files
-    matching_files = []
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/hpa/edge'
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if any(f"{name}-" in filename for name in new_edge_names):
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-    # Iterate over all files in matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "apply", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-
-# Autoplacer function to unoffload
-def autoplacer_unoff():
-    global RTT
-    global AVG_DELAY
-    global RCPU
-    Rmem = get_Rmem() # Memory provided of each microservice
-    Pcm = get_Pcm() # Calling probabilities between each microservice
-    Rs = get_Rs() # Response size of each microservice
-    M = len(RCPU)/2 # Number of microservices
-    lambda_value = get_lamba() # Requests per second
-    #app_edge = get_app_edge() # Microservice already in the edge
-    max_delay_delta = ((SLO_MARGIN_UNOFFLOAD * SLO) - AVG_DELAY) / 1000.0 # Minimum delay delta to satisfy SLO
-    #best_S_edge = np.array(eng.autoplacer_unoffload(matlab.double(Rcpu), matlab.double(Rmem), Pcm, M, lambda_value, Rs, app_edge, max_delay_delta)) # Running matlab autoplacer_unoffload
-    output = autoplacer_unoffload(RCPU, Rmem, Pcm, M, lambda_value, Rs, APP_EDGE, max_delay_delta, RTT, nargout=2) # Running matlab autoplacer_unoffload
-    best_S_edge = np.array(output[0])
-    #print("delta_delay:",output[1])
-    best_S_edge = np.delete(best_S_edge, -1) # Remove the last value (user) from best_S_edge
-    #print(numpy.around(best_S_edge, decimals=0)) # This is the new sequence of microservice that must stay in the edge cluster to reduce the delay
-    
-    # Reshape the best_S_edge array to match the shape of APP_EDGE if they are different
-    if best_S_edge.shape != APP_EDGE.shape:
-        # Reshape best_S_edge to match the shape of APP_EDGE
-        best_S_edge = np.reshape(best_S_edge, APP_EDGE.shape)
-    
-    # Get the new microservice to delete in the edge cluster
-    if not np.array_equal(best_S_edge, APP_EDGE):
-        new_edge = numpy.subtract(APP_EDGE,best_S_edge) # This is the new microservice to delete from edge cluster
-        to_delete = np.array(np.array(get_app_names()))[new_edge == 1] # Name of the new microservice to delete from edge cluster
-    else:
-        print("\rIt's not possible to unoffload any microservice")
-        return
-    
-
-    ## SCALE DEPLOYMENT IN CLOUD CLUSTER ##
-    # Load the kube config file
-    config.load_kube_config(context=CTX_CLUSTER2)
-    # Create the API object
-    api = client.AppsV1Api()
-    # Set the same number of replicas in the cloud cluster as the edge cluster
-    for name in to_delete:
-        name_edge = f"{name}-edge"
-        deployment = api.read_namespaced_deployment(name=name_edge, namespace=NAMESPACE)
-        
-        replicas = deployment.spec.replicas
-        if replicas > 0 and replicas != 1:
-            name_cloud = f"{name}-cloud"
-            subprocess.run(["kubectl", "scale", "-n", NAMESPACE, f"deployment/{name_cloud}", "--replicas", str(replicas)], check=True)
-    
-
-    ## REMOVE MICROSERVICES FROM EDGE CLUSTER ##
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/automate/edge'
-    # List to store the matching files
-    matching_files = []
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if any(name in filename for name in to_delete):
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-
-    time.sleep(30) # Wait 30 seconds before removing microservices from edge cluster
-    # Iterate over all files in matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "delete", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-    
-
-    ## REMOVE HPAs FROM EDGE CLUSTER ##
-    matching_files = []
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/hpa/edge'
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if any(name in filename for name in to_delete):
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-    # Iterate over all files in matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "delete", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-
-# Random positioning function to offload
-def random_positioning():
-    global APP_EDGE
-    apps = np.ones(len(get_app_names()), dtype=int) 
-    not_in_edge = numpy.subtract(apps,APP_EDGE) # # Microservices not in edge cluster
-    selected = [i for i, element in enumerate(not_in_edge) if element == 1]
-    x = np.random.choice(selected, 1)
-    new_edge = np.zeros(len(get_app_names()), dtype=int)
-    new_edge[x] = 1
-    new_edge_name = np.array(np.array(get_app_names()))[new_edge == 1] # Name of microservice selected
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/automate/edge'
-
-    # List to store the matching files
-    matching_files = []
-
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if any(name in filename for name in new_edge_name):
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-
-    # Load the kube config file
-    config.load_kube_config()
-
-    # Create the API object
-    api = client.AppsV1Api()
-
-    ## OFFLOADING A RANDOM MICROSERVICE TO EDGE CLUSTER ##
-    # Iterate over all files in matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "apply", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-    
-    # APPLY HPA TO MICROSERVICES OFFLOADED
-    time.sleep(5)
-    # List to store the matching files
-    matching_files = []
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/hpa/edge'
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if any(name in filename for name in new_edge_name):
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-    # Iterate over all files in matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "apply", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-
-    
-    ## SET THE SAME NUMBER OF REPLICAS AS THE CLOUD CLUSTER ##
-    # Read the cloud deployment
-    name_cloud = f"{new_edge_name[0]}-cloud"
-    deployment = api.read_namespaced_deployment(name=name_cloud, namespace=NAMESPACE)
-
-    # Set the same number of replicas as the cloud cluster
-    replicas = deployment.spec.replicas
-    if replicas > 0 and replicas != 1:
-        # Construct the edge deployment name
-        name_edge = f"{new_edge_name[0]}-edge"
-        subprocess.run(["kubectl", "scale", "-n", NAMESPACE, f"deployment/{name_edge}", "--replicas", str(replicas), "--context", CTX_CLUSTER2], check=True)
-
-# Most Frequently Used positioning function Used to offload
-def mfu_positioning():
-    global APP_EDGE
-    apps = np.ones(len(get_app_names()), dtype=int) 
-    not_in_edge = np.subtract(apps,APP_EDGE) # This is the new microservice that must stay in the edge cluster to reduce the delay
-    new_edge_names = np.array(np.array(get_app_names()))[not_in_edge == 1] # Microservice not in edge cluster
-    combined_names = "|".join(new_edge_names)
-    query_lambda = f'topk(1,sum by (destination_app) (floor(rate(istio_requests_total{{destination_app=~"{combined_names}", reporter="destination", response_code="200"}}[1m]))))'
-    query_result = prom.custom_query(query=query_lambda)
-    if query_result:
-        random_result = random.choice(query_result)
-        max_name = random_result['metric']['destination_app']
-    print(max_name)
-    # Directory where yaml files are located
-    directory = '/home/alex/Downloads/automate/edge'
-
-    # List to store matching files
-    matching_files = [filename for filename in os.listdir(directory) if max_name in filename]
-    
-    # Load the kube config file
-    config.load_kube_config()
-
-    # Create the API object
-    api = client.AppsV1Api()
-
-    ## OFFLOADING THE MFU MICROSERVICE TO EDGE CLUSTER ##
-    # Iterate over matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "apply", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-    
-    # Read the cloud deployment
-    name_cloud = f"{max_name}-cloud"
-    deployment = api.read_namespaced_deployment(name=name_cloud, namespace=NAMESPACE)
-
-    # Set the same number of replicas as the cloud cluster
-    replicas = deployment.spec.replicas
-    if replicas > 0 and replicas != 1:
-        # Construct the edge deployment name
-        name_edge = f"{max_name}-edge"
-        subprocess.run(["kubectl", "scale", "-n", NAMESPACE, f"deployment/{name_edge}", "--replicas", str(replicas), "--context", CTX_CLUSTER2], check=True)
-    
-    
-    # APPLY HPA TO MICROSERVICES OFFLOADED
-    time.sleep(5)
-    # List to store the matching files
-    matching_files = []
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/hpa/edge'
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if max_name in filename:
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-    # Iterate over all files in matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "apply", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-
-# Interaction Aware positioning function to offload
-def IA_positioning():
-    app_names = sorted(set(get_app_names()) - set(APP_EDGE), key=get_app_names().index) # Microservices not in edge cluster
-    # Create a matrix with numpy to store interaction between microservices
-    Im = np.zeros((len(app_names), len(app_names)), dtype=float)
-
-    for i, src_app in enumerate(app_names):
-        for j, dst_app in enumerate(app_names):
-            # Check if source and destination apps are different
-            if src_app != dst_app and (APP_EDGE[i] == 0 or APP_EDGE[j] == 0):
-                # total requests that arrive to dst microservice from src microservice
-                query1 = f'sum by (destination_app) (rate(istio_requests_total{{source_app="{src_app}",reporter="destination", destination_app="{dst_app}",response_code="200"}}[2m]))'
-                query2 = f'sum by (destination_app) (rate(istio_requests_total{{source_app="{dst_app}",reporter="destination", destination_app="{src_app}",response_code="200"}}[2m]))'
-
-                r1 = prom.custom_query(query=query1)
-                r2 = prom.custom_query(query=query2)
-
-                # Initialize variables
-                interactions = None
-                v = 0
-                s = 0
-
-                # Extract values from queries
-                if r1:
-                    for result in r1:
-                        if float(result["value"][1]) == 0: 
-                            continue
-                        v = result["value"][1]
-
-                if r2:    
-                    for result in r2:
-                        if float(result["value"][1]) == 0:
-                            continue
-                        s = result["value"][1]
-
-                interactions = (float(v) + float(s)) /2
-                interactions = round(interactions, 1)  # Round to 5 decimal places
-                Im[i, j] = interactions # Insert the value inside Im matrix              
-    
-    # Find the maximum value in the interaction matrix
-    max_value = Im.max()
-
-    # Find the indices of the maximum values in the interaction matrix
-    max_indices = np.argwhere(Im == max_value)
-    if len(max_indices) > 1:
-        # Sort each index pair to consider [x, y] and [y, x] as equivalent
-        sorted_indices = [tuple(sorted(index_pair)) for index_pair in max_indices]
-        # Remove duplicates and randomly choose one of the sorted indices
-        unique_sorted_indices = list(set(sorted_indices))
-        # Randomly choose one pair of microservices (at least one microservice inside the pair only in the cloud cluster)
-        chosen_sorted_index = random.choice(unique_sorted_indices)
-        # Extract the microservices names with the maximum interaction value
-        microservice1 = app_names[chosen_sorted_index[0]]
-        microservice2 = app_names[chosen_sorted_index[1]]
-    else:
-        # If there is only one maximum value, use its indices directly
-        chosen_index = max_indices[0]
-        microservice1 = app_names[chosen_index[0]]
-        microservice2 = app_names[chosen_index[1]]
-
-    # Print or use the values as needed
-    #print(f"The maximum interaction value is {max_value} between microservices {microservice1} and {microservice2}.")
-    
-    # Pair of microservices to offload
-    new_edge_names = [microservice1, microservice2]
-
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/automate/edge'
-
-    # List to store the matching files
-    matching_files = []
-
-    ## OFFLOADING THE IA MICROSERVICES TO EDGE CLUSTER ##
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if any(name in filename for name in new_edge_names):
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-
-    # Iterate over all files in matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "apply", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-    
-
-    # SET THE SAME NUMBER OF REPLICAS AS THE CLOUD CLUSTER
-    config.load_kube_config() # Load the kube config file
-
-    api = client.AppsV1Api() # Create the API object
-
-    for name in new_edge_names:
-        name_cloud = f"{name}-cloud"
-        deployment = api.read_namespaced_deployment(name=name_cloud, namespace=NAMESPACE)
-        
-        replicas = deployment.spec.replicas
-        if replicas > 0 and replicas != 1:
-            name_edge = f"{name}-edge"
-            subprocess.run(["kubectl", "scale", "-n", NAMESPACE, f"deployment/{name_edge}", "--replicas", str(replicas), "--context", CTX_CLUSTER2], check=True)
-    
-    ## APPLY HPA TO MICROSERVICES OFFLOADED ##
-    time.sleep(5)
-    # List to store the matching files
-    matching_files = []
-    # Directory where yaml are located
-    directory = '/home/alex/Downloads/hpa/edge'
-    # Iterate over all files in the directory
-    for filename in os.listdir(directory):
-        # Find the yaml file inside the folder
-        if any(name in filename for name in new_edge_names):
-            # If it does, add it to the list of matching files
-            matching_files.append(filename)
-    # Iterate over all files in matching_files
-    for filename in matching_files:
-        # Construct the full path to the file
-        filepath = os.path.join(directory, filename)
-        # Execute the command
-        subprocess.run(["kubectl", "apply", "-f", filepath, "--context", CTX_CLUSTER2], check=True)
-
 # Function that checks if some HPA is running for both clusters
 def check_hpa():
     # Load the kube config file for the first cluster
@@ -892,10 +459,14 @@ def main():
                     print(f"\r*Current avg_delay: {AVG_DELAY} ms")
                 if duration_counter >= stabilization_window_seconds and HPA_STATUS == 0:
                     print(f"\rSLO not satisfied, offloading...")
-                    autoplacer_off()
-                    #random_positioning()
-                    #mfu_positioning()
-                    #IA_positioning()
+                    if PLACEMENT_TYPE == "OE_PAMP":
+                        OE_PAMP_off()
+                    elif PLACEMENT_TYPE == "RANDOM":
+                        random_placement()
+                    elif PLACEMENT_TYPE == "MFU":
+                        mfu_placement()
+                    elif PLACEMENT_TYPE == "IA":
+                        IA_placement()
             elif AVG_DELAY <= SLO*SLO_MARGIN_UNOFFLOAD:
                 duration_counter = 0
                 while AVG_DELAY < SLO*SLO_MARGIN_UNOFFLOAD and duration_counter < stabilization_window_seconds and HPA_STATUS == 0:
@@ -905,8 +476,10 @@ def main():
                 if AVG_DELAY == 0:
                     continue
                 elif duration_counter >= stabilization_window_seconds and HPA_STATUS == 0 and APP_EDGE.any() != 0:
-                    print(f"\rSLO not satisfied, unoffloading...")
-                    autoplacer_unoff()  
+                    print(f"\rSLO not satisfied")
+                    if PLACEMENT_TYPE == "OE_PAMP":
+                        print(f"\rUnoffloading...")
+                        OE_PAMP_unoff()  
             time.sleep(1)
         else:
             print(f"\rHPA running...")
