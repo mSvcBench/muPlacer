@@ -9,7 +9,7 @@ from kubernetes import client, config
 
 #   Interaction Aware function to offload microservices from edge cluster to cloud cluster
 
-def IA_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Pcm, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom):
+def IA_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
 
     app_names = sorted(set(get_app_names()) - set(APP_EDGE), key=get_app_names().index) # Microservices not in edge cluster
     # Create a matrix with numpy to store interaction between microservices

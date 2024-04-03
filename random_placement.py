@@ -9,7 +9,7 @@ from kubernetes import client, config
 #   Random function to offload microservices from edge cluster to cloud cluster
 
 
-def random_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Pcm, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom):
+def random_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
     apps = np.ones(len(get_app_names()), dtype=int) 
     not_in_edge = np.subtract(apps,APP_EDGE) # # Microservices not in edge cluster
     selected = [i for i, element in enumerate(not_in_edge) if element == 1]

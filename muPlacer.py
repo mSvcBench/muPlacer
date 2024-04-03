@@ -6,11 +6,11 @@ import subprocess
 import threading
 import csv
 from conf import *
-from OE_PAMP_unoff import *
-from OE_PAMP_off import *
-from IA_placement import *
-from random_placement import *
-from mfu_placement import *
+from OE_PAMP_unoff import OE_PAMP_unoff
+from OE_PAMP_off import OE_PAMP_off
+from IA_placement import IA_placement
+from random_placement import random_placement
+from mfu_placement import mfu_placement
 
 
 PERIOD = 3 # Rate of queries in minutes
@@ -23,6 +23,7 @@ TRAFFIC = 0 # Cloud-edge traffic
 RCPU = np.array([]) # CPU provided to each microservice
 RCPU_EDGE = 0 # CPU provided to each microservice in the edge cluster
 RCPU_CLOUD = 0 # CPU provided to each microservice in the cloud cluster
+SLO_MARGIN_UNOFFLOAD = 0.8 # SLO increase margin
 
 # Connect to Prometheus
 prom = PrometheusConnect(url=PROMETHEUS_URL, disable_ssl=True)
@@ -162,68 +163,6 @@ def get_app_edge():
             APP_EDGE[get_app_names().index(microservice)] = 1 # Set value for microservice in edge to 1
         time.sleep(10)
     #return app_edge
-
-# Function that find probabilities between each microservice including istio-ingress
-def get_Pcm():
-    app_names = get_app_names() # Get app names with the relative function
-    
-    # add app name of istio ingress in app_names list for Pcm matrix
-    app_istio_ingress = "istio-ingressgateway"
-    app_names = app_names + [app_istio_ingress] # Add istio-ingress to app_names list
-
-    # Create a matrix with numpy to store calling probabilities
-    Pcm = np.zeros((len(app_names), len(app_names)), dtype=float)
-
-    # Find and filter significant probabilities
-    for i, src_app in enumerate(app_names):
-        for j, dst_app in enumerate(app_names):
-            # Check if source and destination apps are different
-            if src_app != dst_app:
-                # total requests that arrive to dst microservice from src microservice
-                query1 = f'sum by (destination_app) (rate(istio_requests_total{{source_app="{src_app}",reporter="destination", destination_app="{dst_app}",response_code="200"}}[{PERIOD}m]))'
-                
-                #total requests that arrive to the source microservice
-                if src_app != "istio-ingressgateway":
-                    # Query for istio-ingress
-                    query2 = f'sum by (source_app) (rate(istio_requests_total{{reporter="destination", destination_app="{src_app}",response_code="200"}}[{PERIOD}m]))'
-                else:
-                    query2 = f'sum by (source_app) (rate(istio_requests_total{{source_app="{src_app}",reporter="destination", destination_app="{dst_app}",response_code="200"}}[{PERIOD}m]))' 
-
-                #print(query1)
-                #print(query2)
-                r1 = prom.custom_query(query=query1)
-                r2 = prom.custom_query(query=query2)
-
-                # Initialize variables
-                calling_probability = None
-                v = 0
-                s = 0
-
-                # Extract values from queries
-                if r1 and r2:
-                    for result in r1:
-                        if float(result["value"][1]) == 0: 
-                            continue
-                        v = result["value"][1]
-                        #print("v =", v)
-                    for result in r2:
-                        if float(result["value"][1]) == 0:
-                            continue
-                        s = result["value"][1]
-                        #print("s =", s)
-
-                    # Calculate calling probabilities
-                    if s == 0 or s == "Nan":
-                        calling_probability = 0 # If there isn't traffic
-                    else:
-                        calling_probability = float(v) / float(s)
-                        if calling_probability > 0.98:
-                            calling_probability = 1
-                        
-                        calling_probability = round(calling_probability, 3)  # Round to 4 decimal places
-                        Pcm[i, j] = calling_probability # Insert the value inside Pcm matrix              
-    #print(Pcm)
-    return Pcm
 
 # Function that take the response size of each microservice
 def get_Rs():
@@ -447,6 +386,8 @@ def main():
         thread_delay.daemon = True # Daemonize thread
         thread_delay.start()
     
+    M = len(RCPU/2) # Number of microservices
+    
     while True:
         if HPA_STATUS == 0:
             print(f"\rCurrent avg_delay: {AVG_DELAY} ms")
@@ -460,13 +401,13 @@ def main():
                 if duration_counter >= stabilization_window_seconds and HPA_STATUS == 0:
                     print(f"\rSLO not satisfied, offloading...")
                     if PLACEMENT_TYPE == "OE_PAMP":
-                        OE_PAMP_off()
+                        OE_PAMP_off(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "RANDOM":
-                        random_placement()
+                        random_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "MFU":
-                        mfu_placement()
+                        mfu_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "IA":
-                        IA_placement()
+                        IA_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
             elif AVG_DELAY <= SLO*SLO_MARGIN_UNOFFLOAD:
                 duration_counter = 0
                 while AVG_DELAY < SLO*SLO_MARGIN_UNOFFLOAD and duration_counter < stabilization_window_seconds and HPA_STATUS == 0:
@@ -479,7 +420,7 @@ def main():
                     print(f"\rSLO not satisfied")
                     if PLACEMENT_TYPE == "OE_PAMP":
                         print(f"\rUnoffloading...")
-                        OE_PAMP_unoff()  
+                        OE_PAMP_unoff(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)  
             time.sleep(1)
         else:
             print(f"\rHPA running...")

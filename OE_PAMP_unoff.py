@@ -5,17 +5,17 @@ import time
 from kubernetes import client, config
 from autoplacer_unoffload import autoplacer_unoffload
 from muPlacer import get_app_names
+from build_Fcm import Fcm
 
 
 #   OE_PAMP function to unoffload microservices from edge cluster to cloud cluster
 
-SLO_MARGIN_UNOFFLOAD = 0.8 # SLO increase margin
 
-def OE_PAMP_unoff(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Pcm, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom):
-    
+def OE_PAMP_unoff(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
+
     max_delay_delta = ((SLO_MARGIN_UNOFFLOAD * SLO) - AVG_DELAY) / 1000.0 # Minimum delay delta to satisfy SLO
     #best_S_edge = np.array(eng.autoplacer_unoffload(matlab.double(Rcpu), matlab.double(Rmem), Pcm, M, lambda_value, Rs, app_edge, max_delay_delta)) # Running matlab autoplacer_unoffload
-    output = autoplacer_unoffload(RCPU, Rmem, Pcm, M, lambda_value, Rs, APP_EDGE, max_delay_delta, RTT, nargout=2) # Running matlab autoplacer_unoffload
+    output = autoplacer_unoffload(RCPU, Rmem, Fcm(prom, PERIOD), M, lambda_value, Rs, APP_EDGE, max_delay_delta, RTT, nargout=2) # Running matlab autoplacer_unoffload
     best_S_edge = np.array(output[0])
     #print("delta_delay:",output[1])
     best_S_edge = np.delete(best_S_edge, -1) # Remove the last value (user) from best_S_edge

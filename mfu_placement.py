@@ -8,7 +8,7 @@ from kubernetes import client, config
 
 #   Most Frequently Used function to offload microservices from edge cluster to cloud cluster
 
-def mfu_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Pcm, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom):
+def mfu_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
     apps = np.ones(len(get_app_names()), dtype=int) 
     not_in_edge = np.subtract(apps,APP_EDGE) # This is the new microservice that must stay in the edge cluster to reduce the delay
     new_edge_names = np.array(np.array(get_app_names()))[not_in_edge == 1] # Microservice not in edge cluster
