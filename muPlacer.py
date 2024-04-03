@@ -21,6 +21,7 @@ RTT = 86e-3 #  Initialization Round Trip Time in seconds
 AVG_DELAY = 0 # Average user delay
 TRAFFIC = 0 # Cloud-edge traffic
 RCPU = np.array([]) # CPU provided to each microservice
+RMEM = np.array([]) # CPU provided to each microservice
 RCPU_EDGE = 0 # CPU provided to each microservice in the edge cluster
 RCPU_CLOUD = 0 # CPU provided to each microservice in the cloud cluster
 SLO_MARGIN_UNOFFLOAD = 0.8 # SLO increase margin
@@ -114,39 +115,42 @@ def get_Rcpu():
 
 # Function that get the memory provided to each microservices
 def get_Rmem():
-    app_names = get_app_names() # Get app names with the relative function
-    Rmem_cloud = np.full(len(app_names), -1, dtype=float) # Initialize Rmem_cloud
-    Rmem_edge = np.full(len(app_names), -1, dtype=float) # Initialize Rmem_edge
-    
-    # Query to obtain cpu provided to each microservice in the cloud cluster
-    query_mem_cloud = f'sum by (container) (kube_pod_container_resource_limits{{namespace="{NAMESPACE}", resource="memory", container!="istio-proxy",cluster!="cluster2"}})'
-    mem_cloud_results = prom.custom_query(query=query_mem_cloud)
-    if mem_cloud_results:
-        for result in mem_cloud_results:
-            Rmem_value = result["value"][1] # Get the value of Rmem
-            Rmem_cloud[app_names.index(result["metric"]["container"])] = float(Rmem_value) # Insert the value inside Rmem_cloud array
-    else:
-        Rmem_cloud = np.zeros(len(app_names))
+    global RMEM
+    while True:
+        app_names = get_app_names() # Get app names with the relative function
+        Rmem_cloud = np.full(len(app_names), -1, dtype=float) # Initialize Rmem_cloud
+        Rmem_edge = np.full(len(app_names), -1, dtype=float) # Initialize Rmem_edge
+        
+        # Query to obtain cpu provided to each microservice in the cloud cluster
+        query_mem_cloud = f'sum by (container) (kube_pod_container_resource_limits{{namespace="{NAMESPACE}", resource="memory", container!="istio-proxy",cluster!="cluster2"}})'
+        mem_cloud_results = prom.custom_query(query=query_mem_cloud)
+        if mem_cloud_results:
+            for result in mem_cloud_results:
+                Rmem_value = result["value"][1] # Get the value of Rmem
+                Rmem_cloud[app_names.index(result["metric"]["container"])] = float(Rmem_value) # Insert the value inside Rmem_cloud array
+        else:
+            Rmem_cloud = np.zeros(len(app_names))
 
-    # Query to obtain cpu provided to each microservice in the edge cluster
-    query_mem_edge = f'sum by (container) (kube_pod_container_resource_limits{{namespace="{NAMESPACE}", resource="memory", container!="istio-proxy",cluster="cluster2"}})'
-    mem_edge_results = prom.custom_query(query=query_mem_edge)
-    if mem_edge_results:
-        for result in mem_edge_results:
-            Rmem_value = result["value"][1] # Get the value of Rmem
-            Rmem_edge[app_names.index(result["metric"]["container"])] = float(Rmem_value) # Insert the value inside Rmem_cloud array
-    else:
-        Rmem_cloud = np.zeros(len(app_names))
+        # Query to obtain cpu provided to each microservice in the edge cluster
+        query_mem_edge = f'sum by (container) (kube_pod_container_resource_limits{{namespace="{NAMESPACE}", resource="memory", container!="istio-proxy",cluster="cluster2"}})'
+        mem_edge_results = prom.custom_query(query=query_mem_edge)
+        if mem_edge_results:
+            for result in mem_edge_results:
+                Rmem_value = result["value"][1] # Get the value of Rmem
+                Rmem_edge[app_names.index(result["metric"]["container"])] = float(Rmem_value) # Insert the value inside Rmem_cloud array
+        else:
+            Rmem_cloud = np.zeros(len(app_names))
 
-    # Check for missing values in Rmem_edge and replace them with corresponding values from Rmem_cloud
-    for i, value in enumerate(Rmem_edge):
-        if value == -1:
-            Rmem_edge[i] = Rmem_cloud[i]
+        # Check for missing values in Rmem_edge and replace them with corresponding values from Rmem_cloud
+        for i, value in enumerate(Rmem_edge):
+            if value == -1:
+                Rmem_edge[i] = Rmem_cloud[i]
 
-    Rmem_edge = np.append(Rmem_edge, 0) # Add user with Rmem = 0
-    Rmem_cloud = np.append(Rmem_cloud, 0) # Add user with Rmem = 0
-    Rmem = np.concatenate((Rmem_cloud, Rmem_edge)) # Rmem values of each microservices (cloud+edge)
-    return Rmem
+        Rmem_edge = np.append(Rmem_edge, 0) # Add user with Rmem = 0
+        Rmem_cloud = np.append(Rmem_cloud, 0) # Add user with Rmem = 0
+        RMEM = np.concatenate((Rmem_cloud, Rmem_edge)) # Rmem values of each microservices (cloud+edge)
+        time.sleep(5)
+    #return Rmem
 
 # Function that get the microservice names already in edge cluster
 def get_app_edge():
@@ -374,6 +378,11 @@ def main():
     thread_delay.daemon = True # Daemonize thread
     thread_delay.start()
 
+    # Start the thread that checks RMEM in clusters 
+    thread_delay = threading.Thread(target=get_Rmem) # Create thread
+    thread_delay.daemon = True # Daemonize thread
+    thread_delay.start()
+
     # Start the thread that checks cloud-edge traffic and save it in csv file
     if SAVE_RESULTS == 1:
         thread_delay = threading.Thread(target=get_traffic) # Create thread
@@ -387,7 +396,7 @@ def main():
         thread_delay.start()
     
     M = len(RCPU/2) # Number of microservices
-    
+
     while True:
         if HPA_STATUS == 0:
             print(f"\rCurrent avg_delay: {AVG_DELAY} ms")
@@ -401,13 +410,13 @@ def main():
                 if duration_counter >= stabilization_window_seconds and HPA_STATUS == 0:
                     print(f"\rSLO not satisfied, offloading...")
                     if PLACEMENT_TYPE == "OE_PAMP":
-                        OE_PAMP_off(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        OE_PAMP_off(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "RANDOM":
-                        random_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        random_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "MFU":
-                        mfu_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        mfu_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "IA":
-                        IA_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, get_Rmem(), get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        IA_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
             elif AVG_DELAY <= SLO*SLO_MARGIN_UNOFFLOAD:
                 duration_counter = 0
                 while AVG_DELAY < SLO*SLO_MARGIN_UNOFFLOAD and duration_counter < stabilization_window_seconds and HPA_STATUS == 0:
