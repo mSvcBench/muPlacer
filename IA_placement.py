@@ -1,4 +1,3 @@
-from muPlacer import get_app_names
 import numpy as np
 import os
 import subprocess
@@ -9,9 +8,9 @@ from kubernetes import client, config
 
 #   Interaction Aware function to offload microservices from edge cluster to cloud cluster
 
-def IA_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
+def IA_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
 
-    app_names = sorted(set(get_app_names()) - set(APP_EDGE), key=get_app_names().index) # Microservices not in edge cluster
+    app_names = sorted(set(APP) - set(APP_EDGE), key=APP.index) # Microservices not in edge cluster
     # Create a matrix with numpy to store interaction between microservices
     Im = np.zeros((len(app_names), len(app_names)), dtype=float)
 

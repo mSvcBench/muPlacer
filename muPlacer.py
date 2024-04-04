@@ -25,21 +25,25 @@ RMEM = np.array([]) # CPU provided to each microservice
 RCPU_EDGE = 0 # CPU provided to each microservice in the edge cluster
 RCPU_CLOUD = 0 # CPU provided to each microservice in the cloud cluster
 SLO_MARGIN_UNOFFLOAD = 0.8 # SLO increase margin
+APP = np.array([]) # CPU provided to each microservice
 
 # Connect to Prometheus
 prom = PrometheusConnect(url=PROMETHEUS_URL, disable_ssl=True)
 
 # Get microservice (app) names of the application
 def get_app_names():
-    # Get all app names inside the namespace
-    command1 = f'kubectl get deployment -n {NAMESPACE} -o custom-columns=APP:.metadata.labels.app --no-headers=true | grep -v "<none>" | sort -t \'s\' -k2,2n | uniq;'
-    result1 = subprocess.run(command1, shell=True, check=True, text=True, stdout=subprocess.PIPE)
-    output1 = result1.stdout
-    # Split the output by newline, remove any leading/trailing whitespaces, and filter out empty strings
-    app_names = [value.strip() for value in output1.split('\n') if value.strip()]
-    return app_names
+    while True:
+        global APP
+        # Get all app names inside the namespace
+        command1 = f'kubectl get deployment -n {NAMESPACE} -o custom-columns=APP:.metadata.labels.app --no-headers=true | grep -v "<none>" | sort -t \'s\' -k2,2n | uniq;'
+        result1 = subprocess.run(command1, shell=True, check=True, text=True, stdout=subprocess.PIPE)
+        output1 = result1.stdout
+        # Split the output by newline, remove any leading/trailing whitespaces, and filter out empty strings
+        APP = [value.strip() for value in output1.split('\n') if value.strip()]
+        time.sleep(5)
+        #return app_names
 
-APP_EDGE = np.zeros(len(get_app_names()), dtype=int) # Microservice in the edge cluster
+APP_EDGE = np.zeros(len(APP), dtype=int) # Microservice in the edge cluster
 
 # Function that get the average delay from istio-ingress
 def get_avg_delay():
@@ -351,7 +355,7 @@ def get_traffic():
 def main():
     global HPA_STATUS
     global AVG_DELAY
-    stabilization_window_seconds = 5  # window in sec
+    stabilization_window_seconds = 120  # window in sec
 
     # Start the thread that checks the HPAs
     thread_hpa = threading.Thread(target=check_hpa) # Create thread
@@ -360,6 +364,11 @@ def main():
 
     # Start the thread that checks the RTT cloud-edge
     thread_RTT = threading.Thread(target=get_RTT) # Create thread
+    thread_RTT.daemon = True # Daemonize thread
+    thread_RTT.start()
+
+    # Start the thread that get the app names of the application
+    thread_RTT = threading.Thread(target=get_app_names) # Create thread
     thread_RTT.daemon = True # Daemonize thread
     thread_RTT.start()
     
@@ -410,13 +419,13 @@ def main():
                 if duration_counter >= stabilization_window_seconds and HPA_STATUS == 0:
                     print(f"\rSLO not satisfied, offloading...")
                     if PLACEMENT_TYPE == "OE_PAMP":
-                        OE_PAMP_off(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        OE_PAMP_off(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "RANDOM":
-                        random_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        random_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "MFU":
-                        mfu_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        mfu_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "IA":
-                        IA_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        IA_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
             elif AVG_DELAY <= SLO*SLO_MARGIN_UNOFFLOAD:
                 duration_counter = 0
                 while AVG_DELAY < SLO*SLO_MARGIN_UNOFFLOAD and duration_counter < stabilization_window_seconds and HPA_STATUS == 0:

@@ -1,4 +1,3 @@
-from muPlacer import get_app_names
 import numpy as np
 import os
 import subprocess
@@ -9,14 +8,14 @@ from kubernetes import client, config
 #   Random function to offload microservices from edge cluster to cloud cluster
 
 
-def random_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
-    apps = np.ones(len(get_app_names()), dtype=int) 
+def random_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
+    apps = np.ones(len(APP), dtype=int) 
     not_in_edge = np.subtract(apps,APP_EDGE) # # Microservices not in edge cluster
     selected = [i for i, element in enumerate(not_in_edge) if element == 1]
     x = np.random.choice(selected, 1)
-    new_edge = np.zeros(len(get_app_names()), dtype=int)
+    new_edge = np.zeros(len(APP), dtype=int)
     new_edge[x] = 1
-    new_edge_name = np.array(np.array(get_app_names()))[new_edge == 1] # Name of microservice selected
+    new_edge_name = np.array(np.array(APP))[new_edge == 1] # Name of microservice selected
     # Directory where yaml are located
     directory = '/home/alex/Downloads/automate/edge'
 

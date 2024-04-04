@@ -1,10 +1,9 @@
 import numpy as np
-from muPlacer import get_app_names
 
 # Function that build call frequency matrix Fcm
 
-def Fcm(prom, PERIOD):
-    app_names = get_app_names() # Get app names with the relative function
+def Fcm(prom, PERIOD, APP):
+    app_names = APP # Get app names with the relative function
     
     # add app name of istio ingress in app_names list for Fcm matrix
     app_istio_ingress = "istio-ingressgateway"

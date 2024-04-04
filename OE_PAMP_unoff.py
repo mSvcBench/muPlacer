@@ -4,18 +4,17 @@ import subprocess
 import time
 from kubernetes import client, config
 from autoplacer_unoffload import autoplacer_unoffload
-from muPlacer import get_app_names
 from build_Fcm import Fcm
 
 
 #   OE_PAMP function to unoffload microservices from edge cluster to cloud cluster
 
 
-def OE_PAMP_unoff(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
+def OE_PAMP_unoff(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
 
     max_delay_delta = ((SLO_MARGIN_UNOFFLOAD * SLO) - AVG_DELAY) / 1000.0 # Minimum delay delta to satisfy SLO
     #best_S_edge = np.array(eng.autoplacer_unoffload(matlab.double(Rcpu), matlab.double(RMEM), Pcm, M, lambda_value, Rs, app_edge, max_delay_delta)) # Running matlab autoplacer_unoffload
-    output = autoplacer_unoffload(RCPU, RMEM, Fcm(prom, PERIOD), M, lambda_value, Rs, APP_EDGE, max_delay_delta, RTT, nargout=2) # Running matlab autoplacer_unoffload
+    output = autoplacer_unoffload(RCPU, RMEM, Fcm(prom, PERIOD, APP), M, lambda_value, Rs, APP_EDGE, max_delay_delta, RTT, nargout=2) # Running matlab autoplacer_unoffload
     best_S_edge = np.array(output[0])
     #print("delta_delay:",output[1])
     best_S_edge = np.delete(best_S_edge, -1) # Remove the last value (user) from best_S_edge
@@ -29,7 +28,7 @@ def OE_PAMP_unoff(RTT, AVG_DELAY, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value
     # Get the new microservice to delete in the edge cluster
     if not np.array_equal(best_S_edge, APP_EDGE):
         new_edge = np.subtract(APP_EDGE,best_S_edge) # This is the new microservice to delete from edge cluster
-        to_delete = np.array(np.array(get_app_names()))[new_edge == 1] # Name of the new microservice to delete from edge cluster
+        to_delete = np.array(np.array(APP))[new_edge == 1] # Name of the new microservice to delete from edge cluster
     else:
         print("\rIt's not possible to unoffload any microservice")
         return

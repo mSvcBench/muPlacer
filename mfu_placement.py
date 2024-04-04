@@ -1,4 +1,3 @@
-from muPlacer import get_app_names
 import numpy as np
 import os
 import subprocess
@@ -8,10 +7,10 @@ from kubernetes import client, config
 
 #   Most Frequently Used function to offload microservices from edge cluster to cloud cluster
 
-def mfu_placement(RTT, AVG_DELAY, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
-    apps = np.ones(len(get_app_names()), dtype=int) 
+def mfu_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, Rmem, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
+    apps = np.ones(len(APP), dtype=int) 
     not_in_edge = np.subtract(apps,APP_EDGE) # This is the new microservice that must stay in the edge cluster to reduce the delay
-    new_edge_names = np.array(np.array(get_app_names()))[not_in_edge == 1] # Microservice not in edge cluster
+    new_edge_names = np.array(np.array(APP))[not_in_edge == 1] # Microservice not in edge cluster
     combined_names = "|".join(new_edge_names)
     query_lambda = f'topk(1,sum by (destination_app) (floor(rate(istio_requests_total{{destination_app=~"{combined_names}", reporter="destination", response_code="200"}}[1m]))))'
     query_result = prom.custom_query(query=query_lambda)
