@@ -26,6 +26,7 @@ RCPU_EDGE = 0 # CPU provided to each microservice in the edge cluster
 RCPU_CLOUD = 0 # CPU provided to each microservice in the cloud cluster
 SLO_MARGIN_UNOFFLOAD = 0.8 # SLO increase margin
 APP = np.array([]) # CPU provided to each microservice
+APP_EDGE = np.array([]) # Microservice in the edge cluster
 
 # Connect to Prometheus
 prom = PrometheusConnect(url=PROMETHEUS_URL, disable_ssl=True)
@@ -42,8 +43,6 @@ def get_app_names():
         APP = [value.strip() for value in output1.split('\n') if value.strip()]
         time.sleep(5)
         #return app_names
-
-APP_EDGE = np.zeros(len(APP), dtype=int) # Microservice in the edge cluster
 
 # Function that get the average delay from istio-ingress
 def get_avg_delay():
@@ -76,9 +75,10 @@ def get_lamba():
 
 # Function that get the cpu provided to each microservices 
 def get_Rcpu():
+    time.sleep(5)
     global RCPU, RCPU_EDGE, RCPU_CLOUD
     while True:
-        app_names = get_app_names() # Get app names with the relative function
+        app_names = APP # Get app names with the relative function
         Rcpu_cloud = np.full(len(app_names), -1, dtype=float) # Initialize Rcpu_cloud
         Rcpu_edge = np.full(len(app_names), -1, dtype=float) # Initialize Rcpu_edge
         
@@ -121,7 +121,7 @@ def get_Rcpu():
 def get_Rmem():
     global RMEM
     while True:
-        app_names = get_app_names() # Get app names with the relative function
+        app_names = APP # Get app names with the relative function
         Rmem_cloud = np.full(len(app_names), -1, dtype=float) # Initialize Rmem_cloud
         Rmem_edge = np.full(len(app_names), -1, dtype=float) # Initialize Rmem_edge
         
@@ -159,28 +159,28 @@ def get_Rmem():
 # Function that get the microservice names already in edge cluster
 def get_app_edge():
     global APP_EDGE
+    time.sleep(5)
     while True:
-        #app_edge = np.zeros(len(get_app_names()), dtype=int) # Initialize array with zeros with lenght equal to the number of microservices (the last value is for istio-ingress)
+        APP_EDGE = np.zeros(len(APP), dtype=int) # Initialize array with zeros with lenght equal to the number of microservices
         command = f'kubectl get deployments.apps -n edge --context {CTX_CLUSTER2} -o custom-columns=APP:.metadata.labels.app --no-headers=true | grep -v "<none>" | sort | uniq' # Get microservice offloaded
         result = subprocess.run(command, shell=True, check=True, text=True, stdout=subprocess.PIPE)
         output = result.stdout
             # Split the output by newline, remove any leading/trailing whitespaces, and filter out empty strings
         app_names_edge = [value.strip() for value in output.split('\n') if value.strip()]
         for microservice in app_names_edge:
-            #app_edge[get_app_names().index(microservice)] = 1 # Set value for microservice in edge to 1        
-            APP_EDGE[get_app_names().index(microservice)] = 1 # Set value for microservice in edge to 1
+            #app_edge[APP.index(microservice)] = 1 # Set value for microservice in edge to 1        
+            APP_EDGE[APP.index(microservice)] = 1 # Set value for microservice in edge to 1
         time.sleep(10)
     #return app_edge
 
 # Function that take the response size of each microservice
 def get_Rs():
-    app_names = get_app_names() # Get app names with the relative function
+    app_names = APP # Get app names with the relative function
 
     Rs = np.zeros(len(app_names), dtype=float) # inizialize Rs array
 
     # app_names combined with OR (|) for prometheus query
     combined_names = "|".join(app_names)
-
     # Query to obtain response size of each microservice    
     query_Rs = f'sum by (destination_app) (increase(istio_response_bytes_sum{{response_code="200", destination_app=~"{combined_names}", reporter="source"}}[{PERIOD}m]))/sum by (destination_app) (increase(istio_response_bytes_count{{response_code="200", destination_app=~"{combined_names}", reporter="source"}}[{PERIOD}m]))'
     r1 = prom.custom_query(query=query_Rs)
@@ -355,7 +355,7 @@ def get_traffic():
 def main():
     global HPA_STATUS
     global AVG_DELAY
-    stabilization_window_seconds = 120  # window in sec
+    stabilization_window_seconds = 10  # window in sec
 
     # Start the thread that checks the HPAs
     thread_hpa = threading.Thread(target=check_hpa) # Create thread
@@ -404,8 +404,6 @@ def main():
         thread_delay.daemon = True # Daemonize thread
         thread_delay.start()
     
-    M = len(RCPU/2) # Number of microservices
-
     while True:
         if HPA_STATUS == 0:
             print(f"\rCurrent avg_delay: {AVG_DELAY} ms")
@@ -418,14 +416,17 @@ def main():
                     print(f"\r*Current avg_delay: {AVG_DELAY} ms")
                 if duration_counter >= stabilization_window_seconds and HPA_STATUS == 0:
                     print(f"\rSLO not satisfied, offloading...")
+                    Rs = get_Rs()
+                    lambda_value = get_lamba()
+                    M = len(RCPU)/2 # Number of microservices
                     if PLACEMENT_TYPE == "OE_PAMP":
-                        OE_PAMP_off(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        OE_PAMP_off(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "RANDOM":
-                        random_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        random_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "MFU":
-                        mfu_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        mfu_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
                     elif PLACEMENT_TYPE == "IA":
-                        IA_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, get_Rs(), M, SLO, get_lamba(), CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
+                        IA_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD)
             elif AVG_DELAY <= SLO*SLO_MARGIN_UNOFFLOAD:
                 duration_counter = 0
                 while AVG_DELAY < SLO*SLO_MARGIN_UNOFFLOAD and duration_counter < stabilization_window_seconds and HPA_STATUS == 0:
