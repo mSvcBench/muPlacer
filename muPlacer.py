@@ -17,7 +17,7 @@ PERIOD = 3 # Rate of queries in minutes
 #SLO_MARGIN_OFFLOAD = 0.9 # SLO increase margin
 HPA_STATUS = 0 # Initialization HPA status (0 = HPA Not running, 1 = HPA running)
 HPA_MARGIN = 1.05 # HPA margin
-RTT = 86e-3 #  Initialization Round Trip Time in seconds
+RTT = 0 #  Round Trip Time in seconds
 AVG_DELAY = 0 # Average user delay
 TRAFFIC = 0 # Cloud-edge traffic
 RCPU = np.array([]) # CPU provided to each microservice
@@ -25,7 +25,7 @@ RMEM = np.array([]) # CPU provided to each microservice
 RCPU_EDGE = 0 # CPU provided to each microservice in the edge cluster
 RCPU_CLOUD = 0 # CPU provided to each microservice in the cloud cluster
 SLO_MARGIN_UNOFFLOAD = 0.8 # SLO increase margin
-APP = np.array([]) # CPU provided to each microservice
+APP = np.array([]) # Microservice-set name
 APP_EDGE = np.array([]) # Microservice in the edge cluster
 
 # Connect to Prometheus
