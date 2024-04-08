@@ -12,4 +12,28 @@ identifiers:
   - description: "The GitHub URL of the repository"
     type: url
     value: "https://github.com/alessandrofavale/muPlacer"
-date-released: "2024"
+date-released: "2024-04-04"
+
+
+abstract: "This is my awesome research software. It does many things."
+authors:
+  - family-names: Druskat
+    given-names: Stephan
+    orcid: "https://orcid.org/1234-5678-9101-1121"
+cff-version: 1.2.0
+date-released: "2021-07-18"
+identifiers:
+  - description: "This is the collection of archived snapshots of all versions of My Research Software"
+    type: doi
+    value: 10.5281/zenodo.123456
+  - description: "This is the archived snapshot of version 0.11.2 of My Research Software"
+    type: doi
+    value: 10.5281/zenodo.123457
+keywords:
+  - "awesome software"
+  - research
+license: Apache-2.0
+message: "If you use this software, please cite it using these metadata."
+repository-code: "https://github.com/citation-file-format/my-research-software"
+title: "My Research Software"
+version: 0.11.2
