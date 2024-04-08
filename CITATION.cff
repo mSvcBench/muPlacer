@@ -4,10 +4,12 @@ authors:
   - family-names: Favale  
     given-names: Alessandro
     orcid: https://orcid.org/0009-0006-2325-4371
+  - family-names: Detti
+    given-names: Andrea 
 title: muPlacer
 version: 1.0.5
 identifiers:
   - description: "The GitHub URL of the repository"
     type: url
     value: "https://github.com/alessandrofavale/muPlacer"
-date-released: 2024
+date-released: "2024"
