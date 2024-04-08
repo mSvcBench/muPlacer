@@ -7,6 +7,7 @@ authors:
 title: muPlacer
 version: 1.0.5
 identifiers:
-  - type: url
+  - description: "The GitHub URL of the repository"
+    type: url
     value: https://github.com/alessandrofavale/muPlacer
 date-released: 2024-04-03
