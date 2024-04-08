@@ -13,7 +13,6 @@ from build_Fcm import Fcm
 def OE_PAMP_unoff(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD):
 
     max_delay_delta = ((SLO_MARGIN_UNOFFLOAD * SLO) - AVG_DELAY) / 1000.0 # Minimum delay delta to satisfy SLO
-    #best_S_edge = np.array(eng.autoplacer_unoffload(matlab.double(Rcpu), matlab.double(RMEM), Pcm, M, lambda_value, Rs, app_edge, max_delay_delta)) # Running matlab autoplacer_unoffload
     output = autoplacer_unoffload(RCPU, RMEM, Fcm(prom, PERIOD, APP), M, lambda_value, Rs, APP_EDGE, max_delay_delta, RTT, nargout=2) # Running matlab autoplacer_unoffload
     best_S_edge = np.array(output[0])
     #print("delta_delay:",output[1])

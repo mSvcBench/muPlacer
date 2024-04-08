@@ -24,11 +24,11 @@ from id2S import id2S
 # _id : identifier of a set of nodes come out from binary encoding
 # _n : identifiers of the nodes of a set
 
-def heuristic_autoplacer_offload(Pcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, app_edge, min_delay_delta):
+def heuristic_autoplacer_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, app_edge, min_delay_delta):
     # SEARCH ALL PATHS FROM USER TO SERVICES
 
     # Create the graph of the mesh with probabilities
-    G = nx.DiGraph(Pcm)
+    G = nx.DiGraph(Fcm)
     # user is the last microservice, root in the graph
     user = G.number_of_nodes()
     # last microservice (user is the root of the graph)
@@ -87,7 +87,7 @@ def heuristic_autoplacer_offload(Pcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lam
         Sorigin[:M - 1] = 1
         #Sorigin[M:] = Scur_edge_origin_b
         Sorigin[M:] = app_edge
-        dorigin = delayMat(Sorigin, Pcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
+        dorigin = delayMat(Sorigin, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
         subgraphs_id = subgraphs_id[1:]
         Scur_edge_id = Scur_edge_origin_id
         d_prev = dorigin
@@ -120,7 +120,7 @@ def heuristic_autoplacer_offload(Pcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lam
                 Snew[:M - 1] = 1
                 Snew[M:] = Snew_edge_b
                 # dnew is Dm(U) inside the paper
-                dnew = delayMat(Snew, Pcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
+                dnew = delayMat(Snew, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
                 if dnew == np.inf:
                     subgraphs_weigths[i] = -np.inf
                     subgraphs_r[i] = 0
@@ -175,7 +175,7 @@ def heuristic_autoplacer_offload(Pcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lam
     for h in range(2, e+1):
         best_S[(h - 1) * M:h * M] = id2S(int(best_edge_Sid[h-2]), 2 ** M)
     # best_Sid = S2id(best_S);
-    best_dw, Dn, Tnce, Di, Nc = delayMat(best_S, Pcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e)
+    best_dw, Dn, Tnce, Di, Nc = delayMat(best_S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e)
     if len(H) == 0:
         delta = 0
     else:

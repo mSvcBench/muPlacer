@@ -10,7 +10,7 @@ from id2S import id2S
 #   Ne : cloud edge bit rate
 #   lambda : user request frequency
 #   Rs : byte lenght of the response of microservices
-#   Pcm : microservice calling probabilities matrix
+#   Fcm : call frequency matrix
 #   Nc : number of time a microservice is called per request
 #   M : number of microservices
 #   Rcpu_req : CPU seconds for internal functions
@@ -25,11 +25,11 @@ from id2S import id2S
 # _id : identifier of a set of nodes come out from binary encoding
 # _n : identifiers of the nodes of a set
 
-def heuristic_autoplacer_unoffload(Pcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, app_edge, max_delay_delta):
+def heuristic_autoplacer_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, app_edge, max_delay_delta):
     # SEARCH ALL PATHS FROM USER TO SERVICES
 
     # Create the graph of the mesh with probabilities
-    G = nx.DiGraph(Pcm)
+    G = nx.DiGraph(Fcm)
     # user is the last microservice, root in the graph
     user = G.number_of_nodes()
     # last microservice (user is the root of the graph)
@@ -88,7 +88,7 @@ def heuristic_autoplacer_unoffload(Pcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
         Sorigin = np.zeros(2*M)
         Sorigin[:M-1] = 1
         Sorigin[M:2*M] = app_edge
-        dorigin = delayMat(Sorigin, Pcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
+        dorigin = delayMat(Sorigin, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
         subgraphs_id = subgraphs_id[1:]
         Scur_edge_id = 2 # only user
         while True:
@@ -121,7 +121,7 @@ def heuristic_autoplacer_unoffload(Pcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
                 Snew[:M-1] = 1
                 Snew[M:] = Snew_edge_b
                 # dnew is Dm(U) inside the paper
-                dnew = delayMat(Snew, Pcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
+                dnew = delayMat(Snew, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
                 if dnew == np.inf:
                     subgraphs_weights[i] = -np.inf
                     subgraphs_r[i] = 0
@@ -173,7 +173,7 @@ def heuristic_autoplacer_unoffload(Pcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
     best_S[M-1] = 0
     for h in range(2, e+1):
         best_S[(h-1)*M:h*M] = id2S(int(best_edge_Sid[h-2]), 2**M)
-    best_dw, Dn, Tnce, Tnec, Di, Nc = delayMat(best_S, Pcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e)
+    best_dw, Dn, Tnce, Tnec, Di, Nc = delayMat(best_S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e)
     if len(I) == 0:
         delta = 0
     else:
