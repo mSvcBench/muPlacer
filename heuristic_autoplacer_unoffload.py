@@ -4,7 +4,6 @@ from S2id import S2id
 from delayMat import delayMat
 from id2S import id2S
 
-#   path adding heuristic algorithm (PAMP)
 
 #   RTT : RTT cloud edge
 #   Ne : cloud edge bit rate
@@ -46,9 +45,9 @@ def heuristic_autoplacer_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
         valid_path = True 
         # Check if the path is "valid"
         for path in paths:
-            app_edge_values = app_edge[path[-1]]
+            app_edge_values = app_edge[path]
             # If all microservices in the path have app_edge_values == 0, this path is not "valid"
-            if app_edge_values == 0:
+            if any(app_edge_values == 0):
                 valid_path = False
                 break
         
@@ -173,10 +172,10 @@ def heuristic_autoplacer_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
     best_S[M-1] = 0
     for h in range(2, e+1):
         best_S[(h-1)*M:h*M] = id2S(int(best_edge_Sid[h-2]), 2**M)
-    best_dw, Dn, Tnce, Tnec, Di, Nc = delayMat(best_S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e)
+    best_dw, Dn, Tnce, Di, Nc = delayMat(best_S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e)
     if len(I) == 0:
         delta = 0
     else:
         delta = H[I[I2]][4] - H[-1][4]
     
-    return best_S, best_dw, Dn, Tnce, Tnec, delta
+    return best_S, best_dw, Dn, Tnce, delta
