@@ -24,20 +24,15 @@ from id2S import id2S
 # _id : identifier of a set of nodes come out from binary encoding
 # _n : identifiers of the nodes of a set
 
-def heuristic_autoplacer_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, app_edge, max_delay_delta):
-    # SEARCH ALL PATHS FROM USER TO SERVICES
+def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, app_edge, max_delay_delta):
+    # SEARCH ALL PATHS FROM USER TO INSTANCES
+    G = nx.DiGraph(Fcm) # Create the graph of the mesh with probabilities
+    user = G.number_of_nodes() # User is the last microservice istance-set (root in the graph)
+    last_n = user # User is the root of the graph
+    paths_n = [] # Define the variable for dependency paths
 
-    # Create the graph of the mesh with probabilities
-    G = nx.DiGraph(Fcm)
-    # user is the last microservice, root in the graph
-    user = G.number_of_nodes()
-    # last microservice (user is the root of the graph)
-    last_n = user
-    # define the variable for all paths
-    paths_n = []
 
-    # FIND ALL PATHS WITH THE LEAF MICROSERVICE IN CLOUD CLUSTER ("valid" path)
-    
+    # FIND ALL PATHS WITH THE LEAF MICROSERVICE IN CLOUD CLUSTER ("valid" path)    
     for s in range(1, last_n):
         # Find all paths in the graph
         paths = list(nx.all_simple_paths(G, source=user-1, target=s-1))
@@ -46,7 +41,7 @@ def heuristic_autoplacer_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
         # Check if the path is "valid"
         for path in paths:
             app_edge_values = app_edge[path]
-            # If all microservices in the path have app_edge_values == 0, this path is not "valid"
+            # If any microservices in the path have app_edge_values == 0, this path is not "valid"
             if any(app_edge_values == 0):
                 valid_path = False
                 break
@@ -55,43 +50,43 @@ def heuristic_autoplacer_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
         if valid_path:
             paths_n.extend(paths)
 
-    # CREATE THE LIST OF POSSIBLE ID SUBGRAPH WITH THE LEAF MICROSERVICE IN CLOUD CLUSTER
+
+    # CREATE THE LIST OF POSSIBLE ID SUBGRAPHS
     subgraphs_id_origin = [S2id(app_edge)] # The origin subgraph is the actual configuration running
     # Next cycle will increase it adding possible subgraphs
     for i in range(len(paths_n)):
-        SG = paths_n[i]  # SG microservices combination of i-th paths.
-        # SG[j,k] nodes of the k path of the j-th combination of i paths
-        subgraph_b = np.zeros(user)  # inizialize the subgraph_b vector
-        subgraph_b[SG] = 1  # assign value 1 in subgraph_b vector facing subgraph_n
-        subgraph_id = S2id(subgraph_b)  # convert the subgraph in subgraph_id
-        # Check if there is already the current subgraph_id in the list (subgraph_id_origin)
+        SG = paths_n[i]  # SG instances combination of i-th path
+        subgraph_b = np.zeros(user)  # Inizialize the subgraph_b vector
+        subgraph_b[SG] = 1  # Assign value 1 in subgraph_b vector facing subgraph_n
+        subgraph_id = S2id(subgraph_b)  # Convert the subgraph in subgraph_id
+        # Check if there is already the current subgraph_id in the list
         if subgraph_id not in subgraphs_id_origin:
-            subgraphs_id_origin.append(subgraph_id)  # add the current subgraph in the id list
+            subgraphs_id_origin.append(subgraph_id)  # Add the current subgraph in the id list
 
 
     # GREEDY ADDITION OF NODES (SERVICE) OF SUBGRAPHS TO AN EDGE (PAMP ALGORITHM)
-    best_edge_Sid = []  # define the variable for the best edge state
+    best_edge_Sid = [] 
     for h in range(2, e+1):
-        # repeat the algorithm for every edge data center, considering in each
-        # iteration a subproblem made by only a cloud and an edge
+        # Repeat the algorithm for every edge data center, considering in each iteration a subproblem made by only a cloud and an edge
         subgraphs_id = subgraphs_id_origin.copy()
-        Scur_edge_origin_id = subgraphs_id[0] # initial state of an edge node with only user at the edge.
-        # To get the id of a state that includes also the cloud it is necessary to add cloud_shift
-        H = [] # history vector
-        Rcpu_edge = np.array(Rcpu[(h - 1) * M:h * M])
-        Rmem_edge = np.array(Rmem[(h - 1) * M:h * M])
-        #Scur_edge_origin_b = np.array(app_edge)
+        Scur_edge_origin_id = subgraphs_id[0] # Current state id
+        H = [] # History vector
+        Rcpu_edge = np.array(Rcpu[(h - 1) * M:h * M]) # CPU requested by instances in the edge
+        Rmem_edge = np.array(Rmem[(h - 1) * M:h * M]) # Memory requested by instances in the edge
         Scur_edge_origin_b = np.zeros(M)
-        Rcpu_origin = np.sum(Scur_edge_origin_b * Rcpu_edge)
-        Rmem_origin = np.sum(Scur_edge_origin_b * Rmem_edge)
+        Rcpu_origin = np.sum(Scur_edge_origin_b * Rcpu_edge) # Total CPU requested by instances in the edge
+        Rmem_origin = np.sum(Scur_edge_origin_b * Rmem_edge) # Total Memory requested by instances in the edge
+        
+        # Build the state vector of starting configuration
         Sorigin = np.zeros(2*M)
         Sorigin[:M-1] = 1
         Sorigin[M:2*M] = app_edge
+        
         dorigin = delayMat(Sorigin, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
         subgraphs_id = subgraphs_id[1:]
-        Scur_edge_id = 2 # only user
+        Scur_edge_id = 2 # subgraph id only user
         while True:
-            nsg = len(subgraphs_id) # next subgraph
+            nsg = len(subgraphs_id)
             subgraphs_weights = -np.inf * np.ones(nsg)
             subgraphs_costs = -np.inf * np.ones(nsg)
             subgraphs_r = np.inf * np.ones(nsg)
@@ -100,46 +95,37 @@ def heuristic_autoplacer_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
 
             for i in range(nsg):
                 sg_id = subgraphs_id[i]
-                Snew_edge_id = np.bitwise_or(sg_id-1, Scur_edge_id-1) + 1 # new edge state adding subgraph sg_id
+                Snew_edge_id = np.bitwise_or(sg_id-1, Scur_edge_id-1) + 1 
                 Snew_edge_b = id2S(Snew_edge_id, 2**M)
                 Rcpu_new = np.sum(Snew_edge_b * Rcpu_edge)
                 Rmem_new = np.sum(Snew_edge_b * Rmem_edge)
-                # This is the check in line 10 of PAMP code in the paper
                 if Rcpu_new > Ce or Rmem_new > Me:
                     subgraphs_weights[i] = -np.inf
                     subgraphs_r[i] = 0
                     continue
                 cost_cpu = Rcpu_new - Rcpu_origin
                 cost_mem = Rmem_new - Rmem_origin
-                # cost is the w(pi) inside the paper
-                # cost = max(cost_cpu / Ce + cost_mem / Me, 1e-6) # cost proportional to consumed resources. 1e-6 used to avoid 0
                 cost = cost_cpu
-                # Snew_edge_id+cloud_shift is the id of the state made by a
-                # cloud and an edge
                 Snew = np.zeros(2*M)
                 Snew[:M-1] = 1
                 Snew[M:] = Snew_edge_b
-                # dnew is Dm(U) inside the paper
                 dnew = delayMat(Snew, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
                 if dnew == np.inf:
                     subgraphs_weights[i] = -np.inf
                     subgraphs_r[i] = 0
                     continue
-                # this is the v(pi) inside the paper
-                # r = 1 / dnew
                 r = dnew - dorigin
                 if r > max_delay_delta:
                     subgraphs_weights[i] = 0
                     subgraphs_costs[i] = np.inf
                 else:
-                    # This is the delta variable in the paper
-                    subgraphs_weights[i] = min(r, max_delay_delta) / cost # delta = v(pi)/w(pi)
+                    subgraphs_weights[i] = min(r, max_delay_delta) / cost 
                     subgraphs_costs[i] = cost
                 subgraphs_r[i] = r
                 subgraph_d[i] = dnew
             I = np.argmax(subgraphs_weights)
             best_sg = subgraphs_id[I]
-            Scur_edge_id = np.bitwise_or(best_sg-1, Scur_edge_id-1) + 1 # update edge status inserting the nodes of the best subgraph
+            Scur_edge_id = np.bitwise_or(best_sg-1, Scur_edge_id-1) + 1 
             H.append(np.array([Scur_edge_id, subgraphs_r[I], subgraphs_costs[I], subgraphs_weights[I], subgraph_d[I]]))
             PR = []
             for pr in range(nsg):
@@ -150,15 +136,15 @@ def heuristic_autoplacer_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, l
                 # all subgraphs considered
                 break
 
-        # resource exhaustion
+        # Resource exhaustion
         if len(H) == 0:
-            # no capacity for edge computing
+            # No capacity for edge computing
             best_edge_Sid[h] = Scur_edge_origin_id
         else:
-            cur_delay = H[-1][4] # current delay, because last solution will contain the current edge microservices
-            # select in H matrix the configuration in which the increment of the delay respect to cur_delay is less than max_delay_delta
+            cur_delay = H[-1][4] # current delay, because last solution will contain the current edge configuration
+            # Select in H matrix the configuration in which the increment of the delay respect to cur_delay is less than max_delay_delta
             I = [i for i in range(len(H)) if H[i][4] - cur_delay < max_delay_delta]
-            # select the one with less usage of CPU
+            # Select the one with less usage of CPU
             I2 = np.argmin([H[i][2] for i in I])
 
             if len(I) == 0:
