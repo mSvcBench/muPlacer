@@ -6,18 +6,18 @@ import random
 from kubernetes import client, config
 
 
-#   Interaction Aware (IA) function to offload microservices istance-sets from cloud cluster to edge cluster
+#   Interaction Aware (IA) function to offload microservices instance-sets from cloud cluster to edge cluster
 
 
 def IA_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE):
 
     app_names = sorted(set(APP) - set(APP_EDGE), key=APP.index) # Microservices not in edge cluster
-    Im = np.zeros((len(app_names), len(app_names)), dtype=float) # Create a matrix to store interaction between microservice istance-sets
+    Im = np.zeros((len(app_names), len(app_names)), dtype=float) # Create a matrix to store interaction between microservice instance-sets
 
     # Construct the interaction matrix Im
     for i, src_app in enumerate(app_names):
         for j, dst_app in enumerate(app_names):
-            # Check if source and destination istance-sets are different
+            # Check if source and destination instance-sets are different
             if src_app != dst_app and (APP_EDGE[i] == 0 or APP_EDGE[j] == 0):
                 # total requests that arrive to dst microservice from src microservice
                 query1 = f'sum by (destination_app) (rate(istio_requests_total{{source_app="{src_app}",reporter="destination", destination_app="{dst_app}",response_code="200"}}[2m]))'
@@ -58,7 +58,7 @@ def IA_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_v
         sorted_indices = [tuple(sorted(index_pair)) for index_pair in max_indices] # Sort each index pair to consider [x, y] and [y, x] as equivalent
         unique_sorted_indices = list(set(sorted_indices)) # Remove duplicates and randomly choose one of the sorted indices
         chosen_sorted_index = random.choice(unique_sorted_indices) # Randomly choose one pair of microservices (at least one microservice inside the pair only in the cloud cluster)
-        # Extract the microservice istance-set with the maximum interaction value
+        # Extract the microservice instance-set with the maximum interaction value
         microservice1 = app_names[chosen_sorted_index[0]]
         microservice2 = app_names[chosen_sorted_index[1]]
     else:
@@ -67,7 +67,7 @@ def IA_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_v
         microservice1 = app_names[chosen_index[0]]
         microservice2 = app_names[chosen_index[1]]
     
-    # Pair of microservice istance-set to offload
+    # Pair of microservice instance-set to offload
     new_edge_names = [microservice1, microservice2]
 
 

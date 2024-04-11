@@ -5,20 +5,20 @@ import time
 import random
 from kubernetes import client, config
 
-#   Most Frequently Used (MFU) function to offload microservice istance-sets from cloud cluster to edge cluster
+#   Most Frequently Used (MFU) function to offload microservice instance-sets from cloud cluster to edge cluster
 
 def mfu_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE):
     apps = np.ones(len(APP), dtype=int) 
-    not_in_edge = np.subtract(apps,APP_EDGE) # Microservice istance-sets not in edge cluster
-    names = np.array(np.array(APP))[not_in_edge == 1] # Name of microservice istance-sets selected
-    combined_names = "|".join(names) # Combine the names of the istance-sets
+    not_in_edge = np.subtract(apps,APP_EDGE) # Microservice instance-sets not in edge cluster
+    names = np.array(np.array(APP))[not_in_edge == 1] # Name of microservice instance-sets selected
+    combined_names = "|".join(names) # Combine the names of the instance-sets
 
-    # Query to get the most frequently used microservice istance-set
+    # Query to get the most frequently used microservice instance-set
     query_lambda = f'topk(1,sum by (destination_app) (floor(rate(istio_requests_total{{destination_app=~"{combined_names}", reporter="destination", response_code="200"}}[1m]))))'
     query_result = prom.custom_query(query=query_lambda)
     if query_result:
         random_result = random.choice(query_result)
-        new_edge_name = random_result['metric']['destination_app'] # Name of the most frequently used microservice istance-set
+        new_edge_name = random_result['metric']['destination_app'] # Name of the most frequently used microservice instance-set
 
      ## OFFLOADING TO EDGE CLUSTER ##
     directory = MICROSERVICE_DIRECTORY + '/edge' # Directory where manifest files are located

@@ -10,12 +10,12 @@ from kubernetes import client, config
 
 def random_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE):
     apps = np.ones(len(APP), dtype=int) 
-    not_in_edge = np.subtract(apps,APP_EDGE) # Microservice istance-sets not in edge cluster
+    not_in_edge = np.subtract(apps,APP_EDGE) # Microservice instance-sets not in edge cluster
     selected = [i for i, element in enumerate(not_in_edge) if element == 1]
-    x = np.random.choice(selected, 1) # Randomly select a microservice istance-set to offload
+    x = np.random.choice(selected, 1) # Randomly select a microservice instance-set to offload
     new_edge = np.zeros(len(APP), dtype=int) # Initialize the new_edge array
-    new_edge[x] = 1 # Set the selected microservice istance-set to 1
-    new_edge_name = np.array(np.array(APP))[new_edge == 1] # Name of microservice istance-set selected
+    new_edge[x] = 1 # Set the selected microservice instance-set to 1
+    new_edge_name = np.array(np.array(APP))[new_edge == 1] # Name of microservice instance-set selected
     
     
     ## OFFLOADING TO EDGE CLUSTER ##

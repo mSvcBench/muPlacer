@@ -20,6 +20,6 @@ def offload(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RT
     Rcpu_req[int(Ubit[0])-1] = 0   
     Rcpu_req[int(Ubit[1])-1] = 0
 
-    best_S, best_dw, Dn, Tnce, delta = heuristic_offload(Fcm_nocache, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, 0, 1, 2, app_edge, min_delay_delta)
+    best_S = heuristic_offload(Fcm_nocache, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, 0, 1, 2, app_edge, min_delay_delta)
     best_S_edge = best_S[M:2*M]  # Takes only edge part of the state vector
-    return best_S_edge, delta
+    return best_S_edge

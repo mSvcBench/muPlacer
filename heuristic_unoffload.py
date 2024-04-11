@@ -25,14 +25,14 @@ from id2S import id2S
 # _n : identifiers of the nodes of a set
 
 def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, app_edge, max_delay_delta):
-    # SEARCH ALL PATHS FROM USER TO INSTANCES
+    ## SEARCH ALL PATHS FROM USER TO INSTANCES ##
     G = nx.DiGraph(Fcm) # Create the graph of the mesh with probabilities
-    user = G.number_of_nodes() # User is the last microservice istance-set (root in the graph)
+    user = G.number_of_nodes() # User is the last microservice instance-set (root in the graph)
     last_n = user # User is the root of the graph
     paths_n = [] # Define the variable for dependency paths
 
 
-    # FIND ALL PATHS WITH THE LEAF MICROSERVICE IN CLOUD CLUSTER ("valid" path)    
+    ## FIND ALL PATHS WITH THE LEAF MICROSERVICE IN CLOUD CLUSTER ("valid" path) ##    
     for s in range(1, last_n):
         # Find all paths in the graph
         paths = list(nx.all_simple_paths(G, source=user-1, target=s-1))
@@ -51,7 +51,7 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M
             paths_n.extend(paths)
 
 
-    # CREATE THE LIST OF POSSIBLE ID SUBGRAPHS
+    ## CREATE THE LIST OF POSSIBLE ID SUBGRAPHS ##
     subgraphs_id_origin = [S2id(app_edge)] # The origin subgraph is the actual configuration running
     # Next cycle will increase it adding possible subgraphs
     for i in range(len(paths_n)):
@@ -64,7 +64,7 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M
             subgraphs_id_origin.append(subgraph_id)  # Add the current subgraph in the id list
 
 
-    # GREEDY ADDITION OF NODES (SERVICE) OF SUBGRAPHS TO AN EDGE (PAMP ALGORITHM)
+    ## GREEDY SUBTRACTION OF SUBGRAPHS FROM EDGE CLUSTER##
     best_edge_Sid = [] 
     for h in range(2, e+1):
         # Repeat the algorithm for every edge data center, considering in each iteration a subproblem made by only a cloud and an edge
@@ -82,86 +82,91 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M
         Sorigin[:M-1] = 1
         Sorigin[M:2*M] = app_edge
         
-        dorigin = delayMat(Sorigin, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
-        subgraphs_id = subgraphs_id[1:]
-        Scur_edge_id = 2 # subgraph id only user
+        dorigin = delayMat(Sorigin, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the original configuration
+        subgraphs_id = subgraphs_id[1:] # Remove the configuration with all instances in the edge cluster
+        Scur_edge_id = 2 # Starting configuration with no instances in the edge cluster (only the user in the edge cluster)
         while True:
-            nsg = len(subgraphs_id)
-            subgraphs_weights = -np.inf * np.ones(nsg)
-            subgraphs_costs = -np.inf * np.ones(nsg)
-            subgraphs_r = np.inf * np.ones(nsg)
-            Scur_edge_b = id2S(Scur_edge_id, 2**M)
-            subgraph_d = np.inf * np.ones(nsg)
+            nsg = len(subgraphs_id) # Number of subgraphs
+            subgraphs_weights = -np.inf * np.ones(nsg) # Initialize the weight array of the subgraphs
+            subgraphs_costs = -np.inf * np.ones(nsg) # Initialize the cost array of the subgraphs
+            subgraphs_r = np.inf * np.ones(nsg) # Initialize the delay reduction array of the subgraphs
+            subgraph_d = np.inf * np.ones(nsg) # Initialize the new delay variable array of the subgraphs
 
+            # For each configuration calculate delay reduction, cost, weight and new delay
             for i in range(nsg):
-                sg_id = subgraphs_id[i]
-                Snew_edge_id = np.bitwise_or(sg_id-1, Scur_edge_id-1) + 1 
-                Snew_edge_b = id2S(Snew_edge_id, 2**M)
-                Rcpu_new = np.sum(Snew_edge_b * Rcpu_edge)
-                Rmem_new = np.sum(Snew_edge_b * Rmem_edge)
+                sg_id = subgraphs_id[i] # Current subgraph id
+                Snew_edge_id = np.bitwise_or(sg_id-1, Scur_edge_id-1) + 1 # New edge state adding new subgraph
+                Snew_edge_b = id2S(Snew_edge_id, 2**M) # New edge state in binary encoding
+                Rcpu_new = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
+                Rmem_new = np.sum(Snew_edge_b * Rmem_edge) # Memory requested by the new state
+                
+                # Check if the new configuration is feasible (resource exhaustion)
                 if Rcpu_new > Ce or Rmem_new > Me:
                     subgraphs_weights[i] = -np.inf
                     subgraphs_r[i] = 0
                     continue
-                cost_cpu = Rcpu_new - Rcpu_origin
-                cost_mem = Rmem_new - Rmem_origin
-                cost = cost_cpu
-                Snew = np.zeros(2*M)
-                Snew[:M-1] = 1
-                Snew[M:] = Snew_edge_b
-                dnew = delayMat(Snew, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)[0]
+                
+                cost_cpu = Rcpu_new - Rcpu_origin # CPU cost
+                cost_mem = Rmem_new - Rmem_origin # Memory cost
+                cost = cost_cpu # Cost of the new state
+                Snew = np.zeros(2*M) # Inizialize array of the new state
+                Snew[:M-1] = 1 # Set the cloud instances in the array (all instances always in the cloud cluster)
+                Snew[M:] = Snew_edge_b # Set the edge instances in the array
+                dnew = delayMat(Snew, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new state
+                
+                # Check if the new configuration is feasible about the delay
                 if dnew == np.inf:
                     subgraphs_weights[i] = -np.inf
                     subgraphs_r[i] = 0
                     continue
-                r = dnew - dorigin
+
+                r = dnew - dorigin # Delay reduction of the new configuration
+                
+                # Check if the new configuration is feasible about delay reduction and set the weight, cost and delay reduction of the new configuration
                 if r > max_delay_delta:
                     subgraphs_weights[i] = 0
                     subgraphs_costs[i] = np.inf
                 else:
-                    subgraphs_weights[i] = min(r, max_delay_delta) / cost 
-                    subgraphs_costs[i] = cost
-                subgraphs_r[i] = r
-                subgraph_d[i] = dnew
-            I = np.argmax(subgraphs_weights)
-            best_sg = subgraphs_id[I]
-            Scur_edge_id = np.bitwise_or(best_sg-1, Scur_edge_id-1) + 1 
-            H.append(np.array([Scur_edge_id, subgraphs_r[I], subgraphs_costs[I], subgraphs_weights[I], subgraph_d[I]]))
+                    subgraphs_weights[i] = min(r, max_delay_delta) / cost  # Weight of the new state (min between delay reduction and max_delay_delta divided by cost)
+                    subgraphs_costs[i] = cost # Cost of the new state
+                subgraphs_r[i] = r # Delay reduction of the new state
+                subgraph_d[i] = dnew # Delay of the new state
+
+            I = np.argmax(subgraphs_weights) # Select the best subgraph
+            best_sg = subgraphs_id[I] # Best subgraph id
+            Scur_edge_id = np.bitwise_or(best_sg-1, Scur_edge_id-1) + 1  # Update edge status inserting the nodes of the best subgraph
+            H.append(np.array([Scur_edge_id, subgraphs_r[I], subgraphs_costs[I], subgraphs_weights[I], subgraph_d[I]])) # Add the best subgraph in the history vector with its properties
+
+            # Prune not considered subgraphs whose nodes are already contained in the edge  
             PR = []
             for pr in range(nsg):
                 if np.bitwise_and(subgraphs_id[pr]-1, Scur_edge_id-1) + 1 == subgraphs_id[pr]:
                     PR.append(pr)
             subgraphs_id = [subgraphs_id[pr] for pr in range(nsg) if pr not in PR]
             if len(subgraphs_id) == 0:
-                # all subgraphs considered
+                # All subgraphs considered
                 break
 
-        # Resource exhaustion
+        # Check if there are solutions
         if len(H) == 0:
-            # No capacity for edge computing
-            best_edge_Sid[h] = Scur_edge_origin_id
+            best_edge_Sid[h] = Scur_edge_origin_id # If there are no solutions the best configuration is the original one
         else:
-            cur_delay = H[-1][4] # current delay, because last solution will contain the current edge configuration
+            cur_delay = H[-1][4] # current delay (last solution in H will contain the current edge configuration)
             # Select in H matrix the configuration in which the increment of the delay respect to cur_delay is less than max_delay_delta
             I = [i for i in range(len(H)) if H[i][4] - cur_delay < max_delay_delta]
             # Select the one with less usage of CPU
             I2 = np.argmin([H[i][2] for i in I])
 
+            # If there are no solutions the best configuration is the current one, otherwise the best configuration is appended in the best_edge_Sid vector
             if len(I) == 0:
                 best_edge_Sid.append(H[-1][0])
             else:
                 best_edge_Sid.append(H[I[I2]][0])
 
-    # BUILD THE BEST_S VECTOR
-    best_S = np.zeros(e*M)
-    best_S[:M-1] = 1
-    best_S[M-1] = 0
+    ## BUILD THE SELECTED CONFIGURATION ARRAY ##
+    best_S = np.zeros(e*M) # Initialize the best configuration vector
+    best_S[:M-1] = 1 # Set the cloud instances in the array (all instances always in the cloud cluster)
     for h in range(2, e+1):
-        best_S[(h-1)*M:h*M] = id2S(int(best_edge_Sid[h-2]), 2**M)
-    best_dw, Dn, Tnce, Di, Nc = delayMat(best_S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e)
-    if len(I) == 0:
-        delta = 0
-    else:
-        delta = H[I[I2]][4] - H[-1][4]
-    
-    return best_S, best_dw, Dn, Tnce, delta
+        best_S[(h-1)*M:h*M] = id2S(int(best_edge_Sid[h-2]), 2**M) # Set the edge instances in the array
+
+    return best_S

@@ -23,7 +23,7 @@ TRAFFIC = 0 # Edge-cloud traffic in Mbps
 APP = np.array([]) # Microservice instance-set names
 RCPU = np.array([]) # CPU provided to each instance-set
 RMEM = np.array([]) # CPU provided to each instance-set
-RCPU_EDGE = 0 # CPU provided to each istance-set in the edge cluster
+RCPU_EDGE = 0 # CPU provided to each instance-set in the edge cluster
 RCPU_CLOUD = 0 # CPU provided to each instance-set in the cloud cluster
 SLO_MARGIN_UNOFFLOAD = 0.8 # Service Level Objective increase margin
 APP_EDGE = np.array([]) # Instance-set in the edge cluster
@@ -31,7 +31,7 @@ APP_EDGE = np.array([]) # Instance-set in the edge cluster
 # Connect to Prometheus
 prom = PrometheusConnect(url=PROMETHEUS_URL, disable_ssl=True)
 
-# Function that get microservice istance-set names of the application
+# Function that get microservice instance-set names of the application
 def get_app_names():
     while True:
         global APP
@@ -74,16 +74,16 @@ def get_lamba():
         for result in query_result:
             return float(result["value"][1]) # Get the value of lambda
 
-# Function that get the CPU provided to each microservice istance-set
+# Function that get the CPU provided to each microservice instance-set
 def get_Rcpu():
     time.sleep(5)
     global RCPU, RCPU_EDGE, RCPU_CLOUD
     while True:
-        app_names = APP # Microservice istance-set names
+        app_names = APP # Microservice instance-set names
         Rcpu_cloud = np.full(len(app_names), -1, dtype=float) # Initialize Rcpu_cloud
         Rcpu_edge = np.full(len(app_names), -1, dtype=float) # Initialize Rcpu_edge
         
-        # Query to obtain cpu provided to each istance-set in the cloud cluster
+        # Query to obtain cpu provided to each instance-set in the cloud cluster
         query_cpu_cloud = f'sum by (container) (last_over_time(kube_pod_container_resource_limits{{namespace="{NAMESPACE}", resource="cpu", container!="istio-proxy", cluster!="cluster2"}}[1m]))'
         cpu_cloud_results = prom.custom_query(query=query_cpu_cloud)
         if cpu_cloud_results:
@@ -91,7 +91,7 @@ def get_Rcpu():
                 Rcpu_value = result["value"][1] # Get the value of Rcpu
                 Rcpu_cloud[app_names.index(result["metric"]["container"])] = float(Rcpu_value) # Insert the value Rcpu_cloud in the correct position of the array
         
-        # Query to obtain cpu provided to each istance-set in the edge cluster
+        # Query to obtain cpu provided to each instance-set in the edge cluster
         query_cpu_edge = f'sum by (container) (last_over_time(kube_pod_container_resource_limits{{namespace="{NAMESPACE}", resource="cpu", container!="istio-proxy", cluster="cluster2"}}[1m]))'
         cpu_edge_results = prom.custom_query(query=query_cpu_edge)
         if cpu_edge_results:
@@ -118,15 +118,15 @@ def get_Rcpu():
         time.sleep(5)
     #return Rcpu
 
-# Function that get the memory provided to each microservice istance-set
+# Function that get the memory provided to each microservice instance-set
 def get_Rmem():
     global RMEM
     while True:
-        app_names = APP # Microservice istance-set names
+        app_names = APP # Microservice instance-set names
         Rmem_cloud = np.full(len(app_names), -1, dtype=float) # Initialize Rmem_cloud
         Rmem_edge = np.full(len(app_names), -1, dtype=float) # Initialize Rmem_edge
         
-        # Query to obtain memory provided to each istance-set in the cloud cluster
+        # Query to obtain memory provided to each instance-set in the cloud cluster
         query_mem_cloud = f'sum by (container) (kube_pod_container_resource_limits{{namespace="{NAMESPACE}", resource="memory", container!="istio-proxy",cluster!="cluster2"}})'
         mem_cloud_results = prom.custom_query(query=query_mem_cloud)
         if mem_cloud_results:
@@ -136,7 +136,7 @@ def get_Rmem():
         else:
             Rmem_cloud = np.zeros(len(app_names))
 
-        # Query to obtain memory provided to each istance-set in the edge cluster
+        # Query to obtain memory provided to each instance-set in the edge cluster
         query_mem_edge = f'sum by (container) (kube_pod_container_resource_limits{{namespace="{NAMESPACE}", resource="memory", container!="istio-proxy",cluster="cluster2"}})'
         mem_edge_results = prom.custom_query(query=query_mem_edge)
         if mem_edge_results:
@@ -155,13 +155,13 @@ def get_Rmem():
         time.sleep(5)
     #return Rmem
 
-# Function that get the istance-set already in edge cluster
+# Function that get the instance-set already in edge cluster
 def get_app_edge():
     global APP_EDGE
     time.sleep(5)
     while True:
-        APP_EDGE = np.zeros(len(APP), dtype=int) # Initialize array with zeros with lenght equal to the number of istance-set
-        command = f'kubectl get deployments.apps -n edge --context {CTX_CLUSTER2} -o custom-columns=APP:.metadata.labels.app --no-headers=true | grep -v "<none>" | sort | uniq' # Get istance-set offloaded
+        APP_EDGE = np.zeros(len(APP), dtype=int) # Initialize array with zeros with lenght equal to the number of instance-set
+        command = f'kubectl get deployments.apps -n edge --context {CTX_CLUSTER2} -o custom-columns=APP:.metadata.labels.app --no-headers=true | grep -v "<none>" | sort | uniq' # Get instance-set offloaded
         result = subprocess.run(command, shell=True, check=True, text=True, stdout=subprocess.PIPE)
         output = result.stdout
         app_names_edge = [value.strip() for value in output.split('\n') if value.strip()]
@@ -170,7 +170,7 @@ def get_app_edge():
         time.sleep(10)
     #return app_edge
 
-# Function that get the response size of each microservice
+# Function that get the response size of each microservice instance-set
 def get_Rs():
     app_names = APP # Get app names with the relative function
     Rs = np.zeros(len(app_names), dtype=float) # inizialize Rs array
@@ -415,7 +415,7 @@ def main():
                 #  Offloading
                 if duration_counter >= stabilization_window_seconds and HPA_STATUS == 0:
                     print(f"\rSLO not satisfied, offloading...")
-                    Rs = get_Rs() # Response size of each microservice istance-set
+                    Rs = get_Rs() # Response size of each microservice instance-set
                     lambda_value = get_lamba() # Average user requests per second
                     M = int(len(RCPU)/2) # Number of microservices
                     if PLACEMENT_TYPE == "OE_PAMP":
@@ -441,9 +441,9 @@ def main():
                     print(f"\rSLO not satisfied")
                     if PLACEMENT_TYPE == "OE_PAMP":
                         print(f"\rUnoffloading...")
-                        Rs = get_Rs() # Response size of each microservice istance-set
+                        Rs = get_Rs() # Response size of each microservice instance-set
                         lambda_value = get_lamba() # Average user requests per second
-                        M = int(len(RCPU)/2) # Number of microservice istance-set
+                        M = int(len(RCPU)/2) # Number of microservice instance-set
                         OE_PAMP_unoff(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE)  
             time.sleep(1)
         else:

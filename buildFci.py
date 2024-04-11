@@ -7,7 +7,7 @@ from mV2mI import mV2mI
 #   M : number of microservices
 #   e : number of datacenters
 #   Fcm : microservice-level call frequency matrix
-#   Fci : istance-level call frequency matrix 
+#   Fci : instance-level call frequency matrix 
 
 
 def buildFci(S, Fcm, M, e):
