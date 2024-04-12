@@ -24,7 +24,5 @@ def offload2(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, R
     Rcpu_req[int(Ubit[0])-1] = 0   
     Rcpu_req[int(Ubit[1])-1] = 0
     
-    #best_S_edge = heuristic_offload(Fcm_nocache, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, 0, 1, 2, app_edge, min_delay_delta)
-
     best_S_edge = heuristic_offload(Fcm_nocache, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_edge, Ce, Me, Ne, lambd, Rs, M, 0, 1, 2, app.astype(int), min_delay_delta)
     return best_S_edge
