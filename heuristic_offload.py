@@ -147,10 +147,10 @@ def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M, 
             best_edge_Sid.append(Scur_edge_origin_id) # If there are no solutions, the best configuration is the original one
         else:
             # The best configuration is the one that satisfy the min delay reduction requirement and has the minimum CPU cost
-            H = np.array(H)
-            I = np.where(H[:, 1] >= min(min_delay_delta, dorigin - 1e-3))
-            I2 = np.argmin(H[I, 2])
-            best_edge_Sid.append(H[I[I2], 0])  
+            # H = np.array(H)
+            # I = np.where(H[:, 1] >= min_delay_delta)
+            # I2 = np.argmin(H[I, 2])
+            best_edge_Sid.append(H[-1][0])  
 
     ## BUILD THE SELECTED CONFIGURATION ARRAY ##
     best_S = np.zeros(e * M) # Initialize the best configuration vector

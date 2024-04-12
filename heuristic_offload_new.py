@@ -3,6 +3,7 @@ import networkx as nx
 from S2id import S2id
 from delayMat import delayMat 
 from id2S import id2S
+import matplotlib.pyplot as plt
 
 
 #   RTT : edge-cloud Round Trip Time 
@@ -27,6 +28,9 @@ from id2S import id2S
 def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_edge, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, Sold_b, delta_mes):
     ## SEARCH ALL PATHS FROM USER TO INSTANCES ##
     G = nx.DiGraph(Fcm) # Create the microservice dependency graph 
+
+    #nx.draw_planar(G,with_labels=True)
+    #plt.show()
     
     Sold_edge_b = Sold_b[M:2*M] # Binary placement status containing edge microservices only
     Sold_edge_id = S2id(Sold_edge_b) # id-based placement status containing only edge microservices
@@ -51,9 +55,10 @@ def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_ed
                 dependency_path_cloud_only_b = np.zeros(M)  
                 dependency_path_cloud_only_b[path] = 1 # binary-based encoding of the dependency path
                 dependency_path_cloud_only_id = S2id(dependency_path_cloud_only_b)  # id-based encoding of the dependency path
-                # Check if there is already the current subgraph_id in the list
-                if dependency_path_cloud_only_id not in dependency_paths_cloud_only_id:
-                    dependency_paths_cloud_only_id.append(dependency_path_cloud_only_id)  # Add the current subgraph in the id list
+                dependency_paths_cloud_only_id.append(dependency_path_cloud_only_id) 
+                # # Check if there is already the current subgraph_id in the list
+                # if dependency_path_cloud_only_id not in dependency_paths_cloud_only_id:
+                #     dependency_paths_cloud_only_id.append(dependency_path_cloud_only_id)  # Add the current subgraph in the id list
     
     ## GREEDY ADDITION OF SUBGRAPHS TO EDGE CLUSTER ##
     
@@ -92,6 +97,7 @@ def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_ed
                 path_opt_id = path_id
                 Sopt_id = S_edge_temp_id
                 delta_delay_opt = delta_delay
+                w_max = w
             
         if (Sopt_id == Snew_edge_id):
             # nothing to add
