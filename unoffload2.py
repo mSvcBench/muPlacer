@@ -2,7 +2,7 @@ import datetime
 import numpy as np
 from heuristic_unoffload_new import heuristic_unoffload
 
-def unoffload(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, max_delay_delta, RTT, Ne):
+def unoffload2(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, max_delay_delta, RTT, Ne):
     #x = datetime.datetime.now().strftime('%d-%m_%H:%M:%S')
     #filename = f'unoffload_{x}.mat'
     #np.save(filename, arr=[Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RTT])
@@ -23,7 +23,6 @@ def unoffload(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, max_delay_delta, 
     # Seconds of CPU per request for the user
     Rcpu_req[int(Ubit[0])-1] = 0 
     Rcpu_req[int(Ubit[1])-1] = 0
-
-    best_S = heuristic_unoffload(Fcm_nocache, RTT, Rcpu_req, Rcpu, Rmem, Ce, Cost_cpu_edge, Cost_mem_edge, Me, Ne, lambd, Rs, M, 0, 1, 2, app_edge, max_delay_delta)
+    best_S = heuristic_unoffload(Fcm_nocache, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_edge, Ce, Me, Ne, lambd, Rs, M, 0, 1, 2, app.astype(int), max_delay_delta)
     best_S_edge = best_S[M:2*M]  # Takes only edge part of the new state vector
     return best_S_edge

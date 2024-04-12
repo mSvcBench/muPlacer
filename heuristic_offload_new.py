@@ -42,23 +42,18 @@ def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_ed
     for ms in range(M-1):
         # Find all dependency paths in the graph from user to microservice ms
         paths = list(nx.all_simple_paths(G, source=M-1, target=ms)) 
-        cloud_only = True
         # Check if the path is "valid"
         for path in paths:
             edge_presences = Sold_edge_b[path]
             # If all microservices in the path have edge_presences == 1, this path is not "valid" because all microservices are running in the edge
             if all(value == 1 for value in edge_presences):
-                cloud_only = False
                 break
-            if cloud_only:
+            else:
                 dependency_paths_cloud_only.extend(path)
                 dependency_path_cloud_only_b = np.zeros(M)  
                 dependency_path_cloud_only_b[path] = 1 # binary-based encoding of the dependency path
                 dependency_path_cloud_only_id = S2id(dependency_path_cloud_only_b)  # id-based encoding of the dependency path
-                dependency_paths_cloud_only_id.append(dependency_path_cloud_only_id) 
-                # # Check if there is already the current subgraph_id in the list
-                # if dependency_path_cloud_only_id not in dependency_paths_cloud_only_id:
-                #     dependency_paths_cloud_only_id.append(dependency_path_cloud_only_id)  # Add the current subgraph in the id list
+                dependency_paths_cloud_only_id.append(dependency_path_cloud_only_id) # \Pi_c of paper
     
     ## GREEDY ADDITION OF SUBGRAPHS TO EDGE CLUSTER ##
     
@@ -76,7 +71,6 @@ def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_ed
     
     while True:
         w_max = 0
-        path_opt_id = -1
         Sopt_id = Snew_edge_id
         delta_delay_opt = -1
         for path_id in dependency_paths_cloud_only_r_id :
@@ -94,31 +88,30 @@ def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_ed
             delta_cost = (Cost_cpu_edge_temp_sum-Cost_cpu_edge_old_sum) + (Cost_mem_edge_temp_sum-Cost_mem_edge_old_sum)
             w = min(delta_delay, delta_mes) / delta_cost
             if (w > w_max and Rcpu_temp_sum <= Ce and Rmem_temp_sum <= Me ):
-                path_opt_id = path_id
                 Sopt_id = S_edge_temp_id
                 delta_delay_opt = delta_delay
                 w_max = w
             
         if (Sopt_id == Snew_edge_id):
-            # nothing to add
+            # no additional delay reduction possible
             break
-         
-        Snew_edge_id = Sopt_id
-        
-        # Check if the delay reduction is enough
-        if delta_delay_opt >= delta_mes:
-            break
-        
-        # Prune not considered dependency graph whose microservices are already contained in the edge
-        PR = []
-        for pr in range(len(dependency_paths_cloud_only_r_id)):
-            if np.bitwise_and(dependency_paths_cloud_only_r_id[pr] - 1, Snew_edge_id - 1) + 1 == dependency_paths_cloud_only_r_id[pr]:
-                # dependency path already fully included at edge
-                PR.append(pr)
-        dependency_paths_cloud_only_r_id = [dependency_paths_cloud_only_r_id[pr] for pr in range(len(dependency_paths_cloud_only_r_id)) if pr not in PR ]
-        if len(dependency_paths_cloud_only_r_id) == 0:
-            # All dependency path considered
-            break
+        else:
+            Snew_edge_id = Sopt_id
+            
+            # Check if the delay reduction is enough
+            if delta_delay_opt >= delta_mes:
+                break
+            
+            # Prune not considered dependency graph whose microservices are already contained in the edge
+            PR = []
+            for pr in range(len(dependency_paths_cloud_only_r_id)):
+                if np.bitwise_and(dependency_paths_cloud_only_r_id[pr] - 1, Snew_edge_id - 1) + 1 == dependency_paths_cloud_only_r_id[pr]:
+                    # dependency path already fully included at edge
+                    PR.append(pr)
+            dependency_paths_cloud_only_r_id = [dependency_paths_cloud_only_r_id[pr] for pr in range(len(dependency_paths_cloud_only_r_id)) if pr not in PR ]
+            if len(dependency_paths_cloud_only_r_id) == 0:
+                # All dependency path considered
+                break
 
     S_new_edge_b = id2S(int(Snew_edge_id), 2 ** M)
     return S_new_edge_b

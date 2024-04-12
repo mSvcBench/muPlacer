@@ -50,6 +50,8 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M
         if valid_path:
             paths_n.extend(paths)
 
+    # add path with no microservice at edge
+    paths_n.extend([[user-1]])
 
     ## CREATE THE LIST OF POSSIBLE ID SUBGRAPHS ##
     subgraphs_id_origin = [S2id(app_edge)] # The origin subgraph is the actual configuration running
@@ -83,7 +85,6 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M
         Sorigin[M:2*M] = app_edge
         
         dorigin = delayMat(Sorigin, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the original configuration
-        subgraphs_id = subgraphs_id[1:] # Remove the configuration with all instances in the edge cluster
         Scur_edge_id = 2 # Starting configuration with no instances in the edge cluster (only the user in the edge cluster)
         while True:
             nsg = len(subgraphs_id) # Number of subgraphs
@@ -106,8 +107,8 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M
                     subgraphs_r[i] = 0
                     continue
                 
-                cost_cpu = Rcpu_new - Rcpu_origin # CPU cost
-                cost_mem = Rmem_new - Rmem_origin # Memory cost
+                cost_cpu = Rcpu_new - Rcpu_origin + 1e-6 # CPU cost
+                cost_mem = Rmem_new - Rmem_origin + 1e-6 # Memory cost
                 cost = cost_cpu # Cost of the new state
                 Snew = np.zeros(2*M) # Inizialize array of the new state
                 Snew[:M-1] = 1 # Set the cloud instances in the array (all instances always in the cloud cluster)
@@ -120,7 +121,7 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Ce, Me, Ne, lambd, Rs, M
                     subgraphs_r[i] = 0
                     continue
 
-                r = dnew - dorigin # Delay reduction of the new configuration
+                r = dnew - dorigin # Delay increase of the new configuration
                 
                 # Check if the new configuration is feasible about delay reduction and set the weight, cost and delay reduction of the new configuration
                 if r > max_delay_delta:
