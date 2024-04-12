@@ -1,6 +1,6 @@
 import datetime
 import numpy as np
-from heuristic_offload_new import heuristic_offload
+from heuristic_offload_new2 import heuristic_offload
 
 def offload(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RTT, Ne):
     #x = datetime.datetime.now().strftime('%d-%m_%H:%M:%S')
