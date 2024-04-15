@@ -90,6 +90,8 @@ def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_ed
             if (w > w_max and Rcpu_temp_sum <= Ce and Rmem_temp_sum <= Me ):
                 Sopt_id = S_edge_temp_id
                 delta_delay_opt = delta_delay
+                Cost_opt = Cost_cpu_edge_temp_sum + Cost_mem_edge_temp_sum
+                delta_opt = delay_old-delay_temp
                 w_max = w
             
         if (Sopt_id == Snew_edge_id):
@@ -114,4 +116,4 @@ def heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_ed
                 break
 
     S_new_edge_b = id2S(int(Snew_edge_id), 2 ** M)
-    return S_new_edge_b
+    return S_new_edge_b, Cost_opt, delta_opt

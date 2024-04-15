@@ -27,7 +27,6 @@ import matplotlib.pyplot as plt
 
 def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_edge, Ce, Me, Ne, lambd, Rs, M, db, horizon, e, Sold_b, delta_mes):
     
-    delta_unoff = -delta_mes
     ## SEARCH ALL PATHS FROM USER TO INSTANCES ##
     G = nx.DiGraph(Fcm) # Create the microservice dependency graph 
 
@@ -69,10 +68,14 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_
     Cost_mem_edge_old_sum = Cost_mem_edge * Rmem_old_edge_sum # Total Mem cost
     
     dependency_paths_edge_r_id = dependency_paths_edge_id.copy() # \Pi_r of paper
-    Snew_edge_id = Sold_edge_id
-    
+    Snew_edge_id = 2 # no microservice at the edge
+    Snew_b = np.zeros(2*M)
+    Snew_b[0:M-2]=1
+    Snew_b[2*M-1]=1 
+    delay_void = delayMat(Snew_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of placement state with no microservice at the edge 
+    target_delay = delay_old - 
     while True:
-        w_min = 1e6
+        w_max = 0
         Sopt_id = Snew_edge_id
         delta_delay_opt = -1
         for path_id in dependency_paths_edge_r_id :
@@ -87,9 +90,9 @@ def heuristic_unoffload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_
             S_temp_b = Sold_b
             S_temp_b[M:] = S_edge_temp_b
             delay_temp = delayMat(S_temp_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new placement state
-            delta_delay = delay_temp - delay_old # delay increase with new config
+            delta_delay = delay_old - delay_temp # delay increase with new config
             delta_cost = (Cost_cpu_edge_old_sum-Cost_cpu_edge_temp_sum) + (Cost_mem_edge_old_sum-Cost_mem_edge_temp_sum) # cost rediction with new config
-            w = delta_cost / delta_delay
+            w = delta_cost / delta_delay 
             if (delta_delay>delta_mes and w < w_min and Rcpu_temp_sum <= Ce and Rmem_temp_sum <= Me ):
                 Sopt_id = S_edge_temp_id
                 delta_delay_opt = delta_delay
