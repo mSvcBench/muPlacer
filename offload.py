@@ -12,7 +12,8 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     #filename = f'offload_{x}.mat'
     #np.save(filename, arr=[Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RTT])
 
-    ## INITIALIZATION ##
+
+    ## INITIALIZE VARIABLES ##
     app_edge = np.append(app_edge, 1) # Add the user in app_edge vector (user is in the edge cluster)
     Sold_b = np.concatenate((np.ones(int(M)), app_edge))
     Sold_b[M-1] = 0  # User is not in the cloud
@@ -30,6 +31,7 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     Rcpu_req[int(Ubit[0])-1] = 0   
     Rcpu_req[int(Ubit[1])-1] = 0
     
+
     # SAVE CURRENT VALUES FOR METRICS ##
     Scurr_edge_b = Sold_b[M:2*M] # Binary placement status containing edge microservices only
     Scurr_edge_id = S2id(Scurr_edge_b) # id-based placement status containing only edge microservices
@@ -71,6 +73,7 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
         Sold_edge_b = Scurr_edge_b # For offload, the old status is the current one
         Sold_edge_id = Scurr_edge_id 
     
+
     ## UNOFFLOAD ##
     else:
         ## COMPUTE EDGE DEPENDENCY PATHS ##
@@ -98,6 +101,7 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
         delay_target = delay_curr - delta_mes # analitical target delay 
         delta_target = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) - delay_target # for unoffload, the delta_target is from the status with no microservice at the edge  
     
+
     ## GREEDY ADDITION OF SUBGRAPHS TO EDGE CLUSTER ##
     
     delay_old = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the original configuration
@@ -170,7 +174,5 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     S_new_b[M:2*M] = S_new_edge_b   # new edge binary status
     delta_cost_opt = Cost_opt - Cost_edge_curr  # cost variation
     delta_final = delay_curr - delayMat(S_new_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # delay delta reached
-    
-    #best_S_edge, best_cost, best_delta, best_delta_cost = heuristic_offload(Fcm, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_edge, Ce, Me, Ne, lambd, Rs, M, 0, 1, 2, app.astype(int), delta_mes)
-    
+        
     return S_new_edge_b, Cost_opt, delta_final, delta_cost_opt
