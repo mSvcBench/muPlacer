@@ -1,8 +1,6 @@
+from offload_old1 import offload_old1
+from offload_old2 import offload_old2
 from offload import offload
-from offload2 import offload2
-from offload import offload
-from offload2 import offload2
-from offload3 import offload3
 
 from unoffload import unoffload
 from unoffload2 import unoffload2
@@ -46,8 +44,8 @@ for k in range(50):
 
     #result1 = offload(Rcpu, Rmem, Fcm, M, lambda_val, Rs, app_edge, min_delay_delta, RTT, Ne)
     #result1=result1[M:]
-    best_S_edge2, best_cost2, best_delta2 = offload2(Rcpu, Rmem, Fcm, M, lambda_val, Rs, app_edge, min_delay_delta, RTT, Ne)
-    best_S_edge3, best_cost3, best_delta3, best_delta_cost3 = offload3(Rcpu, Rmem, Fcm, M, lambda_val, Rs, app_edge, min_delay_delta, RTT, Ne)
+    best_S_edge2, best_cost2, best_delta2 = offload_old2(Rcpu, Rmem, Fcm, M, lambda_val, Rs, app_edge, min_delay_delta, RTT, Ne)
+    best_S_edge3, best_cost3, best_delta3, best_delta_cost3 = offload(Rcpu, Rmem, Fcm, M, lambda_val, Rs, app_edge, min_delay_delta, RTT, Ne)
     #print(result1)
 
     # if (np.array_equal(best_S_edge1,best_S_edge2)==False):
@@ -96,6 +94,6 @@ for k in range(200):
     #result1 = offload(Rcpu, Rmem, Fcm, M, lambda_val, Rs, app_edge, min_delay_delta, RTT, Ne)
     #result1=result1[M:]
     
-    best_S_edge3, best_cost3, best_delta3, best_delta_cost3 = offload3(Rcpu, Rmem, Fcm, M, lambda_val, Rs, app_edge, min_delay_delta, RTT, Ne)
+    best_S_edge3, best_cost3, best_delta3, best_delta_cost3 = offload(Rcpu, Rmem, Fcm, M, lambda_val, Rs, app_edge, min_delay_delta, RTT, Ne)
     print(best_S_edge3)
     print(f"cost3 {best_cost3}, delta3 = {best_delta3}, best_delta_cost3 = {best_delta_cost3}")

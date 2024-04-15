@@ -1,8 +1,8 @@
 import datetime
 import numpy as np
-from heuristic_offload_new2 import heuristic_offload
+from heuristic_offload_new import heuristic_offload
 
-def offload3(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RTT, Ne):
+def offload_old2(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RTT, Ne):
     #x = datetime.datetime.now().strftime('%d-%m_%H:%M:%S')
     #filename = f'offload_{x}.mat'
     #np.save(filename, arr=[Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RTT])
@@ -24,5 +24,5 @@ def offload3(Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, R
     Rcpu_req[int(Ubit[0])-1] = 0   
     Rcpu_req[int(Ubit[1])-1] = 0
     
-    best_S_edge, best_cost, best_delta, best_delta_cost = heuristic_offload(Fcm_nocache, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_edge, Ce, Me, Ne, lambd, Rs, M, 0, 1, 2, app.astype(int), min_delay_delta)
-    return best_S_edge, best_cost, best_delta, best_delta_cost
+    best_S_edge, best_cost, best_delta = heuristic_offload(Fcm_nocache, RTT, Rcpu_req, Rcpu, Rmem, Cost_cpu_edge, Cost_mem_edge, Ce, Me, Ne, lambd, Rs, M, 0, 1, 2, app.astype(int), min_delay_delta)
+    return best_S_edge, best_cost, best_delta

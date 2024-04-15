@@ -3,7 +3,7 @@ import os
 import subprocess
 import time
 from kubernetes import client, config
-from unoffload import unoffload
+from offload import offload
 from build_Fcm import Fcm
 
 
@@ -12,7 +12,7 @@ from build_Fcm import Fcm
 
 def OE_PAMP_unoff(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE):
     max_delay_delta = ((SLO_MARGIN_UNOFFLOAD * SLO) - AVG_DELAY) / 1000.0 # Maximum delay delta to satisfy SLO
-    output = unoffload(RCPU, RMEM, Fcm(prom, PERIOD, APP), M, lambda_value, Rs, APP_EDGE, max_delay_delta, RTT, NE) # Unoffload function
+    output = offload(RCPU, RMEM, Fcm(prom, PERIOD, APP), M, lambda_value, Rs, APP_EDGE, max_delay_delta, RTT, NE) # Unoffload function
     best_S_edge = np.array(output) # Istance-sets that must stay in the edge cluster according to OE_PAMP
     best_S_edge = np.delete(best_S_edge, -1) # Remove the last value (user) from best_S_edge
     
