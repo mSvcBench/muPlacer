@@ -5,7 +5,6 @@ import networkx as nx
 from S2id import S2id
 from delayMat import delayMat 
 from id2S import id2S
-from heuristic_offload_new2 import heuristic_offload
 
 def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     #x = datetime.datetime.now().strftime('%d-%m_%H:%M:%S')
@@ -33,16 +32,16 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     
 
     # SAVE CURRENT VALUES FOR METRICS ##
-    Scurr_edge_b = Sold_b[M:2*M] # Binary placement status containing edge microservices only
+    Scurr_edge_b = Sold_b[M:2*M] # Binary placement status containing only edge microservices
     Scurr_edge_id = S2id(Scurr_edge_b) # id-based placement status containing only edge microservices
-    delay_curr = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)
-    Rcpu_edge_curr = Rcpu[M:]
-    Rmem_edge_curr = Rmem[M:]
-    Rcpu_edge_sum_curr = np.sum(Scurr_edge_b * Rcpu_edge_curr) # Total CPU requested by instances in the edge
-    Rmem_edge_sum_curr = np.sum(Scurr_edge_b * Rmem_edge_curr) # Total Memory requested by instances in the edge
-    Cost_cpu_edge_sum_curr = Cost_cpu_edge * Rcpu_edge_sum_curr # Total CPU cost
-    Cost_mem_edge_sum_curr = Cost_mem_edge * Rmem_edge_sum_curr # Total Mem cost
-    Cost_edge_curr = Cost_cpu_edge_sum_curr + Cost_mem_edge_sum_curr
+    delay_curr = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the current configuration
+    Rcpu_edge_curr = Rcpu[M:] # CPU requested by the edge microservices
+    Rmem_edge_curr = Rmem[M:] # Memory requested by the edge microservices
+    Rcpu_edge_curr_sum = np.sum(Scurr_edge_b * Rcpu_edge_curr) # Total CPU requested by instances in the edge
+    Rmem_edge_curr_sum = np.sum(Scurr_edge_b * Rmem_edge_curr) # Total Memory requested by instances in the edge
+    Cost_cpu_edge_curr_sum = Cost_cpu_edge * Rcpu_edge_curr_sum # Total CPU cost
+    Cost_mem_edge_curr_sum = Cost_mem_edge * Rmem_edge_curr_sum # Total Mem cost
+    Cost_edge_curr = Cost_cpu_edge_curr_sum + Cost_mem_edge_curr_sum # Total cost
     
     
     ## SEARCH ALL PATHS FROM USER TO INSTANCES ##
@@ -68,8 +67,10 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
                     dependency_path_set_b[path] = 1 # binary-based encoding of the dependency path
                     dependency_path_set_id = S2id(dependency_path_set_b)  # id-based encoding of the dependency path
                     dependency_paths_set_id.append(dependency_path_set_id) # \Pi_c of paper
-        delay_target = delay_curr - delta_mes # analitical target delay 
+        ######### ?????????????????? #########
+        delay_target = delay_curr - delta_mes # analitical target delay (SLO)
         delta_target = delay_curr - delay_target # targeted delay increase
+        ######################################
         Sold_edge_b = Scurr_edge_b # For offload, the old status is the current one
         Sold_edge_id = Scurr_edge_id 
     
@@ -98,7 +99,7 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
         Sold_b[M-1:2*M-1] = 0
         Sold_edge_b = Sold_b[M:2*M] # For unoffload, the old status has no edge microservice
         Sold_edge_id = S2id(Sold_edge_b) 
-        delay_target = delay_curr - delta_mes # analitical target delay 
+        delay_target = delay_curr - delta_mes # analitical target delay (SLO)
         delta_target = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) - delay_target # for unoffload, the delta_target is from the status with no microservice at the edge  
     
 
@@ -107,10 +108,10 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     delay_old = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the original configuration
     Rcpu_edge = Rcpu[M:]
     Rmem_edge = Rmem[M:]
-    Rcpu_old_edge_sum = np.sum(Sold_edge_b * Rcpu_edge) # Total CPU requested by instances in the edge
-    Rmem_old_edge_sum = np.sum(Sold_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
-    Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_old_edge_sum # Total CPU cost
-    Cost_mem_edge_old_sum = Cost_mem_edge * Rmem_old_edge_sum # Total Mem cost
+    # Rcpu_old_edge_sum = np.sum(Sold_edge_b * Rcpu_edge) # Total CPU requested by instances in the edge
+    # Rmem_old_edge_sum = np.sum(Sold_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
+    # Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_old_edge_sum # Total CPU cost
+    # Cost_mem_edge_old_sum = Cost_mem_edge * Rmem_old_edge_sum # Total Mem cost
     
     dependency_paths_cloud_only_r_id = dependency_paths_set_id.copy() # \Pi_r of paper
     Snew_edge_id = Sold_edge_id

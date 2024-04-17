@@ -6,8 +6,8 @@ import subprocess
 import threading
 import csv
 from conf import *
-from OE_PAMP_unoff import OE_PAMP_unoff
-from OE_PAMP_off import OE_PAMP_off
+from E_PAMP_unoff import E_PAMP_unoff
+from E_PAMP_off import E_PAMP_off
 from IA_placement import IA_placement
 from random_placement import random_placement
 from mfu_placement import mfu_placement
@@ -419,7 +419,7 @@ def main():
                     lambda_value = get_lamba() # Average user requests per second
                     M = int(len(RCPU)/2) # Number of microservices
                     if PLACEMENT_TYPE == "OE_PAMP":
-                        OE_PAMP_off(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE)
+                        E_PAMP_off(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE)
                     elif PLACEMENT_TYPE == "RANDOM":
                         random_placement(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE)
                     elif PLACEMENT_TYPE == "MFU":
@@ -444,7 +444,7 @@ def main():
                         Rs = get_Rs() # Response size of each microservice instance-set
                         lambda_value = get_lamba() # Average user requests per second
                         M = int(len(RCPU)/2) # Number of microservice instance-set
-                        OE_PAMP_unoff(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE)  
+                        E_PAMP_unoff(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE)  
             time.sleep(1)
         else:
             print(f"\rHPA running...")
