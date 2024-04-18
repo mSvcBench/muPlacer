@@ -36,57 +36,114 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     
     delta_delay_new = 0
     Snew_b = None
-    while delta_mes > delta_delay_new:
-        if Snew_b is None:
-            Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
-        else:
-            Fci = np.matrix(buildFci(Snew_b, Fcm, M, e))
-        
-        if Snew_b is None:
-            Snew_edge_b = app_edge.copy()
-        else:
+
+    ## OFFLOAD ##
+    if delta_mes > 0:
+        while delta_mes > delta_delay_new:
+            if Snew_b is None:
+                Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
+            else:
+                Fci = np.matrix(buildFci(Snew_b, Fcm, M, e))
+            
+            if Snew_b is None:
+                Snew_edge_b = app_edge.copy()
+            else:
+                Snew_edge_b = Snew_b[M:2*M].copy()
+            Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
+            Snew_b[M-1] = 0
+
+            # DEFINE DICTIONARY FOR INTERACTION AWARE MATRIX ##
+            maxes = {
+                "app_i": 0,
+                "app_j": 0,
+                "value": 0
+            }
+
+            ## FIND THE MICROSERVICES WITH THE MOST INTERACTIONS ##
+            Nc = computeNcMat(Fci, M, e)
+            for i in range (2*M):
+                for j in range (M):
+                    x = Nc[j] * Fci[i,j]
+                    if x > maxes["value"]:
+                        maxes["value"] = x
+                        maxes["app_i"] = i
+                        maxes["app_j"] = j
+
             Snew_edge_b = Snew_b[M:2*M].copy()
-        Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
-        Snew_b[M-1] = 0
+            Snew_edge_b[maxes["app_i"]] = 1
+            Snew_edge_b[maxes["app_j"]] = 1
+            Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
+            Snew_b[M-1] = 0
 
-        # DEFINE DICTIONARY FOR INTERACTION AWARE MATRIX ##
-        maxes = {
-            "app_i": 0,
-            "app_j": 0,
-            "value": 0
-        }
+            
 
-        ## FIND THE MICROSERVICES WITH THE MOST INTERACTIONS ##
-        Nc = computeNcMat(Fci, M, e)
-        for i in range (2*M):
-            for j in range (M):
-                x = Nc[j] * Fci[i,j]
-                if x > maxes["value"]:
-                    maxes["value"] = x
-                    maxes["app_i"] = i
-                    maxes["app_j"] = j
+            ## COMPUTE THE NEW COST (CPU + MEMORY) OF THE NEW STATE ##
+            Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
+            Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
+            Cost_cpu_edge_new_sum = Cost_cpu_edge * Rcpu_edge_new_sum # Total CPU cost
+            Cost_mem_edge_new_sum = Cost_mem_edge * Rmem_edge_new_sum # Total Mem cost
+            Cost_edge_new = Cost_cpu_edge_new_sum + Cost_mem_edge_new_sum
 
-        Snew_edge_b = Snew_b[M:2*M].copy()
-        Snew_edge_b[maxes["app_i"]] = 1
-        Snew_edge_b[maxes["app_j"]] = 1
-        Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
-        Snew_b[M-1] = 0
+            delta_delay_new = delay_old - delayMat(Snew_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # delay delta reached
 
-        
+            delta_cost_opt =  Cost_edge_new - Cost_edge_old # cost variation
+            
+            if np.all(Snew_edge_b == 1):
+                break
+    
+    ## UNOFFLOAD  ##
+    else:
+        while delta_mes > delta_delay_new:
+            if Snew_b is None:
+                Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
+            else:
+                Fci = np.matrix(buildFci(Snew_b, Fcm, M, e))
+            
+            if Snew_b is None:
+                Snew_edge_b = app_edge.copy()
+            else:
+                Snew_edge_b = Snew_b[M:2*M].copy()
+            Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
+            Snew_b[M-1] = 0
 
-        ## COMPUTE THE NEW COST (CPU + MEMORY) OF THE NEW STATE ##
-        Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
-        Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
-        Cost_cpu_edge_new_sum = Cost_cpu_edge * Rcpu_edge_new_sum # Total CPU cost
-        Cost_mem_edge_new_sum = Cost_mem_edge * Rmem_edge_new_sum # Total Mem cost
-        Cost_edge_new = Cost_cpu_edge_new_sum + Cost_mem_edge_new_sum
+            # DEFINE DICTIONARY FOR INTERACTION AWARE MATRIX ##
+            maxes = {
+                "app_i": 0,
+                "app_j": 0,
+                "value": 0
+            }
 
-        delta_delay_new = delay_old - delayMat(Snew_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # delay delta reached
+            ## FIND THE MICROSERVICES WITH THE MOST INTERACTIONS ##
+            Nc = computeNcMat(Fci, M, e)
+            for i in range (2*M):
+                for j in range (M):
+                    x = Nc[j] * Fci[i,j]
+                    if x > maxes["value"]:
+                        maxes["value"] = x
+                        maxes["app_i"] = i
+                        maxes["app_j"] = j
 
-        delta_cost_opt =  Cost_edge_new - Cost_edge_old # cost variation
-        
-        if np.all(Snew_edge_b == 1):
-            break
+            Snew_edge_b = Snew_b[M:2*M].copy()
+            Snew_edge_b[maxes["app_i"]] = 1
+            Snew_edge_b[maxes["app_j"]] = 1
+            Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
+            Snew_b[M-1] = 0
+
+            
+
+            ## COMPUTE THE NEW COST (CPU + MEMORY) OF THE NEW STATE ##
+            Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
+            Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
+            Cost_cpu_edge_new_sum = Cost_cpu_edge * Rcpu_edge_new_sum # Total CPU cost
+            Cost_mem_edge_new_sum = Cost_mem_edge * Rmem_edge_new_sum # Total Mem cost
+            Cost_edge_new = Cost_cpu_edge_new_sum + Cost_mem_edge_new_sum
+
+            delta_delay_new = delay_old - delayMat(Snew_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # delay delta reached
+
+            delta_cost_opt =  Cost_edge_new - Cost_edge_old # cost variation
+            
+            if np.all(Snew_edge_b == 1):
+                break
 
 
     return Snew_edge_b, Cost_edge_new, delta_delay_new, delta_cost_opt

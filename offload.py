@@ -44,9 +44,9 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     Cost_edge_curr = Cost_cpu_edge_curr_sum + Cost_mem_edge_curr_sum # Total cost
     
     
-    ## SEARCH ALL PATHS FROM USER TO INSTANCES ##
+    ## SEARCH PATHS FROM USER TO INSTANCES ##
     G = nx.DiGraph(Fcm) # Create the microservice dependency graph 
-    dependency_paths_set = [] # cloud only dependency paths, each path is a list of the ids (0,M-1) of the contained microservices. \Pi_c of paper
+    dependency_paths_set = [] # Cloud only dependency paths, each path is a list of the ids (0,M-1) of the contained microservices. \Pi_c of paper
     dependency_paths_set_id = [] # id-based cloud only dependency paths
 
     ## OFFLOAD ##
@@ -64,15 +64,15 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
                 else:
                     dependency_paths_set.extend(path)
                     dependency_path_set_b = np.zeros(M)  
-                    dependency_path_set_b[path] = 1 # binary-based encoding of the dependency path
+                    dependency_path_set_b[path] = 1 # Binary-based encoding of the dependency path
                     dependency_path_set_id = S2id(dependency_path_set_b)  # id-based encoding of the dependency path
                     dependency_paths_set_id.append(dependency_path_set_id) # \Pi_c of paper
         ######### ?????????????????? #########
-        delay_target = delay_curr - delta_mes # analitical target delay (SLO)
-        delta_target = delay_curr - delay_target # targeted delay increase
+        delay_target = delay_curr - delta_mes # Analitical target delay (SLO)
+        delta_target = delay_curr - delay_target # Targeted delay increase
         ######################################
-        Sold_edge_b = Scurr_edge_b # For offload, the old status is the current one
-        Sold_edge_id = Scurr_edge_id 
+        Sold_edge_b = Scurr_edge_b.copy() # For offload, the old status is the current one
+        Sold_edge_id = Scurr_edge_id # id of the old status
     
 
     ## UNOFFLOAD ##
@@ -84,23 +84,23 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
             # Check if the path is "valid"
             for path in paths:
                 edge_presences = Scurr_edge_b[path]
-                # If all microservices in the path have edge_presences == 1, this path is "valid" because all microservices are running in the edge
+                # If not all microservices in the path have edge_presences == 1 this path is not "valid"
                 if not all(value == 1 for value in edge_presences):
                     break
                 else:
                     dependency_paths_set.extend(path)
                     dependency_path_set_b = np.zeros(M)  
-                    dependency_path_set_b[path] = 1 # binary-based encoding of the dependency path
+                    dependency_path_set_b[path] = 1 # Binary-based encoding of the dependency path
                     dependency_path_set_id = S2id(dependency_path_set_b)  # id-based encoding of the dependency path
                     dependency_paths_set_id.append(dependency_path_set_id) # \Pi_c of paper
         
-        # reset status with no microservice at the edge
+        # Reset status with no microservice at the edge
         Sold_b=np.ones(2*M)
         Sold_b[M-1:2*M-1] = 0
         Sold_edge_b = Sold_b[M:2*M] # For unoffload, the old status has no edge microservice
         Sold_edge_id = S2id(Sold_edge_b) 
-        delay_target = delay_curr - delta_mes # analitical target delay (SLO)
-        delta_target = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) - delay_target # for unoffload, the delta_target is from the status with no microservice at the edge  
+        delay_target = delay_curr - delta_mes # Analitical target delay (SLO)
+        delta_target = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) - delay_target # For unoffload, the delta_target is from the status with no microservice at the edge  
     
 
     ## GREEDY ADDITION OF SUBGRAPHS TO EDGE CLUSTER ##
@@ -114,20 +114,22 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     # Cost_mem_edge_old_sum = Cost_mem_edge * Rmem_old_edge_sum # Total Mem cost
     
     dependency_paths_cloud_only_r_id = dependency_paths_set_id.copy() # \Pi_r of paper
-    Snew_edge_id = Sold_edge_id
+    Snew_edge_id = Sold_edge_id  # Inizialize the new edge status
         
     while True:
-        w_min = float("inf")
-        Sopt_id = Snew_edge_id
-        Snew_edge_b = np.array(id2S(Snew_edge_id,2**M))
+        w_min = float("inf") # Initialize the weight
+        Sopt_id = Snew_edge_id # Initialize the optimal status
+        Snew_edge_b = np.array(id2S(Snew_edge_id,2**M)) # New edge status in binary encoding
+        # New placement status
         Snew_b = np.ones(2*M)
         Snew_b[M-1]=0
         Snew_b[M:] = Snew_edge_b
+
         Rcpu_new_edge_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
         Rmem_new_edge_sum = np.sum(Snew_edge_b * Rmem_edge) # Memory requested by the new state
         Cost_cpu_new_edge_sum = Cost_cpu_edge * Rcpu_new_edge_sum # Total CPU cost
         Cost_mem_new_edge_sum = Cost_mem_edge * Rmem_new_edge_sum # Total Mem cost  
-        Cost_opt = Cost_cpu_new_edge_sum + Cost_mem_new_edge_sum 
+        Cost_opt = Cost_cpu_new_edge_sum + Cost_mem_new_edge_sum # Total cost
         delay_new = delayMat(Snew_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new placement state
         r_delta_delay = delta_target - (delay_old-delay_new)
         # Check if the delay reduction is enough
@@ -135,20 +137,20 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
             #delay reduction reached
             break
         for path_id in dependency_paths_cloud_only_r_id :
-            S_edge_temp_id = Snew_edge_id # Starting configuration
+            #S_edge_temp_id = Snew_edge_id # Starting configuration ????????????????????????
             S_edge_temp_id = np.bitwise_or(path_id - 1, Snew_edge_id - 1) + 1  # New edge state adding new dependency path
             S_edge_temp_b = np.array(id2S(S_edge_temp_id, 2 ** M)) # New edge state in binary encoding
             Rcpu_temp_sum = np.sum(S_edge_temp_b * Rcpu_edge) # CPU requested by the new state
             Rmem_temp_sum = np.sum(S_edge_temp_b * Rmem_edge) # Memory requested by the new state
             Cost_cpu_edge_temp_sum = Cost_cpu_edge * Rcpu_temp_sum # Total CPU cost
             Cost_mem_edge_temp_sum = Cost_mem_edge * Rmem_temp_sum # Total Mem cost   
-            S_temp_b = Sold_b
+            S_temp_b = Sold_b.copy()
             S_temp_b[M:] = S_edge_temp_b
             delay_temp = delayMat(S_temp_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new placement state
             delta_delay = delay_new - delay_temp
             delta_cost = (Cost_cpu_edge_temp_sum-Cost_cpu_new_edge_sum) + (Cost_mem_edge_temp_sum-Cost_mem_new_edge_sum)
             w = delta_cost / min(delta_delay, r_delta_delay)
-            if (w < w_min and Rcpu_temp_sum <= Ce and Rmem_temp_sum <= Me and delta_delay>0):
+            if (w < w_min and Rcpu_temp_sum <= Ce and Rmem_temp_sum <= Me and delta_delay>=0):
                 Sopt_id = S_edge_temp_id
                 Cost_opt = Cost_cpu_edge_temp_sum + Cost_mem_edge_temp_sum  # cost of the solution
                 w_min = w

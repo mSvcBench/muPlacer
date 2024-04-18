@@ -36,36 +36,74 @@ def mfu_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     
     delta_delay_new = 0
     Snew_b = None
-    while delta_mes > delta_delay_new:
-        if Snew_b is None:
-            Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
-        else:
-            Fci = np.matrix(buildFci(Snew_b, Fcm, M, e))
-        Nc = computeNcMat(Fci, M, e)
-        Nc_cloud = Nc[:M-1] # Get the Nc values for the cloud microservices
-        argmax = np.argmax(Nc_cloud)
-        if Snew_b is None:
-            Snew_edge_b = app_edge.copy()
-        else:
-            Snew_edge_b = Snew_b[M:2*M].copy()
-        Snew_edge_b[argmax] = 1
-        Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
-        Snew_b[M-1] = 0
+
+    ## OFFLOAD ##
+    if delta_mes > 0:
+        while delta_mes > delta_delay_new:
+            if Snew_b is None:
+                Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
+            else:
+                Fci = np.matrix(buildFci(Snew_b, Fcm, M, e))
+            Nc = computeNcMat(Fci, M, e)
+            Nc_cloud = Nc[:M-1] # Get the Nc values for the cloud microservices
+            argmax = np.argmax(Nc_cloud)
+            if Snew_b is None:
+                Snew_edge_b = app_edge.copy()
+            else:
+                Snew_edge_b = Snew_b[M:2*M].copy()
+            Snew_edge_b[argmax] = 1
+            Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
+            Snew_b[M-1] = 0
+            
+
+            ## COMPUTE THE NEW COST (CPU + MEMORY) OF THE NEW STATE ##
+            Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
+            Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
+            Cost_cpu_edge_new_sum = Cost_cpu_edge * Rcpu_edge_new_sum # Total CPU cost
+            Cost_mem_edge_new_sum = Cost_mem_edge * Rmem_edge_new_sum # Total Mem cost
+            Cost_edge_new = Cost_cpu_edge_new_sum + Cost_mem_edge_new_sum
+
+            delta_delay_new = delay_old - delayMat(Snew_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay delta reached
+
+            delta_cost_opt =  Cost_edge_new - Cost_edge_old # Cost variation
+            
+            if np.all(Snew_edge_b == 1):
+                break
         
+        ## UNOFFLOAD  ##
+        else:
+            while -delta_mes > delta_delay_new:
+                if Snew_b is None:
+                    Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
+                else:
+                    Fci = np.matrix(buildFci(Snew_b, Fcm, M, e))
+                Nc = computeNcMat(Fci, M, e)
+                Nc_cloud = Nc[:M-1] # Get the Nc values for the cloud microservices
+                argmax = np.argmax(Nc_cloud)
+                if Snew_b is None:
+                    Snew_edge_b = app_edge.copy()
+                else:
+                    Snew_edge_b = Snew_b[M:2*M].copy()
+                Snew_edge_b[argmax] = 1
+                Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
+                Snew_b[M-1] = 0
+                
 
-        ## COMPUTE THE NEW COST (CPU + MEMORY) OF THE NEW STATE ##
-        Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
-        Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
-        Cost_cpu_edge_new_sum = Cost_cpu_edge * Rcpu_edge_new_sum # Total CPU cost
-        Cost_mem_edge_new_sum = Cost_mem_edge * Rmem_edge_new_sum # Total Mem cost
-        Cost_edge_new = Cost_cpu_edge_new_sum + Cost_mem_edge_new_sum
+                ## COMPUTE THE NEW COST (CPU + MEMORY) OF THE NEW STATE ##
+                Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
+                Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
+                Cost_cpu_edge_new_sum = Cost_cpu_edge * Rcpu_edge_new_sum # Total CPU cost
+                Cost_mem_edge_new_sum = Cost_mem_edge * Rmem_edge_new_sum # Total Mem cost
+                Cost_edge_new = Cost_cpu_edge_new_sum + Cost_mem_edge_new_sum # Total cost
 
-        delta_delay_new = delay_old - delayMat(Snew_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # delay delta reached
+                delta_delay_new = delayMat(Snew_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) - delay_old # Delay delta reached
 
-        delta_cost_opt =  Cost_edge_new - Cost_edge_old # cost variation
-        
-        if np.all(Snew_edge_b == 1):
-            break
+                delta_cost_opt = Cost_edge_old - Cost_edge_new  # Cost variation
+                
+                if np.all(Snew_edge_b == 1):
+                    break
+            
+
 
 
     return Snew_edge_b, Cost_edge_new, delta_delay_new, delta_cost_opt
