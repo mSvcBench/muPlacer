@@ -19,4 +19,7 @@ def computeDi(Nc, Rcpu, Rcpu_req, lambd, M, e):
         Di = np.array((Rcpu_req / Rcpu) / (1 - rho_c))
     for ubit in Ubits:
         Di[ubit-1] = 0
+    for i, Di_v in enumerate(Di):
+        if np.isnan(Di_v):
+            Di[i] = 0
     return Di
