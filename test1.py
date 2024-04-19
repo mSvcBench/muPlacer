@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 for k in range(100):
     print(f'\n\ntest {k}')  
     RTT = 0.0869
-    M = 50
-    delta_mes = 0.2
+    M = 30
+    delta_mes = 0.1
     app_edge = np.zeros(M-1)
 
     Rs = np.random.randint(500,1000,M)
