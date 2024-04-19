@@ -22,7 +22,7 @@ def delayMat(S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e):
     MN = M * e   # edge+cloud microservice instance-sets
     Fci = np.matrix(buildFci(S, Fcm, M, e))
     Nc = computeNcMat(Fci, M, e)
-    Di = computeDi(Nc, Rcpu, Rcpu_req, lambd, M, e)
+    Di = computeDi(Nc, Rcpu, Rcpu_req, lambd, M, e) if np.sum(Rcpu_req) > 0 else np.zeros(2*M) 
     Dn, Tnce = netdelay(S, RTT, Ne, lambd, Rs, Fci, Nc, M, e) 
     
     H = -(Fci.T)

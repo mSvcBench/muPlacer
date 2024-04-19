@@ -23,13 +23,15 @@ def mfu_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     
     ## COMPUTE THE COST (CPU + MEMORY) OF THE OLD STATE ##
     Sold_edge_b = Sold_b[M:2*M] # Binary placement status containing edge microservices only
-    Rcpu_edge = Rcpu[M:]
-    Rmem_edge = Rmem[M:]
+    Rcpu_edge = Rcpu[:M]
+    Rmem_edge = Rmem[:M]
     Rcpu_edge_old_sum = np.sum(Sold_edge_b * Rcpu_edge) # Total CPU requested by instances in the edge
     Rmem_edge_old_sum = np.sum(Sold_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
     Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_edge_old_sum # Total CPU cost
     Cost_mem_edge_old_sum = Cost_mem_edge * Rmem_edge_old_sum # Total Mem cost
     Cost_edge_old = Cost_cpu_edge_old_sum + Cost_mem_edge_old_sum
+
+    n_rounds = 0
     
     ## COMPUTE THE DELAY OF THE OLD STATE ##
     delay_old = delayMat(Sold_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2)
@@ -40,6 +42,7 @@ def mfu_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     ## OFFLOAD ##
     if delta_mes > 0:
         while delta_mes > delta_delay_new:
+            n_rounds = n_rounds + 1
             if Snew_b is None:
                 Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
             else:
@@ -106,7 +109,7 @@ def mfu_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
 
 
 
-    return Snew_edge_b, Cost_edge_new, delta_delay_new, delta_cost_opt
+    return Snew_edge_b, Cost_edge_new, delta_delay_new, delta_cost_opt, n_rounds
 
 
         

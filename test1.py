@@ -12,15 +12,21 @@ import matplotlib.pyplot as plt
 for k in range(100):
     print(f'\n\ntest {k}')  
     RTT = 0.0869
-    delta_mes = 0.02
-    app_edge = np.array([1, 0, 0, 0, 0, 0, 0, 0, 0])
-    Rs = np.array([1345.95598738420, 1335.07762879323, 1388.14116002795, 1343.13896648045, 1354.06387665198, 1364.47552447552, 1315.36496350365, 1374.55390334572, 1440.83333333333])
-    lambda_val = 40.1576
-    M = 10
-    Ne = 1e9
+    M = 50
+    delta_mes = 0.2
+    app_edge = np.zeros(M-1)
 
-    Rcpu = np.array([1, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0, 1, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0])
-    Rmem = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    Rs = np.random.randint(500,1000,M)
+    Rs[-1]=0
+    Rs = np.append(Rs, Rs)
+    lambda_val = 40.1576
+    Ne = 1e9
+    Rcpu_quota = 0.25
+    Rcpu = (np.random.randint(8,size=M)+1) * Rcpu_quota
+    Rcpu[-1]=0
+    Rcpu = np.append(Rcpu, Rcpu)
+    # Rcpu = np.array([1, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0, 1, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0])
+    Rmem = np.zeros(2*M)
     Rcpu[M:2*M-1] = Rcpu[M:2*M-1] * app_edge
     Rmem[M:2*M-1] = Rmem[M:2*M-1] * app_edge
     
@@ -31,15 +37,15 @@ for k in range(100):
     Fcm[M-1,0] = 1
 
     ## E_PAMP ##
-    best_S_edge, best_cost, best_delta, best_delta_cost = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne)
+    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne)
     #print(f"Result E_PAMP in offload:\n {best_S_edge},\n CPU_cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}")
     
     ## MFU ##
-    best_S_edge2, best_cost2, best_delta2, best_delta_cost2 = mfu_heuristic(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne)
+    best_S_edge2, best_cost2, best_delta2, best_delta_cost2, n_rounds2 = mfu_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
     #print(f"Result MFU in offload:\n {best_S_edge2},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta2}, delta_cost: = {best_delta_cost2}")
 
     ## IA ##
-    best_S_edge3, best_cost3, best_delta3, best_delta_cost3 = IA_heuristic(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne)
+    best_S_edge3, best_cost3, best_delta3, best_delta_cost3, n_rounds3 = IA_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
     #print(f"Result IA in offload:\n {best_S_edge3},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta3}, delta_cost: = {best_delta_cost3}")
 
 
@@ -49,16 +55,16 @@ for k in range(100):
 
     # # if (np.array_equal(best_S_edge1,best_S_edge2)==False):
     # #     print("Result Mismatch 1 2")
-    if np.array_equal(best_S_edge,best_S_edge3)==False or np.array_equal(best_S_edge,best_S_edge2)==False:
+    if  best_cost != best_cost2 or best_cost != best_cost3 or n_rounds != n_rounds2 or n_rounds != n_rounds3:
         #print(Fcm)
         ## E_PAMP ##
-        print(f"Result E_PAMP in offload:\n {best_S_edge},\n CPU_cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}")
+        print(f"Result E_PAMP in offload:\n {best_S_edge},\n CPU_cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
     
         ## MFU ##
-        print(f"Result MFU in offload:\n {best_S_edge2},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta2}, delta_cost: = {best_delta_cost2}")
+        print(f"Result MFU in offload:\n {best_S_edge2},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta2}, delta_cost: = {best_delta_cost2}, rounds: = {n_rounds2}")
 
         ## IA ##
-        print(f"Result IA in offload:\n {best_S_edge3},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta3}, delta_cost: = {best_delta_cost3}")
+        print(f"Result IA in offload:\n {best_S_edge3},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta3}, delta_cost: = {best_delta_cost3}, rounds: = {n_rounds3}")
 
 
 

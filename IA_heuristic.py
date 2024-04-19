@@ -23,8 +23,8 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     
     ## COMPUTE THE COST (CPU + MEMORY) OF THE OLD STATE ##
     Sold_edge_b = Sold_b[M:2*M] # Binary placement status containing edge microservices only
-    Rcpu_edge = Rcpu[M:]
-    Rmem_edge = Rmem[M:]
+    Rcpu_edge = Rcpu[:M]
+    Rmem_edge = Rmem[:M]
     Rcpu_edge_old_sum = np.sum(Sold_edge_b * Rcpu_edge) # Total CPU requested by instances in the edge
     Rmem_edge_old_sum = np.sum(Sold_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
     Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_edge_old_sum # Total CPU cost
@@ -37,9 +37,12 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     delta_delay_new = 0
     Snew_b = None
 
+    n_rounds = 0
+
     ## OFFLOAD ##
     if delta_mes > 0:
         while delta_mes > delta_delay_new:
+            n_rounds = n_rounds + 1
             if Snew_b is None:
                 Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
             else:
@@ -66,7 +69,7 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
                     x = Nc[j] * Fci[i,j]
                     if x > maxes["value"]:
                         maxes["value"] = x
-                        maxes["app_i"] = i
+                        maxes["app_i"] = i if i<M else i-M
                         maxes["app_j"] = j
 
             Snew_edge_b = Snew_b[M:2*M].copy()
@@ -146,7 +149,7 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
                 break
 
 
-    return Snew_edge_b, Cost_edge_new, delta_delay_new, delta_cost_opt
+    return Snew_edge_b, Cost_edge_new, delta_delay_new, delta_cost_opt, n_rounds
 
 
         
