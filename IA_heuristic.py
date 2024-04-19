@@ -23,8 +23,11 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     
     ## COMPUTE THE COST (CPU + MEMORY) OF THE OLD STATE ##
     Sold_edge_b = Sold_b[M:2*M] # Binary placement status containing edge microservices only
-    Rcpu_edge = Rcpu[:M]
-    Rmem_edge = Rmem[:M]
+    Rcpu_edge = Rcpu[M:2*M]
+    Rmem_edge = Rmem[M:2*M]
+    Rcpu_cloud = Rcpu[0:M]
+    Rmem_cloud = Rmem[0:M]
+    
     Rcpu_edge_old_sum = np.sum(Sold_edge_b * Rcpu_edge) # Total CPU requested by instances in the edge
     Rmem_edge_old_sum = np.sum(Sold_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
     Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_edge_old_sum # Total CPU cost
@@ -40,20 +43,18 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     n_rounds = 0
 
     ## OFFLOAD ##
+    Snew_edge_b = app_edge.copy()
+    Snew_b = Sold_b.copy()
     if delta_mes > 0:
         while delta_mes > delta_delay_new:
             n_rounds = n_rounds + 1
-            if Snew_b is None:
-                Fci = np.matrix(buildFci(Sold_b, Fcm, M, e))
-            else:
-                Fci = np.matrix(buildFci(Snew_b, Fcm, M, e))
             
             if Snew_b is None:
                 Snew_edge_b = app_edge.copy()
             else:
                 Snew_edge_b = Snew_b[M:2*M].copy()
-            Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
-            Snew_b[M-1] = 0
+            #Snew_b = np.concatenate((np.ones(int(M)), Snew_edge_b))
+            #Snew_b[M-1] = 0
 
             # DEFINE DICTIONARY FOR INTERACTION AWARE MATRIX ##
             maxes = {
@@ -63,14 +64,15 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
             }
 
             ## FIND THE MICROSERVICES WITH THE MOST INTERACTIONS ##
-            Nc = computeNcMat(Fci, M, e)
-            for i in range (2*M):
-                for j in range (M):
-                    x = Nc[j] * Fci[i,j]
-                    if x > maxes["value"]:
-                        maxes["value"] = x
-                        maxes["app_i"] = i if i<M else i-M
-                        maxes["app_j"] = j
+            Nc = computeNcMat(Fcm, M, 1)
+            for i in range (M-1):
+                for j in range (M-1):
+                    if j!=i and (Snew_edge_b[i]==0 or Snew_edge_b[j]==0):
+                        x = Nc[j] * Fcm[i,j]
+                        if x > maxes["value"]:
+                            maxes["value"] = x
+                            maxes["app_i"] = i
+                            maxes["app_j"] = j
 
             Snew_edge_b = Snew_b[M:2*M].copy()
             Snew_edge_b[maxes["app_i"]] = 1
@@ -148,7 +150,25 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
             if np.all(Snew_edge_b == 1):
                 break
 
+    path_id_n = [i for i, x in enumerate(Snew_edge_b) if x > 0]
+    Fci_old = np.matrix(buildFci(Sold_b, Fcm, M, e))
+    Nci_old = computeNcMat(Fci_old, M, e)
+    Fci_new = np.matrix(buildFci(Snew_b, Fcm, M, e))
+    Nci_new = computeNcMat(Fci_new, M, e)
+    Rcpu_edge_new = Rcpu_edge.copy()
+    Rcpu_cloud_new = Rcpu_cloud.copy()
+    Rmem_edge_new = Rmem_edge.copy()
+    Rmem_cloud_new = Rmem_cloud.copy()
+    for k in path_id_n:
+                if Nci_old[k]>0:
+                    cloud_cpu_reduction = (1-Nci_new[k]/Nci_old[k]) * Rcpu_cloud[k]  # equal to edge cpu increase
+                    cloud_mem_reduction = (1-Nci_new[k]/Nci_old[k]) * Rmem_cloud[k]  # equal to edge mem increase
+                    Rcpu_edge_new[k] = Rcpu_edge_new[k] + cloud_cpu_reduction
+                    Rmem_edge_new[k] = Rmem_edge_new[k] + cloud_mem_reduction
+                    Rcpu_cloud_new[k] = Rcpu_cloud_new[k] - cloud_cpu_reduction
+                    Rmem_cloud_new[k] = Rmem_edge_new[k] - cloud_mem_reduction
 
+    Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_edge_new) + Cost_mem_edge * np.sum(Rmem_edge_new) # Total edge cost
     return Snew_edge_b, Cost_edge_new, delta_delay_new, delta_cost_opt, n_rounds
 
 

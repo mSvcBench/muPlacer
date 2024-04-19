@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 for k in range(100):
     print(f'\n\ntest {k}')  
     RTT = 0.0869
-    M = 30
+    M = 20
     delta_mes = 0.1
     app_edge = np.zeros(M-1)
 
@@ -31,9 +31,11 @@ for k in range(100):
     Rmem[M:2*M-1] = Rmem[M:2*M-1] * app_edge
     
     Fcm = np.zeros((M,M))
+    n_parents = 1
     for i in range(1,M-1):
-        a = np.random.randint(i)
-        Fcm[a,i]=np.random.uniform(0,0.2)
+        for j in range(n_parents):
+            a = np.random.randint(i)
+            Fcm[a,i]=np.random.uniform(0,1)
     Fcm[M-1,0] = 1
 
     ## E_PAMP ##

@@ -51,11 +51,11 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     Scurr_cloud_id = S2id(Scurr_cloud_b) # id-based placement status containing only edge microservices
     Rcpu_cloud_curr = Rcpu[:M] # CPU requested by the edge microservices
     Rmem_cloud_curr = Rmem[:M] # Memory requested by the edge microservices
-    Rcpu_cloud_curr_sum = np.sum(Scurr_cloud_b * Rcpu_cloud_curr) # Total CPU requested by instances in the edge
-    Rmem_cloud_curr_sum = np.sum(Scurr_cloud_b * Rmem_cloud_curr) # Total Memory requested by instances in the edge
-    Cost_cpu_cloud_curr_sum = Cost_cpu_edge * Rcpu_cloud_curr_sum # Total CPU cost
-    Cost_mem_cloud_curr_sum = Cost_mem_edge * Rmem_cloud_curr_sum # Total Mem cost
-    Cost_cloud_curr = Cost_cpu_cloud_curr_sum + Cost_mem_cloud_curr_sum # Total cost
+    # Rcpu_cloud_curr_sum = np.sum(Scurr_cloud_b * Rcpu_cloud_curr) # Total CPU requested by instances in the edge
+    # Rmem_cloud_curr_sum = np.sum(Scurr_cloud_b * Rmem_cloud_curr) # Total Memory requested by instances in the edge
+    # Cost_cpu_cloud_curr_sum = Cost_cpu_edge * Rcpu_cloud_curr_sum # Total CPU cost
+    # Cost_mem_cloud_curr_sum = Cost_mem_edge * Rmem_cloud_curr_sum # Total Mem cost
+    # Cost_cloud_curr = Cost_cpu_cloud_curr_sum + Cost_mem_cloud_curr_sum # Total cost
 
     ## compute instance-set call frequency matrix
     Fci = np.matrix(buildFci(Scurr_b, Fcm, M, e))
@@ -133,7 +133,6 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     Rmem_edge_opt = Rmem_edge_curr.copy()
     Rcpu_cloud_opt = Rcpu_cloud_curr.copy()
     Rmem_cloud_opt = Rmem_cloud_curr.copy()
-    Cost_edge_opt  = Cost_cpu_edge * np.sum(Rcpu_edge_opt) + Cost_mem_edge * np.sum(Rmem_edge_opt) # Total edge cost
     
     while True:
         w_min = float("inf") # Initialize the weight
@@ -146,6 +145,9 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
         S_b_new = np.ones(2*M)
         S_b_new[M-1]=0
         S_b_new[M:] = S_edge_b_new.copy()
+        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M, e))
+        Nci_new = computeNcMat(Fci_new, M, e)
+        
         delay_new = delayMat(S_b_new, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new placement state
         r_delta_delay = delta_target - (delay_old-delay_new)
         Cost_edge_new  = Cost_cpu_edge * np.sum(Rcpu_edge_new) + Cost_mem_edge * np.sum(Rmem_edge_new) # Total edge cost
@@ -175,8 +177,8 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
             path_id_n = [i for i, x in enumerate(path_id_b) if x > 0]
             for k in path_id_n:
                 if Nci[k]>0:
-                    cloud_cpu_reduction = (1-Nci_temp[k]/Nci[k]) * Rcpu_cloud_new[k]  # equal to edge cpu increase
-                    cloud_mem_reduction = (1-Nci_temp[k]/Nci[k]) * Rmem_cloud_new[k]  # equal to edge mem increase
+                    cloud_cpu_reduction = (1-Nci_temp[k]/Nci_new[k]) * Rcpu_cloud_new[k]  # equal to edge cpu increase
+                    cloud_mem_reduction = (1-Nci_temp[k]/Nci_new[k]) * Rmem_cloud_new[k]  # equal to edge mem increase
                     Rcpu_edge_temp[k] = Rcpu_edge_temp[k] + cloud_cpu_reduction
                     Rmem_edge_temp[k] = Rmem_edge_temp[k] + cloud_mem_reduction
                     Rcpu_cloud_temp[k] = Rcpu_cloud_temp[k] - cloud_cpu_reduction
