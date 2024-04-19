@@ -132,7 +132,7 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     
     dependency_paths_cloud_only_r_id = dependency_paths_set_id.copy() # \Pi_r of paper
     Snew_edge_id = Sold_edge_id  # Inizialize the new edge status
-        
+
     while True:
         w_min = float("inf") # Initialize the weight
         Sopt_id = Snew_edge_id # Initialize the optimal status
@@ -166,22 +166,22 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
       
             cloud_cpu_reduction = 0
             cloud_mem_reduction = 0
-            Rcpu_edge_temp = Rcpu_edge_curr
-            Rmem_edge_temp = Rmem_edge_curr
+            Rcpu_edge_temp = Rcpu_edge_curr.copy() # CPU requested by the edge microservices
+            Rmem_edge_temp = Rmem_edge_curr.copy() # Memory requested by the edge microservices
             for k in range(M):
                 if Nci[k]>0:
-                    cloud_cpu_reduction = cloud_cpu_reduction + (1-Nci_temp[k]/Nci[k]) * Rcpu_cloud_curr[k]  ## equal to edge cpu increase
-                    cloud_mem_reduction = cloud_mem_reduction + (1-Nci_temp[k]/Nci[k]) * Rmem_cloud_curr[k]  ## equal to edge mem increase
-                    Rcpu_edge_temp[k] +=  (1-Nci_temp[k]/Nci[k]) * Rcpu_cloud_curr[k]
-                    Rmem_edge_temp[k] +=  (1-Nci_temp[k]/Nci[k]) * Rmem_cloud_curr[k]
+                    cloud_cpu_reduction = cloud_cpu_reduction + (1-Nci_temp[k]/Nci[k]) * Rcpu_cloud_curr[k]  # equal to edge cpu increase
+                    cloud_mem_reduction = cloud_mem_reduction + (1-Nci_temp[k]/Nci[k]) * Rmem_cloud_curr[k]  # equal to edge mem increase
+                    Rcpu_edge_temp[k] = Rcpu_edge_temp[k] + (1-Nci_temp[k]/Nci[k]) * Rcpu_cloud_curr[k]
+                    Rmem_edge_temp[k] = Rmem_edge_temp[k] + (1-Nci_temp[k]/Nci[k]) * Rmem_cloud_curr[k]
             Rcpu_temp_sum = np.sum(Rcpu_edge_temp) # CPU requested by the new state
             Rmem_temp_sum = np.sum(Rmem_edge_temp) # Memory requested by the new state
             Cost_cpu_edge_temp_sum = Cost_cpu_edge * Rcpu_temp_sum # Total CPU cost
             Cost_mem_edge_temp_sum = Cost_mem_edge * Rmem_temp_sum # Total Mem cost   
         
-            delta_cost = cloud_cpu_reduction*Cost_cpu_edge + cloud_mem_reduction*cloud_mem_reduction
+            delta_cost = cloud_cpu_reduction * Cost_cpu_edge + cloud_mem_reduction * Cost_mem_edge
             w = delta_cost / min(delta_delay, r_delta_delay)
-            if (w < w_min and Rcpu_temp_sum <= Ce and Rmem_temp_sum <= Me and delta_delay>=0):
+            if (w < w_min and Rcpu_temp_sum <= Ce and Rmem_temp_sum <= Me and delta_delay>0):
                 Sopt_id = S_edge_temp_id
                 Cost_opt = Cost_cpu_edge_temp_sum + Cost_mem_edge_temp_sum  # cost of the solution
                 w_min = w
@@ -207,6 +207,8 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     S_new_b[M-1]=0
     S_new_b[M:2*M] = S_new_edge_b   # new edge binary status
     delta_cost_opt = Cost_opt - Cost_edge_curr  # cost variation
+    print(S_new_edge_b)
+    print(Cost_opt)
     delta_final = delay_curr - delayMat(S_new_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # delay delta reached
 
     return S_new_edge_b, Cost_opt, delta_final, delta_cost_opt
