@@ -145,8 +145,8 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
         S_b_new = np.ones(2*M)
         S_b_new[M-1]=0
         S_b_new[M:] = S_edge_b_new.copy()
-        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M, e))
-        Nci_new = computeNcMat(Fci_new, M, e)
+        # Fci_new = np.matrix(buildFci(S_b_new, Fcm, M, e))
+        # Nci_new = computeNcMat(Fci_new, M, e)
         
         delay_new = delayMat(S_b_new, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new placement state
         r_delta_delay = delta_target - (delay_old-delay_new)
@@ -166,28 +166,39 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
             
             delay_temp = delayMat(S_b_temp, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new placement state
             delta_delay = delay_new - delay_temp
-            
+
             Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M, e))
             Nci_temp = computeNcMat(Fci_temp, M, e)
-            Rcpu_edge_temp = Rcpu_edge_new.copy() # CPU requested by the edge microservices
-            Rmem_edge_temp = Rmem_edge_new.copy() # Memory requested by the edge microservices
-            Rcpu_cloud_temp = Rcpu_cloud_new.copy() # CPU requested by the edge microservices
-            Rmem_cloud_temp = Rmem_cloud_new.copy() # Memory requested by the edge microservices
-            path_id_b = id2S(path_id,2**M)
-            path_id_n = [i for i, x in enumerate(path_id_b) if x > 0]
-            for k in path_id_n:
-                if Nci[k]>0:
-                    cloud_cpu_reduction = (1-Nci_temp[k]/Nci_new[k]) * Rcpu_cloud_new[k]  # equal to edge cpu increase
-                    cloud_mem_reduction = (1-Nci_temp[k]/Nci_new[k]) * Rmem_cloud_new[k]  # equal to edge mem increase
+            # Rcpu_edge_temp = Rcpu_edge_new.copy() # CPU requested by the edge microservices
+            # Rmem_edge_temp = Rmem_edge_new.copy() # Memory requested by the edge microservices
+            # Rcpu_cloud_temp = Rcpu_cloud_new.copy() # CPU requested by the edge microservices
+            # Rmem_cloud_temp = Rmem_cloud_new.copy() # Memory requested by the edge microservices
+            Rcpu_edge_temp = Rcpu_edge_curr.copy() # CPU requested by the edge microservices
+            Rmem_edge_temp = Rmem_edge_curr.copy() # Memory requested by the edge microservices
+            Rcpu_cloud_temp = Rcpu_cloud_curr.copy() # CPU requested by the edge microservices
+            Rmem_cloud_temp = Rmem_cloud_curr.copy() # Memory requested by the edge microservices
+            #path_id_b = id2S(path_id,2**M)
+            #path_id_n = [i for i, x in enumerate(path_id_b) if x > 0]
+            for k in range(M):
+                if Nci[k]>0:                
+                # if Nci_new[k]>0:
+                    # cloud_cpu_reduction = (1-Nci_temp[k]/Nci_new[k]) * Rcpu_cloud_new[k]  # equal to edge cpu increase
+                    # cloud_mem_reduction = (1-Nci_temp[k]/Nci_new[k]) * Rmem_cloud_new[k]  # equal to edge mem increase
+                    cloud_cpu_reduction = (1-Nci_temp[k]/Nci[k]) * Rcpu_cloud_curr[k]  # equal to edge cpu increase
+                    cloud_mem_reduction = (1-Nci_temp[k]/Nci[k]) * Rmem_cloud_curr[k]  # equal to edge mem increase
                     Rcpu_edge_temp[k] = Rcpu_edge_temp[k] + cloud_cpu_reduction
                     Rmem_edge_temp[k] = Rmem_edge_temp[k] + cloud_mem_reduction
                     Rcpu_cloud_temp[k] = Rcpu_cloud_temp[k] - cloud_cpu_reduction
                     Rmem_cloud_temp[k] = Rmem_edge_temp[k] - cloud_mem_reduction
             Cost_edge_temp = Cost_cpu_edge * np.sum(Rcpu_edge_temp) + Cost_mem_edge * np.sum(Rmem_edge_temp) # Total edge cost
-            delta_cost = Cost_edge_temp - Cost_edge_new
+            delta_cost = Cost_edge_temp - Cost_edge_curr
+            # delta_cost = Cost_edge_temp - Cost_edge_new
             
+            if delta_delay < 0:
+                delta_delay = 1e-9 * abs(delta_delay)
             w = delta_cost / min(delta_delay, r_delta_delay)
-            if (w < w_min and delta_delay>0):
+
+            if w < w_min:
                 S_edge_id_opt = S_edge_id_temp
                 Rcpu_edge_opt = Rcpu_edge_temp.copy()
                 Rmem_edge_opt = Rmem_edge_temp.copy()
