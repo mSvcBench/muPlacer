@@ -195,8 +195,9 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
             # delta_cost = Cost_edge_temp - Cost_edge_new
             
             if delta_delay < 0:
-                delta_delay = 1e-9 * abs(delta_delay)
-            w = delta_cost / min(delta_delay, r_delta_delay)
+                w = 1e6 - delta_cost / min(1000*delta_delay, 1000*r_delta_delay)
+            else:
+                w = delta_cost / min(1000*delta_delay, 1000*r_delta_delay)
 
             if w < w_min:
                 S_edge_id_opt = S_edge_id_temp

@@ -9,12 +9,19 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from igraph import *
+from computeNcMat import computeNcMat
+import matplotlib.pyplot as plt
+
+def edges_reversal(graph):
+    for edge in graph.get_edgelist():
+        graph.delete_edges([(edge[0], edge[1])])
+        graph.add_edges([(edge[1], edge[0])])
 
 for k in range(100):
     print(f'\n\ntest {k}')  
     RTT = 0.0869
-    M = 20
-    delta_mes = 0.05
+    M = 30
+    delta_mes = 0.01
     app_edge = np.zeros(M-1)
 
     Rs = np.random.randint(1000,50000,M)
@@ -22,22 +29,41 @@ for k in range(100):
     Rs = np.append(Rs, Rs)
     lambda_val = 20
     Ne = 1e9
-    Rcpu_quota = 0.25
-    Rcpu = (np.random.randint(8,size=M)+1) * Rcpu_quota
+    # Rcpu_quota = 0.25
+    # Rcpu = (np.random.randint(32,size=M)+1) * Rcpu_quota
+    # Rcpu[-1]=0
+    # Rcpu = np.append(Rcpu, Rcpu)
+    # Rcpu = np.array([1, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0, 1, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0])
+    # Rmem = np.zeros(2*M)
+    # Rcpu[M:2*M-1] = Rcpu[M:2*M-1] * app_edge
+    # Rmem[M:2*M-1] = Rmem[M:2*M-1] * app_edge
+
+    Fcm = np.zeros([M,M])
+    g = Graph.Barabasi(n=M-1, m=2, power=0.9,
+                       zero_appeal=0.9, directed=True)
+    edges_reversal(g)
+    Fcm[:M-1,:M-1] = np.matrix(g.get_adjacency())  
+    # n_parents = 4
+    # for i in range(1,M-1):
+    #     n_parent=np.random.randint(1,n_parents)
+    #     for j in range(n_parent):
+    #         a = np.random.randint(i)
+    #         Fcm[a,i]=np.random.uniform(0,1)
+    for i in range(0,M-1):
+        for j in range(0,M-1):
+            Fcm[i,j]=np.random.uniform(0.1,0.3) if Fcm[i,j]>0 else 0
+    Fcm[M-1,0] = 1
+    Nc = computeNcMat(Fcm, M, 1)
+    Rcpu = Nc/max(Nc) * 16 
     Rcpu[-1]=0
     Rcpu = np.append(Rcpu, Rcpu)
-    # Rcpu = np.array([1, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0, 1, 0.25, 0.25, 0.25, 0.5, 0.25, 0.25, 0.25, 0.25, 0])
     Rmem = np.zeros(2*M)
     Rcpu[M:2*M-1] = Rcpu[M:2*M-1] * app_edge
     Rmem[M:2*M-1] = Rmem[M:2*M-1] * app_edge
-    
-    Fcm = np.zeros((M,M))
-    n_parents = 2
-    for i in range(1,M-1):
-        for j in range(n_parents):
-            a = np.random.randint(i)
-            Fcm[a,i]=np.random.uniform(0,1)
-    Fcm[M-1,0] = 1
+
+    G = nx.DiGraph(Fcm)
+    nx.draw(G,with_labels=True)
+    plt.show()
 
     ## E_PAMP ##
     best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne)
