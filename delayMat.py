@@ -3,6 +3,7 @@ from buildFci import buildFci
 from computeNcMat import computeNcMat
 from computeDi import computeDi
 from netdelay import netdelay
+from netdelay import netdelay2
 
 #   Compute the average delay Dm when the system gets state S
 
@@ -23,7 +24,7 @@ def delayMat(S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e):
     Fci = np.matrix(buildFci(S, Fcm, M, e))
     Nc = computeNcMat(Fci, M, e)
     Di = computeDi(Nc, Rcpu, Rcpu_req, lambd, M, e) if np.sum(Rcpu_req) > 0 else np.zeros(2*M) 
-    Dn, Tnce = netdelay(S, RTT, Ne, lambd, Rs, Fci, Nc, M, e) 
+    Dn, Tnce = netdelay2(S, RTT, Ne, lambd, Rs, Fci, Nc, M)
     
     H = -(Fci.T)
     N = Di
@@ -41,4 +42,26 @@ def delayMat(S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e):
     if np.isnan(d):
         d = float('inf')
 
+    return d
+
+def delayMatNcFci(S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, Nc, Fci, e):
+    MN = M * e   # edge+cloud microservice instance-sets
+    Di = computeDi(Nc, Rcpu, Rcpu_req, lambd, M, e) if np.sum(Rcpu_req) > 0 else np.zeros(2*M) 
+    #Dn, Tnce = netdelay(S, RTT, Ne, lambd, Rs, Fci, Nc, M, e) 
+    Dn, Tnce = netdelay2(S, RTT, Ne, lambd, Rs, Fci, Nc, M)
+    H = -(Fci.T)
+    N = Di
+    for i in range(MN):
+        H[i, i] = 1
+        for j in range(MN):
+            if i == j or Fci[i, j] == 0:
+                continue
+            N[i] = N[i] + Fci[i, j] * Dn[i, j]
+            
+    H_inv = np.linalg.inv(H)
+    Dm = np.array(np.dot(N, H_inv))
+    Dm = Dm.flatten()
+    d = Dm[MN-1]
+    if np.isnan(d):
+        d = float('inf')
     return d

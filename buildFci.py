@@ -34,6 +34,37 @@ def buildFci(S, Fcm, M, e):
                         Fci[I, Jc] = Fcm[i, j]
     return Fci
 
+def buildFcinew(S, Fcm, M):
+    MN = M * 2   # mesh nodes
+    Fci = np.zeros((MN, MN))
+    Fci[:M-1,:M-1] = Fcm[:M-1,:M-1]
+    S_edge_id = np.argwhere(S[M:]==1).flatten()
+    S_not_edge_id = np.argwhere(S[M:]==0).flatten()
+    # temporary initialize all edge instances call cloud instances
+    Fci[M:,:M] = Fcm[:,:]
+    Fci[M+S_not_edge_id,:] = 0 # clean rows of edge instance not present @ edge
+    y = np.repeat([S_edge_id], len(S_edge_id),axis=0).T
+    Fci[M+S_edge_id,M+y] = Fcm[S_edge_id,y] # edge instances call edge insances
+    Fci[M+S_edge_id,y] = 0 # clean edge cloud call for instances both at the edge 
+
+    # for i in range(M):
+    #     for j in range(M):
+    #         i_e = i + M
+    #         j_e = j + M
+
+    #         Fci()
+    #         # edge nodes
+    #         for h in range(2, e+1):
+    #             I = mV2mI(i, h, M)
+    #             J = mV2mI(j, h, M)
+    #             if S[I] == 1:
+    #                 if S[J] == 1:
+    #                     Fci[I, J] = Fcm[i, j]
+    #                 else:
+    #                     Jc = mV2mI(j, 1, M)
+    #                     Fci[I, Jc] = Fcm[i, j]
+    return Fci
+
     # MN = M * e   # mesh nodes
     # Pci = np.zeros((MN, MN))
     # Ns = 2 ** MN

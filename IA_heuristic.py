@@ -169,7 +169,7 @@ def IA_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
                     Rmem_cloud_new[k] = Rmem_edge_new[k] - cloud_mem_reduction
 
     Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_edge_new) + Cost_mem_edge * np.sum(Rmem_edge_new) # Total edge cost
-    return Snew_edge_b, Cost_edge_new, delta_delay_new, delta_cost_opt, n_rounds
+    return Snew_edge_b.astype(int).tolist(), Cost_edge_new, delta_delay_new, delta_cost_opt, n_rounds
 
 
         

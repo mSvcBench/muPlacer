@@ -5,11 +5,15 @@ import numpy as np
 import networkx as nx
 from computeNcMat import computeNcMat
 from buildFci import buildFci
+from buildFci import buildFcinew
 from S2id import S2id
 from delayMat import delayMat 
+from delayMat import delayMatNcFci
 from id2S import id2S
+from numpy import inf
 
-def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
+
+def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne,depth):
     #x = datetime.datetime.now().strftime('%d-%m_%H:%M:%S')
     #filename = f'offload_{x}.mat'
     #np.save(filename, arr=[Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RTT])
@@ -17,8 +21,8 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
 
     ## INITIALIZE VARIABLES ##
     app_edge = np.append(app_edge, 1) # Add the user in app_edge vector (user is in the edge cluster)
-    Scurr_b = np.concatenate((np.ones(int(M)), app_edge))
-    Scurr_b[M-1] = 0  # User is not in the cloud
+    S_b_curr = np.concatenate((np.ones(int(M)), app_edge))
+    S_b_curr[M-1] = 0  # User is not in the cloud
     e = 2  # Number of datacenters
     Ubit = np.arange(1, e+1) * M  # User position in the state vector
     Ce = np.inf # CPU capacity of edge datacenter
@@ -33,11 +37,15 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     Rcpu_req[int(Ubit[0])-1] = 0   
     Rcpu_req[int(Ubit[1])-1] = 0
 
-
     # SAVE CURRENT VALUES FOR METRICS ##
-    delay_curr = delayMat(Scurr_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the current configuration
+    ## compute instance-set call frequency matrix
+    #Fci = np.matrix(buildFci(Scurr_b, Fcm, M, e))
+    Fci = np.matrix(buildFcinew(S_b_curr, Fcm, M))
+    Nci = computeNcMat(Fci, M, e)
+    
+    delay_curr = delayMatNcFci(S_b_curr, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci, Fci,2) # Delay of the current configuration
   
-    Scurr_edge_b = Scurr_b[M:2*M] # Binary placement status containing only edge microservices
+    Scurr_edge_b = S_b_curr[M:2*M] # Binary placement status containing only edge microservices
     S_edge_id_curr = S2id(Scurr_edge_b) # id-based placement status containing only edge microservices
     Rcpu_edge_curr = Rcpu[M:] # CPU requested by the edge microservices
     Rmem_edge_curr = Rmem[M:] # Memory requested by the edge microservices
@@ -47,7 +55,7 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     Cost_mem_edge_curr_sum = Cost_mem_edge * Rmem_edge_curr_sum # Total Mem cost
     Cost_edge_curr = Cost_cpu_edge_curr_sum + Cost_mem_edge_curr_sum # Total cost
 
-    Scurr_cloud_b = Scurr_b[0:M] # Binary placement status containing only edge microservices
+    Scurr_cloud_b = S_b_curr[0:M] # Binary placement status containing only edge microservices
     Scurr_cloud_id = S2id(Scurr_cloud_b) # id-based placement status containing only edge microservices
     Rcpu_cloud_curr = Rcpu[:M] # CPU requested by the edge microservices
     Rmem_cloud_curr = Rmem[:M] # Memory requested by the edge microservices
@@ -56,11 +64,6 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     # Cost_cpu_cloud_curr_sum = Cost_cpu_edge * Rcpu_cloud_curr_sum # Total CPU cost
     # Cost_mem_cloud_curr_sum = Cost_mem_edge * Rmem_cloud_curr_sum # Total Mem cost
     # Cost_cloud_curr = Cost_cpu_cloud_curr_sum + Cost_mem_cloud_curr_sum # Total cost
-
-    ## compute instance-set call frequency matrix
-    Fci = np.matrix(buildFci(Scurr_b, Fcm, M, e))
-    Nci = computeNcMat(Fci, M, e)
-
 
     ## SEARCH PATHS FROM USER TO INSTANCES ##
     G = nx.DiGraph(Fcm) # Create the microservice dependency graph 
@@ -112,101 +115,124 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
                     dependency_paths_set_id.append(dependency_path_set_id) # \Pi_c of paper
         
         # Reset status with no microservice at the edge
-        Scurr_b=np.ones(2*M)
-        Scurr_b[M-1:2*M-1] = 0
-        Sold_edge_b = Scurr_b[M:2*M] # For unoffload, the old status has no edge microservice
+        S_b_curr=np.ones(2*M)
+        S_b_curr[M-1:2*M-1] = 0
+        Sold_edge_b = S_b_curr[M:2*M] # For unoffload, the old status has no edge microservice
         S_edge_id_curr = S2id(Sold_edge_b) 
-        delay_target = delay_curr - delta_mes # Analitical target delay (SLO)
-        delta_target = delayMat(Scurr_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) - delay_target # For unoffload, the delta_target is from the status with no microservice at the edge  
-    
+        #delay_target = delay_curr - delta_mes # Analitical target delay (SLO)
+        #delta_target = delayMatNcFci(Scurr_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci, 2) - delay_target # For unoffload, the delta_target is from the status with no microservice at the edge  
+        delta_target = delta_mes
 
     ## GREEDY ADDITION OF SUBGRAPHS TO EDGE CLUSTER ##
     
-    delay_old = delayMat(Scurr_b, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the original configuration
-    Rcpu_edge = Rcpu[M:]
-    Rmem_edge = Rmem[M:]
-
-    
     dependency_paths_cloud_only_r_id = dependency_paths_set_id.copy() # \Pi_r of paper
     S_edge_id_opt = S_edge_id_curr  # Inizialize the new edge status
+    S_b_temp = np.empty_like(S_b_curr)
+    S_b_new = np.empty_like(S_b_curr)
     Rcpu_edge_opt = Rcpu_edge_curr.copy()
     Rmem_edge_opt = Rmem_edge_curr.copy()
-    Rcpu_cloud_opt = Rcpu_cloud_curr.copy()
-    Rmem_cloud_opt = Rmem_cloud_curr.copy()
+    Rcpu_edge_new = np.empty_like(Rcpu_edge_curr)
+    Rmem_edge_new = np.empty_like(Rmem_edge_curr)
+    Rcpu_edge_temp = np.empty_like(Rcpu_edge_curr)
+    Rmem_edge_temp = np.empty_like(Rmem_edge_curr)
+    Rcpu_cloud_temp = np.empty_like(Rcpu_cloud_curr)
+    Rmem_cloud_temp = np.empty_like(Rmem_cloud_curr)
+    delay_opt = delay_curr
+
+    debug = False
+    debug2 = False
+    skip_neg = False
+    delta_cost_opt=0
+    delta_opt=1
     
+
     while True:
+        print(f'-----------------------') if debug else 0
         w_min = float("inf") # Initialize the weight
         S_edge_id_new = S_edge_id_opt  # Initialize new status as the optimum one of the previous greedy round
-        Rcpu_edge_new = Rcpu_edge_opt.copy()
-        Rmem_edge_new = Rmem_edge_opt.copy()
-        Rcpu_cloud_new = Rcpu_cloud_opt.copy()
-        Rmem_cloud_new = Rmem_cloud_opt.copy()
+        np.copyto(Rcpu_edge_new,Rcpu_edge_opt)
+        np.copyto(Rmem_edge_new,Rmem_edge_opt)
         S_edge_b_new = np.array(id2S(S_edge_id_new,2**M)) # New edge status in binary encoding
         S_b_new = np.ones(2*M)
         S_b_new[M-1]=0
-        S_b_new[M:] = S_edge_b_new.copy()
-        # Fci_new = np.matrix(buildFci(S_b_new, Fcm, M, e))
-        # Nci_new = computeNcMat(Fci_new, M, e)
+        S_b_new[M:] = S_edge_b_new[:]
         
-        delay_new = delayMat(S_b_new, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new placement state
-        r_delta_delay = delta_target - (delay_old-delay_new)
+        delay_new = delay_opt # Delay of the new placement state
         Cost_edge_new  = Cost_cpu_edge * np.sum(Rcpu_edge_new) + Cost_mem_edge * np.sum(Rmem_edge_new) # Total edge cost
+        print(f'new subpath {S_edge_b_new}, delta_delay {1000*(delay_curr-delay_new)}, cost {Cost_edge_new}, delta_cost/delta_delay {delta_cost_opt/(1000*delta_opt)}') if debug else 0
+        
         # Check if the delay reduction is enough
-        if r_delta_delay <= 0:
+        if delay_curr-delay_new >= delta_target:
             #delay reduction reached
             break
         if len(dependency_paths_cloud_only_r_id) == 0:
-            # All dependency path considered
+            # All dependency path considered no other way to reduce delay
             break
         for path_id in dependency_paths_cloud_only_r_id :
             S_edge_id_temp = np.bitwise_or(path_id - 1, S_edge_id_new - 1) + 1  # New edge state adding new dependency path
             S_edge_b_temp = np.array(id2S(S_edge_id_temp, 2 ** M)) # New edge state in binary encoding
+            if np.sum(S_edge_b_temp-S_edge_b_new)>depth:
+                continue
+            
             S_b_temp = S_b_new.copy()
-            S_b_temp[M:] = S_edge_b_temp.copy()
-            
-            delay_temp = delayMat(S_b_temp, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # Delay of the new placement state
-            delta_delay = delay_new - delay_temp
+            S_b_temp[M:] = S_edge_b_temp[:]
 
-            Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M, e))
+            #Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M, e))
+            Fci_temp = np.matrix(buildFcinew(S_b_temp, Fcm, M))
             Nci_temp = computeNcMat(Fci_temp, M, e)
-            # Rcpu_edge_temp = Rcpu_edge_new.copy() # CPU requested by the edge microservices
-            # Rmem_edge_temp = Rmem_edge_new.copy() # Memory requested by the edge microservices
-            # Rcpu_cloud_temp = Rcpu_cloud_new.copy() # CPU requested by the edge microservices
-            # Rmem_cloud_temp = Rmem_cloud_new.copy() # Memory requested by the edge microservices
-            Rcpu_edge_temp = Rcpu_edge_curr.copy() # CPU requested by the edge microservices
-            Rmem_edge_temp = Rmem_edge_curr.copy() # Memory requested by the edge microservices
-            Rcpu_cloud_temp = Rcpu_cloud_curr.copy() # CPU requested by the edge microservices
-            Rmem_cloud_temp = Rmem_cloud_curr.copy() # Memory requested by the edge microservices
-            #path_id_b = id2S(path_id,2**M)
-            #path_id_n = [i for i, x in enumerate(path_id_b) if x > 0]
-            for k in range(M):
-                if Nci[k]>0:                
-                # if Nci_new[k]>0:
-                    # cloud_cpu_reduction = (1-Nci_temp[k]/Nci_new[k]) * Rcpu_cloud_new[k]  # equal to edge cpu increase
-                    # cloud_mem_reduction = (1-Nci_temp[k]/Nci_new[k]) * Rmem_cloud_new[k]  # equal to edge mem increase
-                    cloud_cpu_reduction = (1-Nci_temp[k]/Nci[k]) * Rcpu_cloud_curr[k]  # equal to edge cpu increase
-                    cloud_mem_reduction = (1-Nci_temp[k]/Nci[k]) * Rmem_cloud_curr[k]  # equal to edge mem increase
-                    Rcpu_edge_temp[k] = Rcpu_edge_temp[k] + cloud_cpu_reduction
-                    Rmem_edge_temp[k] = Rmem_edge_temp[k] + cloud_mem_reduction
-                    Rcpu_cloud_temp[k] = Rcpu_cloud_temp[k] - cloud_cpu_reduction
-                    Rmem_cloud_temp[k] = Rmem_edge_temp[k] - cloud_mem_reduction
-            Cost_edge_temp = Cost_cpu_edge * np.sum(Rcpu_edge_temp) + Cost_mem_edge * np.sum(Rmem_edge_temp) # Total edge cost
-            delta_cost = Cost_edge_temp - Cost_edge_curr
-            # delta_cost = Cost_edge_temp - Cost_edge_new
+            delay_temp = delayMatNcFci(S_b_temp, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci_temp, Fci_temp, 2) # Delay of the new placement state
+            if skip_neg and delay_temp<0:
+                continue
+            delta_delay = delay_new - delay_temp
             
+            # compute the cost increase adding this dependency path 
+            np.copyto(Rcpu_edge_temp,Rcpu_edge_curr) # CPU requested by the edge microservices
+            np.copyto(Rmem_edge_temp,Rmem_edge_curr) # Memory requested by the edge microservices
+            np.copyto(Rcpu_cloud_temp,Rcpu_cloud_curr) # CPU requested by the edge microservices
+            np.copyto(Rmem_cloud_temp,Rmem_cloud_curr) # Memory requested by the edge microservices
+            cloud_cpu_reduction = (1-Nci_temp[:M]/Nci[:M]) * Rcpu_cloud_curr  # equal to edge cpu increase
+            cloud_mem_reduction = (1-Nci_temp[:M]/Nci[:M]) * Rmem_cloud_curr  # equal to edge mem increase
+            cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
+            cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
+            cloud_cpu_reduction[cloud_cpu_reduction==-inf] = 0
+            cloud_mem_reduction[cloud_mem_reduction==-inf] = 0
+            Rcpu_edge_temp = Rcpu_edge_temp + cloud_cpu_reduction
+            Rmem_edge_temp = Rmem_edge_temp + cloud_mem_reduction
+            Rcpu_cloud_temp = Rcpu_cloud_temp - cloud_cpu_reduction
+            Rmem_cloud_temp = Rmem_cloud_temp - cloud_mem_reduction
+
+
+            # for k in range(M-1):
+            #     if Nci[k]>0:                
+            #         cloud_cpu_reduction = (1-Nci_temp[k]/Nci[k]) * Rcpu_cloud_curr[k]  # equal to edge cpu increase
+            #         cloud_mem_reduction = (1-Nci_temp[k]/Nci[k]) * Rmem_cloud_curr[k]  # equal to edge mem increase
+            #         Rcpu_edge_temp[k] = Rcpu_edge_temp[k] + cloud_cpu_reduction
+            #         Rmem_edge_temp[k] = Rmem_edge_temp[k] + cloud_mem_reduction
+            #         Rcpu_cloud_temp[k] = Rcpu_cloud_temp[k] - cloud_cpu_reduction
+            #         Rmem_cloud_temp[k] = Rmem_cloud_temp[k] - cloud_mem_reduction
+            Cost_edge_temp = Cost_cpu_edge * np.sum(Rcpu_edge_temp) + Cost_mem_edge * np.sum(Rmem_edge_temp) # Total edge cost
+            # delta_cost = Cost_edge_temp - Cost_edge_curr
+            delta_cost = Cost_edge_temp - Cost_edge_new
+            
+            r_delta = delta_target - (delay_curr-delay_new) # residul delay to decrease wrt previous conf
             if delta_delay < 0:
-                w = 1e6 - delta_cost / min(1000*delta_delay, 1000*r_delta_delay)
+                w = 1e6 - delta_cost / min(1000*delta_delay, 1000*r_delta) 
+                #w = 1e6 - (delta_cost/delay_curr) / max((delta_target-delta_delay)/delta_target, 1e-3)
             else:
-                w = delta_cost / min(1000*delta_delay, 1000*r_delta_delay)
+                w = delta_cost /  min(1000*delta_delay, 1000*r_delta)
+                skip_neg = True
+            
+            print(f'subpath {S_edge_b_temp}, cost {delta_cost}, delta_delay {1000*delta_delay}, weight {w}') if debug2 else 0
 
             if w < w_min:
                 S_edge_id_opt = S_edge_id_temp
                 Rcpu_edge_opt = Rcpu_edge_temp.copy()
                 Rmem_edge_opt = Rmem_edge_temp.copy()
-                Rcpu_cloud_opt = Rcpu_cloud_temp.copy()
-                Rmem_cloud_opt = Rmem_cloud_temp.copy()
+                delta_cost_opt = delta_cost
+                delta_opt = delta_delay
+                delay_opt = delay_temp
                 w_min = w
-
+                
         if S_edge_id_opt == S_edge_id_new:
             # no additional delay reduction possible
             break
@@ -219,12 +245,52 @@ def offload(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
                     # dependency path already fully included at edge
                     PR.append(pr)
             dependency_paths_cloud_only_r_id = [dependency_paths_cloud_only_r_id[pr] for pr in range(len(dependency_paths_cloud_only_r_id)) if pr not in PR ]
+        
 
+    
+    # cleaning phase
+    S_new_c = np.empty_like(S_b_new)
+    while True:
+        c_max=0
+        i_max=-1
+        for i in range(M, 2*M-1):
+            if S_b_new[i]==1:
+                # try remove microservice
+                np.copyto(S_new_c,S_b_new)
+                S_new_c[i] = 0
+                delta_final2 = delay_curr - delayMat(S_new_c, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # delay delta reached
+                if delta_final2>=delta_target:
+                    # possible removal
+                    if Rcpu_edge_new[i-M]*Cost_cpu_edge > c_max:
+                        i_max = i
+                        c_max = Rcpu_edge_new[i-M]*Cost_cpu_edge
+        if i_max>-1:
+            print('cleaning')
+            S_b_new[i_max] = 0
+            Cost_edge_new = Cost_edge_new - Rcpu_edge_new[i_max-M]*Cost_cpu_edge
+        else:
+            break
+            
+    
 
-    S_new_edge_b = id2S(int(S_edge_id_new), 2 ** M)
-    S_new_b = np.ones(2*M)
-    S_new_b[M-1]=0
-    S_new_b[M:2*M] = S_new_edge_b   # new edge binary status
+    #Final cost computation
+    Fci_new = np.matrix(buildFcinew(S_b_new, Fcm, M))
+    Nci_new = computeNcMat(Fci_new, M, e)
+    delay_final = delayMatNcFci(S_b_temp, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci_new, Fci_new, 2) # Delay of the new placement state
+    delta_final = delay_curr - delay_final
+    
+    # compute the cost increase adding this dependency path 
+    np.copyto(Rcpu_edge_new,Rcpu_edge_curr) # CPU requested by the edge microservices
+    np.copyto(Rmem_edge_new,Rmem_edge_curr) # Memory requested by the edge microservices
+    cloud_cpu_reduction = (1-Nci_new[:M]/Nci[:M]) * Rcpu_cloud_curr  # equal to edge cpu increase
+    cloud_mem_reduction = (1-Nci_new[:M]/Nci[:M]) * Rmem_cloud_curr  # equal to edge mem increase
+    cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
+    cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
+    cloud_cpu_reduction[cloud_cpu_reduction==-inf] = 0
+    cloud_mem_reduction[cloud_mem_reduction==-inf] = 0
+    Rcpu_edge_new = Rcpu_edge_new + cloud_cpu_reduction
+    Rmem_edge_temp = Rmem_edge_temp + cloud_mem_reduction
+    Cost_edge_temp = Cost_cpu_edge * np.sum(Rcpu_edge_new) + Cost_mem_edge * np.sum(Rmem_edge_new) # Total edge cost
 
     delta_cost_opt = Cost_edge_new - Cost_edge_curr  # cost variation
     #print(S_new_edge_b)
