@@ -22,11 +22,11 @@ def mfu_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
     Sold_b[M-1] = 0  # User is not in the cloud
     
     ## COMPUTE THE COST (CPU + MEMORY) OF THE OLD STATE ##
-    Sold_edge_b = Sold_b[M:2*M] # Binary placement status containing edge microservices only
-    Rcpu_cloud = Rcpu[:M]
-    Rmem_cloud = Rmem[:M]
-    Rcpu_edge = Rcpu[M:2*M]
-    Rmem_edge = Rmem[M:2*M]
+    Sold_edge_b = Sold_b[M:2*M].copy() # Binary placement status containing edge microservices only
+    Rcpu_cloud = Rcpu[:M].copy()
+    Rmem_cloud = Rmem[:M].copy()
+    Rcpu_edge = Rcpu[M:2*M].copy()
+    Rmem_edge = Rmem[M:2*M].copy()
     Rcpu_edge_old_sum = np.sum(Sold_edge_b * Rcpu_edge) # Total CPU requested by instances in the edge
     Rmem_edge_old_sum = np.sum(Sold_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
     Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_edge_old_sum # Total CPU cost
@@ -62,8 +62,10 @@ def mfu_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
             
 
             ## COMPUTE THE NEW COST (CPU + MEMORY) OF THE NEW STATE ##
-            Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
-            Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
+            Rcpu_edge_new = Rcpu[:M].copy()
+            Rmem_edge_new = Rmem[:M].copy()
+            Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge_new) # CPU requested by the new state
+            Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge_new) # Total Memory requested by instances in the edge
             Cost_cpu_edge_new_sum = Cost_cpu_edge * Rcpu_edge_new_sum # Total CPU cost
             Cost_mem_edge_new_sum = Cost_mem_edge * Rmem_edge_new_sum # Total Mem cost
             Cost_edge_new = Cost_cpu_edge_new_sum + Cost_mem_edge_new_sum
@@ -95,8 +97,10 @@ def mfu_heuristic(Rcpu, Rmem, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
                 
 
                 ## COMPUTE THE NEW COST (CPU + MEMORY) OF THE NEW STATE ##
-                Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge) # CPU requested by the new state
-                Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge) # Total Memory requested by instances in the edge
+                Rcpu_edge_new = Rcpu[:M].copy()
+                Rmem_edge_new = Rmem[:M].copy()
+                Rcpu_edge_new_sum = np.sum(Snew_edge_b * Rcpu_edge_new) # CPU requested by the new state
+                Rmem_edge_new_sum = np.sum(Snew_edge_b * Rmem_edge_new) # Total Memory requested by instances in the edge
                 Cost_cpu_edge_new_sum = Cost_cpu_edge * Rcpu_edge_new_sum # Total CPU cost
                 Cost_mem_edge_new_sum = Cost_mem_edge * Rmem_edge_new_sum # Total Mem cost
                 Cost_edge_new = Cost_cpu_edge_new_sum + Cost_mem_edge_new_sum # Total cost
