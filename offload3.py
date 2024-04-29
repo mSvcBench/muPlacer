@@ -12,6 +12,8 @@ from delayMat import delayMatNcFci
 from id2S import id2S
 from numpy import inf
 
+np.seterr(divide='ignore', invalid='ignore')
+
 
 def offload_fast(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, S_edge_b_curr, delta_mes, RTT, Ne, depth):
     #x = datetime.datetime.now().strftime('%d-%m_%H:%M:%S')
@@ -75,6 +77,7 @@ def offload_fast(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, S_edge_b_curr, delta_m
     while True:
         print(f'-----------------------') if debug else 0
         w_min = float("inf") # Initialize the weight
+        skip_neg = False
         np.copyto(Rcpu_new,Rcpu_opt)
         np.copyto(Rmem_new,Rmem_opt)
         np.copyto(S_b_new, S_b_opt) # New edge status in binary encoding
@@ -85,7 +88,7 @@ def offload_fast(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, S_edge_b_curr, delta_m
 
         delay_new = delay_opt # Delay of the new placement state
         cost_edge_new  = cost_cpu_edge * np.sum(Rcpu_new[M:]) + cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
-        print(f'new subpath {S_b_new}, delta_delay {1000*(delay_curr-delay_new)}, cost {cost_edge_new}, delta_cost/delta_delay {delta_cost_opt/(1000*delta_opt)}') if debug else 0
+        print(f'new edge micros {np.argwhere(S_b_new[M:]==1).squeeze()}, delta_delay {1000*(delay_curr-delay_new)}, cost {cost_edge_new}, delta_cost/delta_delay {delta_cost_opt/(1000*delta_opt)}') if debug else 0
         
         # Check if the delay reduction is enough
         if delay_curr-delay_new >= delta_target:
@@ -102,9 +105,9 @@ def offload_fast(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, S_edge_b_curr, delta_m
             Fci_temp = np.matrix(buildFcinew(S_b_temp, Fcm, M))
             Nci_temp = computeNcMat(Fci_temp, M, 2)
             delay_temp = delayMatNcFci(S_b_temp, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci_temp, Fci_temp, 2) # Delay of the new placement state
-            if skip_neg and delay_temp<0:
-                continue
             delta_delay = delay_new - delay_temp
+            if skip_neg and delta_delay<0:
+                continue
             
             # compute the cost increase adding this microservice
             np.copyto(Rcpu_temp,Rcpu_curr) 
@@ -124,13 +127,13 @@ def offload_fast(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, S_edge_b_curr, delta_m
             
             r_delta = delta_target - (delay_curr-delay_new) # residul delay to decrease wrt previous conf
             if delta_delay < 0:
-                w = 1e6 - delta_cost / min(1000*delta_delay, 1000*r_delta) 
+                w = 1e6 - delta_cost * (1000*delta_delay) 
                 #w = 1e6 - (delta_cost/delay_curr) / max((delta_target-delta_delay)/delta_target, 1e-3)
             else:
                 w = delta_cost /  min(1000*delta_delay, 1000*r_delta)
                 skip_neg = True
             
-            print(f'new edge {S_b_temp[M:]}, cost {delta_cost}, delta_delay {1000*delta_delay}, weight {w}') if debug2 else 0
+            print(f'new edge micro {ms_id}, cost {delta_cost}, delta_delay {1000*delta_delay}, weight {w}') if debug2 else 0
 
             if w < w_min:
                 np.copyto(S_b_opt, S_b_temp)
@@ -140,12 +143,6 @@ def offload_fast(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, S_edge_b_curr, delta_m
                 delta_opt = delta_delay
                 delay_opt = delay_temp
                 w_min = w
-                
-        if np.array_equal(S_b_opt,S_b_new):
-            # no additional delay reduction possible
-            break
-        else:
-            np.copyto(S_b_new, S_b_opt)
             
     # cleaning phase
     while True:
@@ -169,11 +166,25 @@ def offload_fast(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, S_edge_b_curr, delta_m
         else:
             break
             
-
-    delta_cost_opt = cost_edge_new - cost_edge_curr  # cost variation
-    #print(S_new_edge_b)
-    #print(Cost_edge_new)
-    delta_final = delay_curr - delayMat(S_b_new, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, 2) # delay delta reached
     n_rounds = 1
+    # compute final values
+    Fci_new = np.matrix(buildFcinew(S_b_new, Fcm, M))
+    Nci_new = computeNcMat(Fci_new, M, 2)
+    delay_new = delayMatNcFci(S_b_new, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci_new, Fci_new, 2) # Delay of the new placement state
+    delta_new = delay_curr - delay_new
+    np.copyto(Rcpu_new,Rcpu_curr) 
+    np.copyto(Rmem_new,Rmem_curr) 
+    cloud_cpu_reduction = (1-Nci_new[:M]/Nci[:M]) * Rcpu_curr[:M]   
+    cloud_mem_reduction = (1-Nci_new[:M]/Nci[:M]) * Rmem_curr[:M]  
+    cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
+    cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
+    cloud_cpu_reduction[cloud_cpu_reduction==-inf] = 0
+    cloud_mem_reduction[cloud_mem_reduction==-inf] = 0
+    Rcpu_new[M:] = Rcpu_new[M:] + cloud_cpu_reduction # edge cpu increase
+    Rmem_new[M:] = Rmem_new[M:] + cloud_mem_reduction # edge mem increase
+    Rcpu_new[:M] = Rcpu_new[:M] - cloud_cpu_reduction # cloud cpu decrease
+    Rmem_new[:M] = Rmem_new[:M] - cloud_mem_reduction     # cloud mem decrease
+    Cost_edge_new = cost_cpu_edge * np.sum(Rcpu_new[M:]) + cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
+    delta_cost = Cost_edge_new - cost_edge_curr 
     
-    return S_b_new[M:], cost_edge_new, delta_final, delta_cost_opt, n_rounds
+    return S_b_new[M:].astype(int).tolist(), Cost_edge_new, delta_new, delta_cost, n_rounds

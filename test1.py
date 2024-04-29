@@ -48,7 +48,7 @@ for k in range(trials):
     # Fcm[:M-1,:M-1] = np.matrix(g.get_adjacency()) 
 
     # Random
-    n_parents = 3
+    n_parents = 2
     for i in range(1,M-1):
         n_parent=np.random.randint(1,n_parents)
         for j in range(n_parent):
@@ -83,13 +83,12 @@ for k in range(trials):
     # print(f'processing time E-PAMP {(toc-tic)} sec')
     # print(f"Result E_PAMP no depth in offload:\n {best_S_edge},\n CPU_cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
     
-    # best_cost2 = -1
-    # tic = time.time()
-    # best_S_edge, best_cost2, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne,1)
-    # toc = time.time()
-    # print(f'processing time E-PAMP {(toc-tic)} sec')
-    # print(f"Result E_PAMP 2 in offload:\n {best_S_edge},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
-
+    best_cost2 = -1
+    tic = time.time()
+    best_S_edge, best_cost2, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne,2)
+    toc = time.time()
+    print(f"Result E_PAMP 2 in offload:\n {best_S_edge},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
+    print(f'processing time E-PAMP {(toc-tic)} sec')
     # best_cost3 = -1
     # tic = time.time()
     # best_S_edge, best_cost3, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne,4)
@@ -97,16 +96,16 @@ for k in range(trials):
     # print(f'processing time E-PAMP {(toc-tic)} sec')
     # print(f"Result E_PAMP 1 in offload:\n {best_S_edge},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
 
-    best_cost3 = -1
-    tic = time.time()
-    best_S_edge, best_cost3, best_delta, best_delta_cost, n_rounds = offload_fast(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne,2)
-    toc = time.time()
-    print(f'processing time E-PAMP fast {(toc-tic)} sec')
-    print(f"Result E_PAMP fast in offload:\n {best_S_edge},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
+    # best_cost3 = -1
+    # tic = time.time()
+    # best_S_edge, best_cost3, best_delta, best_delta_cost, n_rounds = offload_fast(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne,2)
+    # toc = time.time()
+    # print(f'processing time E-PAMP fast {(toc-tic)} sec')
+    # print(f"Result E_PAMP fast in offload:\n {best_S_edge},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
 
 
 
-    ## MFU ##
+    # # MFU ##
     # best_cost2 = -1
     # best_S_edge2, best_cost2, best_delta2, best_delta_cost2, n_rounds2 = mfu_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
     # print(f"Result MFU in offload:\n {best_S_edge2},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta2}, delta_cost: = {best_delta_cost2}, rounds: = {n_rounds2}")
@@ -116,21 +115,21 @@ for k in range(trials):
     # best_S_edge3, best_cost3, best_delta3, best_delta_cost3, n_rounds3 = IA_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
     # print(f"Result IA in offload:\n {best_S_edge3},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta3}, delta_cost: = {best_delta_cost3}, rounds: = {n_rounds3}")
 
-    if len(res)==0:
-        res = [best_cost, best_cost2, best_cost3]
-    else:
-        res = np.vstack((res,[best_cost, best_cost2, best_cost3]))    
+#     if len(res)==0:
+#         res = [best_cost, best_cost2, best_cost3]
+#     else:
+#         res = np.vstack((res,[best_cost, best_cost2, best_cost3]))    
        
-mdic = {"res": res}
-savemat("res.mat", mdic)
-line, = plt.plot(res[:,0], res[:,0], linestyle='None', marker = 's')
-line.set_label('PAMP')
-line, = plt.plot(res[:,0], res[:,1], linestyle='None', marker='o')
-line.set_label('MFU')
-line, = plt.plot(res[:,0], res[:,2], linestyle='None', marker = 'd')
-line.set_label('IA')
-plt.legend()
-plt.show()
+# mdic = {"res": res}
+# savemat("res.mat", mdic)
+# line, = plt.plot(res[:,0], res[:,0], linestyle='None', marker = 's')
+# line.set_label('PAMP')
+# line, = plt.plot(res[:,0], res[:,1], linestyle='None', marker='o')
+# line.set_label('MFU')
+# line, = plt.plot(res[:,0], res[:,2], linestyle='None', marker = 'd')
+# line.set_label('IA')
+# plt.legend()
+# plt.show()
 
 
 # for k in range(50):
