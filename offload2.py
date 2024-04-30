@@ -13,18 +13,12 @@ from computeDnTot import computeDnTot
 np.seterr(divide='ignore', invalid='ignore')
 
 
-def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne,depth):
-    #x = datetime.datetime.now().strftime('%d-%m_%H:%M:%S')
-    #filename = f'offload_{x}.mat'
-    #np.save(filename, arr=[Rcpu, Rmem, Fcm_nocache, M, lambd, Rs, app_edge, min_delay_delta, RTT])
-
+def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delta_mes, RTT, Ne,depth):
 
     ## INITIALIZE VARIABLES ##
-    app_edge = np.append(app_edge, 1) # Add the user in app_edge vector (user is in the edge cluster)
-    S_b_old = np.concatenate((np.ones(int(M)), app_edge))
+    S_b_old = np.concatenate((np.ones(int(M)), S_edge_old))
     S_b_old[M-1] = 0  # User is not in the cloud
-    Rs = np.append(Rs, 0)  # Add the user in the Rs vector
-    Rs = np.tile(Rs, 2)  # Expand the Rs vector to fit the number of data centers
+    Rs = np.tile(Rs, 2)  # Expand the Rs vector to include edge and cloud
     Cost_cpu_edge = 1
     Cost_mem_edge = 1
     Rcpu_req = np.tile(np.zeros(int(M)), 2)  # Seconds of CPU per request (set to zero for all microservices)
@@ -92,7 +86,7 @@ def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne,
         S_edge_id_curr = S2id(Sold_edge_b) 
         delta_target = delta_mes
 
-    ## GREEDY ADDITION OF SUBGRAPHS TO EDGE CLUSTER ##
+    ## GREEDY ADDITION OF DEPENDECY PATHS TO EDGE CLUSTER ##
     
     dependency_paths_b_residual = dependency_paths_b.copy() # \Pi_r of paper
     S_b_opt = S_b_old  # Inizialize the new edge status
@@ -281,4 +275,4 @@ def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne,
     delta_cost = Cost_edge_new - Cost_edge_old 
 
     
-    return S_b_new[M:].astype(int).tolist(), Cost_edge_new, delta_new, delta_cost, n_rounds
+    return S_b_new[M:].astype(int), Cost_edge_new, delta_new, delta_cost, n_rounds

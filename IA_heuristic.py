@@ -5,13 +5,11 @@ from computeDnTot import computeDnTot
 from numpy import inf
 
 
-def IA_heuristic(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, Ne):
+def IA_heuristic(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delta_mes, RTT, Ne):
     Cost_cpu_edge = 1
     Cost_mem_edge = 1
-    Rs = np.append(Rs, 0)  # Add the user in the Rs vector
-    Rs = np.tile(Rs, 2)  # Expand the Rs vector to fit the number of data centers
-    app_edge = np.append(app_edge, 1) # Add the user in app_edge vector (user is in the edge cluster)
-    S_b_old = np.concatenate((np.ones(int(M)), app_edge))
+    Rs = np.tile(Rs, 2)  # Expand the Rs vector to to include edge and cloud
+    S_b_old = np.concatenate((np.ones(int(M)), S_edge_old))
     S_b_old[M-1] = 0  # User is not in the cloud
     Rcpu_edge_old_sum = np.sum(S_b_old[M:] * Rcpu_old[M:]) # Total CPU requested by instances in the edge
     Rmem_edge_old_sum = np.sum(S_b_old[M:] * Rmem_old[M:]) # Total Memory requested by instances in the edge
@@ -91,7 +89,7 @@ def IA_heuristic(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT
     Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
     delta_cost = Cost_edge_new - Cost_edge_old 
 
-    return S_b_new[M:].astype(int).tolist(), Cost_edge_new, delta_new, delta_cost, n_rounds
+    return S_b_new[M:].astype(int), Cost_edge_new, delta_new, delta_cost, n_rounds
 
 
         
