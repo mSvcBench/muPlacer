@@ -48,7 +48,7 @@ for k in range(trials):
     # Fcm[:M-1,:M-1] = np.matrix(g.get_adjacency()) 
 
     # Random
-    n_parents = 2
+    n_parents = 3
     for i in range(1,M-1):
         n_parent=np.random.randint(1,n_parents)
         for j in range(n_parent):
@@ -84,8 +84,9 @@ for k in range(trials):
     # print(f"Result E_PAMP no depth in offload:\n {best_S_edge},\n CPU_cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
     
     best_cost2 = -1
+    depth = 3
     tic = time.time()
-    best_S_edge, best_cost2, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne,2)
+    best_S_edge, best_cost2, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, app_edge.copy(), delta_mes, RTT, Ne,depth)
     toc = time.time()
     print(f"Result E_PAMP 2 in offload:\n {best_S_edge},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
     print(f'processing time E-PAMP {(toc-tic)} sec')
@@ -106,9 +107,9 @@ for k in range(trials):
 
 
     # # MFU ##
-    # best_cost2 = -1
-    # best_S_edge2, best_cost2, best_delta2, best_delta_cost2, n_rounds2 = mfu_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
-    # print(f"Result MFU in offload:\n {best_S_edge2},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta2}, delta_cost: = {best_delta_cost2}, rounds: = {n_rounds2}")
+    best_cost2 = -1
+    best_S_edge2, best_cost2, best_delta2, best_delta_cost2, n_rounds2 = mfu_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
+    print(f"Result MFU in offload:\n {best_S_edge2},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta2}, delta_cost: = {best_delta_cost2}, rounds: = {n_rounds2}")
 
     # ## IA ##
     # best_cost3 = -1

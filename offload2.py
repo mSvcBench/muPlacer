@@ -11,6 +11,7 @@ from delayMat import delayMat
 from delayMat import delayMatNcFci
 from id2S import id2S
 from numpy import inf
+from computeDnTot import computeDnTot
 
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -42,7 +43,8 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
     Fci = np.matrix(buildFcinew(S_b_curr, Fcm, M))
     Nci = computeNcMat(Fci, M, 2)
     
-    delay_curr = delayMatNcFci(S_b_curr, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci, Fci,2) # Delay of the current configuration
+    #delay_curr = delayMatNcFci(S_b_curr, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci, Fci,2) # Delay of the current configuration
+    delay_curr = computeDnTot(S_b_curr, Nci, Fci, Rs, RTT, Ne, lambd, M)
   
     Rcpu_edge_curr_sum = np.sum(S_b_curr[M:] * Rcpu_curr[M:]) # Total CPU requested by instances in the edge
     Rmem_edge_curr_sum = np.sum(S_b_curr[M:] * Rmem_curr[M:]) # Total Memory requested by instances in the edge
@@ -118,6 +120,7 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
 
     debug = True
     debug2 = False
+    debug_cache = False
     skip_neg = False
     delta_cost_opt=0
     delta_opt=1
@@ -138,21 +141,25 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
         if delay_curr-delay_new >= delta_target:
             #delay reduction reached
             break
+        # remove too long dependency paths
+        print(f"depencency path no depth: {len(dependency_paths_b_residual)}") if debug else 0
+        r = np.argwhere(np.sum(np.maximum(dependency_paths_b_residual-S_b_new[M:],0),axis=1)<=depth).squeeze()
+        print(f"depencency path with depth: {len(r)}") if debug else 0
         if len(dependency_paths_b_residual) == 0:
             # All dependency path considered no other way to reduce delay
             break
-        for path_b in dependency_paths_b_residual :
+        chache_hits = 0
+        for i in r :
+            path_b = dependency_paths_b_residual[i]
             # merging path_b and S_b_new into S_b_temp
             path_n = np.argwhere(path_b==1).squeeze()
             np.copyto(S_b_temp, S_b_new)
             S_b_temp[M+path_n] = 1
-            
-            if np.sum(S_b_temp[M:]-S_b_new[M:])>depth:
-                continue
-            
             S_id_edge_temp=str(S2id(S_b_temp[M:]))
+            # if False:
             if S_id_edge_temp in delay_cache:
-                print('cache_hit')
+                print(f'cache_hit for {np.argwhere(S_b_temp[M:]==1).squeeze()}, path {path_n}') if debug_cache else 0
+                chache_hits += 1
                 delay_temp = delay_cache[S_id_edge_temp]
                 np.copyto(Rcpu_temp,Rcpu_cache[S_id_edge_temp])
                 np.copyto(Rmem_temp,Rmem_cache[S_id_edge_temp])
@@ -162,7 +169,8 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
             else:
                 Fci_temp = np.matrix(buildFcinew(S_b_temp, Fcm, M))
                 Nci_temp = computeNcMat(Fci_temp, M, 2)
-                delay_temp = delayMatNcFci(S_b_temp, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci_temp, Fci_temp, 2) # Delay of the new placement state
+                #delay_temp = delayMatNcFci(S_b_temp, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci_temp, Fci_temp, 2) # Delay of the new placement state
+                delay_temp = computeDnTot(S_b_temp, Nci_temp, Fci_temp, Rs, RTT, Ne, lambd, M)
                 delta_delay = delay_new - delay_temp
                 if skip_neg and delta_delay<0:
                     continue
@@ -183,6 +191,7 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
                 delay_cache[S_id_edge_temp] = delay_temp
                 Rcpu_cache[S_id_edge_temp] = Rcpu_temp.copy() 
                 Rmem_cache[S_id_edge_temp] = Rmem_temp.copy()
+                print(f'cache store for {np.argwhere(S_b_temp[M:]==1).squeeze()}, path {path_n}') if debug_cache else 0
             Cost_edge_temp = Cost_cpu_edge * np.sum(Rcpu_temp[M:]) + Cost_mem_edge * np.sum(Rmem_temp[M:]) # Total edge cost
             delta_cost = Cost_edge_temp - Cost_edge_new
             
@@ -194,7 +203,7 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
                 w = delta_cost /  min(1000*delta_delay, 1000*r_delta)
                 skip_neg = True
             
-            print(f'subpath {S_b_temp[M:]}, cost {delta_cost}, delta_delay {1000*delta_delay}, weight {w}') if debug2 else 0
+            print(f'state {S_b_temp[M:]}, cost {delta_cost}, delta_delay {1000*delta_delay}, weight {w}') if debug2 else 0
 
             if w < w_min:
                 np.copyto(S_b_opt,S_b_temp)
@@ -211,6 +220,7 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
             if np.sum(path_b) == np.sum(path_b * S_b_opt[M:]):
                 # dependency path already fully included at edge
                 PR.append(pr)
+                # cache cleaning
                 S_id_edge_temp = str(S2id(S_b_temp[M:]))
                 if S_id_edge_temp in delay_cache:
                     del delay_cache[S_id_edge_temp]
@@ -218,7 +228,19 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
                     del Rmem_cache[S_id_edge_temp]
         dependency_paths_b_residual = [dependency_paths_b_residual[pr] for pr in range(len(dependency_paths_b_residual)) if pr not in PR ]
         
-
+        # cache cleaning
+        for S_id_edge_temp_s in list(delay_cache):
+            # when a cached state do not have edge microservice in new (opt) state it will be never reused for calculos
+            S_id_edge_temp = id2S(int(S_id_edge_temp_s),2**M)
+            if np.sum(S_b_opt[M:]) != np.sum(S_id_edge_temp * S_b_opt[M:]):
+                    del delay_cache[S_id_edge_temp_s]
+                    del Rcpu_cache[S_id_edge_temp_s]
+                    del Rmem_cache[S_id_edge_temp_s]
+            else:
+                print(f"cached state {np.argwhere(np.array(S_id_edge_temp)==1).squeeze()}") if debug_cache else 0
+        print(f"cache size {len(delay_cache)}") if debug_cache else 0
+        print(f"cache hit prob. {chache_hits/len(r)}") if debug else 0
+        
 
     # cleaning phase
     while True:
@@ -248,7 +270,8 @@ def offload(Rcpu_curr, Rmem_curr, Fcm, M, lambd, Rs, app_edge, delta_mes, RTT, N
     # compute final values
     Fci_new = np.matrix(buildFcinew(S_b_new, Fcm, M))
     Nci_new = computeNcMat(Fci_new, M, 2)
-    delay_new = delayMatNcFci(S_b_new, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci_new, Fci_new, 2) # Delay of the new placement state
+    #delay_new = delayMatNcFci(S_b_new, Fcm, Rcpu_curr, Rcpu_req, RTT, Ne, lambd, Rs, M, Nci_new, Fci_new, 2) # Delay of the new placement state
+    delay_new = computeDnTot(S_b_new, Nci_new, Fci_new, Rs, RTT, Ne, lambd, M)
     delta_new = delay_curr - delay_new
     np.copyto(Rcpu_new,Rcpu_curr) 
     np.copyto(Rmem_new,Rmem_curr) 
