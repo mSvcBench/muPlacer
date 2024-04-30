@@ -1,6 +1,6 @@
 import numpy as np
 from computeNcMat import computeNcMat
-from buildFci import buildFci
+from build_Fci import buildFci
 from delayMat import delayMat
 
 

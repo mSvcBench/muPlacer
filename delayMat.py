@@ -1,5 +1,5 @@
 import numpy as np
-from buildFci import buildFci
+from build_Fci import buildFci
 from computeNcMat import computeNcMat
 from computeDi import computeDi
 from netdelay import netdelay
