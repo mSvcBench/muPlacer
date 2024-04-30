@@ -1,7 +1,7 @@
 import numpy as np
-from build_Fci import buildFci
-from computeNcMat import computeNcMat
-from computeDi import computeDi
+from buildFci import buildFci
+from computeNc import computeNcMat
+from old.computeDi import computeDi
 from netdelay import netdelay
 from netdelay import netdelay2
 

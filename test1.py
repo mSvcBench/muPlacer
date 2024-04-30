@@ -1,14 +1,13 @@
 from offload2 import offload
-from offload3 import offload_fast
 from mfu_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
-from unoffload import unoffload
-from unoffload2 import unoffload2
+# from unoffload import unoffload
+# from unoffload2 import unoffload2
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from igraph import *
-from computeNcMat import computeNcMat
+from computeNc import computeNc
 from scipy.io import savemat
 import time
 
@@ -60,7 +59,7 @@ for k in range(trials):
             Fcm[i,j]=np.random.uniform(0.1,0.5) if Fcm[i,j]>0 else 0
     
     Fcm[M-1,0] = 1
-    Nc = computeNcMat(Fcm, M, 1)
+    Nc = computeNc(Fcm, M, 1)
     Rcpu_quota = 0.5
     Rcpu = (np.random.randint(32,size=M)+1) * Rcpu_quota
     # Rcpu = Nc/max(Nc) * 16 
@@ -111,10 +110,10 @@ for k in range(trials):
     best_S_edge2, best_cost2, best_delta2, best_delta_cost2, n_rounds2 = mfu_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
     print(f"Result MFU in offload:\n {best_S_edge2},\n CPU_cost: {best_cost2}, delta_delay: = {best_delta2}, delta_cost: = {best_delta_cost2}, rounds: = {n_rounds2}")
 
-    # ## IA ##
-    # best_cost3 = -1
-    # best_S_edge3, best_cost3, best_delta3, best_delta_cost3, n_rounds3 = IA_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
-    # print(f"Result IA in offload:\n {best_S_edge3},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta3}, delta_cost: = {best_delta_cost3}, rounds: = {n_rounds3}")
+    ## IA ##
+    best_cost3 = -1
+    best_S_edge3, best_cost3, best_delta3, best_delta_cost3, n_rounds3 = IA_heuristic(Rcpu.tolist(), Rmem.tolist(), Fcm, M, lambda_val, Rs, app_edge.tolist(), delta_mes, RTT, Ne)
+    print(f"Result IA in offload:\n {best_S_edge3},\n CPU_cost: {best_cost3}, delta_delay: = {best_delta3}, delta_cost: = {best_delta_cost3}, rounds: = {n_rounds3}")
 
 #     if len(res)==0:
 #         res = [best_cost, best_cost2, best_cost3]

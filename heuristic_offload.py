@@ -1,7 +1,7 @@
 import numpy as np
 import networkx as nx
 from S2id import S2id
-from delayMat import delayMat 
+from old.delayMat import delayMat 
 from id2S import id2S
 
 
