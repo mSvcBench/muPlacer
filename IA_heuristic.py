@@ -44,8 +44,10 @@ def IA_heuristic(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delta_mes, R
             maxes["ms_j"] = 0
 
             ## FIND THE MICROSERVICES WITH THE MOST INTERACTIONS ##
-            for i in range (M-2):
-                for j in range (i+1,M-1):
+            for i in range (M):
+                for j in range (M):
+                    if i==j:
+                        continue
                     if S_b_new[i+M]==0 or S_b_new[j+M]==0:
                         x = Nc[i] * Fcm[i,j] +  Nc[j] * Fcm[j,i]
                         if x > maxes["interaction_freq"]:

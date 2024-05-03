@@ -1,4 +1,4 @@
-from offload2 import offload
+from offload import offload
 from mfu_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
 # from unoffload import unoffload
@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from igraph import *
 from computeNc import computeNc
 from scipy.io import savemat
+from buildFci import buildFci
+from numpy import inf
 import time
 
 def edges_reversal(graph):
@@ -20,12 +22,16 @@ np.random.seed(150273)
 res=np.array([])
 trials = 30
 RTT = 0.0869    # RTT edge-cloud
-M = 30 # n. microservices
-delta_req = 0.03    # requested delay increase
+M = 100 # n. microservices
+delay_decrease_target = 0.03    # requested delay reduction
 lambda_val = 20     # request per second
 Ne = 1e9    # bitrate cloud-edge
 S_edge_b = np.zeros(M)  # initial state. 
 S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
+S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
+S_b[M-1] = 0  # User is not in the cloud
+Cost_cpu_edge = 1 # cost of CPU at the edge
+Cost_mem_edge = 1 # cost of memory at the edge
 
 graph_algorithm = 'random'
 
@@ -80,13 +86,34 @@ for k in range(trials):
             Fcm[i,j]=np.random.uniform(0.1,0.5) if Fcm[i,j]>0 else 0
     Fcm[M-1,0] = 1  # user call microservice 0 (the ingress microservice)
 
-    # set random values for CPU and memory requests
-    Rcpu = (np.random.randint(32,size=M)+1) * Rcpu_quota
-    Rcpu[M-1]=0   # user has no CPU request
-    Rcpu = np.append(Rcpu, Rcpu)
-    Rmem = np.zeros(2*M)
-    Rcpu[M:] = Rcpu[M:] * S_edge_b # set to zero the CPU requests of the instances not at the edge
-    Rmem[M:] = Rmem[M:] * S_edge_b # set to zero the memory requests of the instances not at the edge
+    # set random values for CPU and memory requests in case of cloud only deployment
+    Rcpu_void = (np.random.randint(32,size=M)+1) * Rcpu_quota
+    Rcpu_void[M-1]=0   # user has no CPU request
+    Rmem_void = np.zeros(M)
+    Rcpu_void = np.append(Rcpu_void, np.zeros(M))
+    Rmem_void = np.append(Rmem_void, np.zeros(M))
+    S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
+    S_b_void[M-1] = 0  # User is not in the cloud
+    S_b_void[2*M-1] = 1  # User is in the cloud
+    Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
+    Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
+    
+    # compute Rcpu and Rmem for the current state
+    # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
+    Fci = np.matrix(buildFci(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
+    Nci = computeNc(Fci, M, 2)    # number of instance call per user request of the current state
+    Rcpu = Rcpu_void.copy()
+    Rmem = Rmem_void.copy()
+    cloud_cpu_decrease = (1-Nci[:M]/Nci_void[:M]) * Rcpu_void[:M]   
+    cloud_mem_decrease = (1-Nci[:M]/Nci_void[:M]) * Rmem_void[:M]
+    cloud_cpu_decrease[np.isnan(cloud_cpu_decrease)] = 0
+    cloud_mem_decrease[np.isnan(cloud_mem_decrease)] = 0
+    cloud_cpu_decrease[cloud_cpu_decrease==-inf] = 0
+    cloud_mem_decrease[cloud_mem_decrease==-inf] = 0
+    Rcpu[M:] = Rcpu[M:] + cloud_cpu_decrease # edge cpu increase
+    Rmem[M:] = Rmem[M:] + cloud_mem_decrease # edge mem increase
+    Rcpu[:M] = Rcpu[:M] - cloud_cpu_decrease # cloud cpu decrease
+    Rmem[:M] = Rmem[:M] - cloud_mem_decrease # cloud mem decrease
 
     if show_graph:
         G = nx.DiGraph(Fcm)
@@ -102,26 +129,40 @@ for k in range(trials):
     a=-1
     
     ## E_PAMP ##
-    a+=1
-    alg_type[a] = "E_PAMP no upgrade limit"
-    best_cost = -1
-    u_limit = M
-    tic = time.time()
-    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delta_req, RTT, Ne, u_limit)
-    toc = time.time()
-    print(f'processing time E-PAMP {(toc-tic)} sec')
-    print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
-    best_cost_row[0,a] = best_cost
-    best_delta_row[0,a] = best_delta
-    n_rounds_row[0,a] = n_rounds
+    # a+=1
+    # alg_type[a] = "E_PAMP no upgrade limit"
+    # best_cost = -1
+    # u_limit = M
+    # tic = time.time()
+    # best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne, Cost_cpu_edge, Cost_mem_edge, None, None, u_limit)
+    # toc = time.time()
+    # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+    # print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
+    # best_cost_row[0,a] = best_cost
+    # best_delta_row[0,a] = best_delta
+    # n_rounds_row[0,a] = n_rounds
     
     a+=1
     alg_type[a] = "E_PAMP upgrade limit 2"
     best_cost = -1
     tic = time.time()
-    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delta_req, RTT, Ne, u_limit)
+    u_limit = 2
+    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne, Cost_cpu_edge, Cost_mem_edge, None, None, u_limit)
     toc = time.time()
-    print(f'processing time E-PAMP {(toc-tic)} sec')
+    print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+    print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
+    best_cost_row[0,a] = best_cost
+    best_delta_row[0,a] = best_delta
+    n_rounds_row[0,a] = n_rounds
+
+    a+=1
+    alg_type[a] = "E_PAMP upgrade limit 1"
+    best_cost = -1
+    tic = time.time()
+    u_limit = 1
+    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne, Cost_cpu_edge, Cost_mem_edge, None, None, u_limit)
+    toc = time.time()
+    print(f'processing time {alg_type[a]} {(toc-tic)} sec')
     print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
     best_cost_row[0,a] = best_cost
     best_delta_row[0,a] = best_delta
@@ -133,9 +174,9 @@ for k in range(trials):
     alg_type[a] = "MFU"
     best_cost = -1
     tic = time.time()
-    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = mfu_heuristic(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delta_req, RTT, Ne)
+    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = mfu_heuristic(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne)
     toc = time.time()
-    print(f'processing time E-PAMP {(toc-tic)} sec')
+    print(f'processing time {alg_type[a]} {(toc-tic)} sec')
     print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
     best_cost_row[0,a] = best_cost
     best_delta_row[0,a] = best_delta
@@ -146,9 +187,9 @@ for k in range(trials):
     alg_type[a] = "IA"
     best_cost = -1
     tic = time.time()
-    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = IA_heuristic(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delta_req, RTT, Ne)
+    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = IA_heuristic(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne)
     toc = time.time()
-    print(f'processing time E-PAMP {(toc-tic)} sec')
+    print(f'processing time {alg_type[a]} {(toc-tic)} sec')
     print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
     best_cost_row[0,a] = best_cost
     best_delta_row[0,a] = best_delta

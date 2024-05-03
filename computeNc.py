@@ -9,7 +9,7 @@ import numpy as np
 
 def computeNc(Fc, M, e):
     MN = len(Fc)
-    H = -Fc
+    H = -Fc.copy()
     np.fill_diagonal(H, 1)
     if e > 1:
         Ubit = np.arange(2, e+1) * M  # user position in the state vector
@@ -18,6 +18,6 @@ def computeNc(Fc, M, e):
     N = np.zeros(MN)
     N[Ubit-1] = 1
     H_inv = np.linalg.inv(H)
-    Nc = np.array(np.dot(N, H_inv))
-    Nc = Nc.flatten()
+    Nc = np.dot(N, H_inv)
+    Nc = np.array(Nc).flatten()
     return Nc
