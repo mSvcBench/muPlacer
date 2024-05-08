@@ -1,8 +1,11 @@
+import os, sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
 from offload import offload
 from mfu_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
-# from unoffload import unoffload
-# from unoffload2 import unoffload2
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -22,7 +25,7 @@ np.random.seed(150273)
 res=np.array([])
 trials = 30
 RTT = 0.0869    # RTT edge-cloud
-M = 100 # n. microservices
+M = 50 # n. microservices
 delay_decrease_target = 0.03    # requested delay reduction
 lambda_val = 20     # request per second
 Ne = 1e9    # bitrate cloud-edge
@@ -52,11 +55,14 @@ Rcpu_range_max = 32 # max value of requested CPU quota per instance-set
 Rs_range_min = 1000 # min value of response size in bytes
 Rs_range_max = 50000   # max of response size in bytes
 
+# set random  internal delay equal to 0 since assuming equal computing performance
+Di = np.zeros(2*M) # internal delay of microservices
+
 max_algotithms = 10
-best_cost_v = np.empty((1,10)) # vector of costs obtained by different algorithms 
-best_delta_v = np.empty((1,10)) # vector of delta obtained by different algorithms  
-n_rounds_v = np.empty((1,10)) # vector of rounds obtained by different algorithms
-p_time_v = np.empty((1,10)) # vector of processing time obtained by different algorithms
+best_cost_v = np.empty((1,max_algotithms)) # vector of costs obtained by different algorithms 
+best_delta_v = np.empty((1,max_algotithms)) # vector of delta obtained by different algorithms  
+n_rounds_v = np.empty((1,max_algotithms)) # vector of rounds obtained by different algorithms
+p_time_v = np.empty((1,max_algotithms)) # vector of processing time obtained by different algorithms
 
 show_graph = False
 show_plot = True
@@ -128,72 +134,156 @@ for k in range(trials):
     alg_type = [""] * max_algotithms # vector of strings describing algorithms used in a trial
     a=-1
     
+    # Call the unoffload function
+
+    
     ## E_PAMP ##
     # a+=1
     # alg_type[a] = "E_PAMP no upgrade limit"
-    # best_cost = -1
-    # u_limit = M
+    # params = {
+    #     'S_edge_b': S_edge_b.copy(),
+    #     'Rcpu': Rcpu.copy(),
+    #     'Rmem': Rmem.copy(),
+    #     'Fcm': Fcm.copy(),
+    #     'M': M,
+    #     'lambd': lambda_val,
+    #     'Rs': Rs,
+    #     'Di': Di,
+    #     'delay_decrease_target': delay_decrease_target,
+    #     'RTT': RTT,
+    #     'Ne': Ne,
+    #     'Cost_cpu_edge': Cost_cpu_edge,
+    #     'Cost_mem_edge': Cost_mem_edge,
+    #     'locked': None,
+    #     'dependency_paths_b': None,
+    #     'u_limit': M
+    # }
     # tic = time.time()
-    # best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne, Cost_cpu_edge, Cost_mem_edge, None, None, u_limit)
+    # result = offload(params)
     # toc = time.time()
     # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-    # print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
-    # best_cost_row[0,a] = best_cost
-    # best_delta_row[0,a] = best_delta
-    # n_rounds_row[0,a] = n_rounds
+    # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+    # best_cost_row[0,a] = result['Cost']
+    # best_delta_row[0,a] = result['delay_decrease']
+    # n_rounds_row[0,a] = result['n_rounds']
+    # p_time_row[0,a] = toc-tic
     
     a+=1
-    alg_type[a] = "E_PAMP upgrade limit 2"
-    best_cost = -1
+    alg_type[a] = "E_PAMP with upgrade limit 2"
+    params = {
+        'S_edge_b': S_edge_b.copy(),
+        'Rcpu': Rcpu.copy(),
+        'Rmem': Rmem.copy(),
+        'Fcm': Fcm.copy(),
+        'M': M,
+        'lambd': lambda_val,
+        'Rs': Rs,
+        'Di': Di,
+        'delay_decrease_target': delay_decrease_target,
+        'RTT': RTT,
+        'Ne': Ne,
+        'Cost_cpu_edge': Cost_cpu_edge,
+        'Cost_mem_edge': Cost_mem_edge,
+        'locked': None,
+        'dependency_paths_b': None,
+        'u_limit': 2
+    }
     tic = time.time()
-    u_limit = 2
-    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne, Cost_cpu_edge, Cost_mem_edge, None, None, u_limit)
+    result = offload(params)
     toc = time.time()
     print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-    print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
-    best_cost_row[0,a] = best_cost
-    best_delta_row[0,a] = best_delta
-    n_rounds_row[0,a] = n_rounds
+    print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+    best_cost_row[0,a] = result['Cost']
+    best_delta_row[0,a] = result['delay_decrease']
+    n_rounds_row[0,a] = result['n_rounds']
+    p_time_row[0,a] = toc-tic
 
     a+=1
-    alg_type[a] = "E_PAMP upgrade limit 1"
-    best_cost = -1
+    alg_type[a] = "E_PAMP with upgrade limit 1"
+    params = {
+        'S_edge_b': S_edge_b.copy(),
+        'Rcpu': Rcpu.copy(),
+        'Rmem': Rmem.copy(),
+        'Fcm': Fcm.copy(),
+        'M': M,
+        'lambd': lambda_val,
+        'Rs': Rs,
+        'Di': Di,
+        'delay_decrease_target': delay_decrease_target,
+        'RTT': RTT,
+        'Ne': Ne,
+        'Cost_cpu_edge': Cost_cpu_edge,
+        'Cost_mem_edge': Cost_mem_edge,
+        'locked': None,
+        'dependency_paths_b': None,
+        'u_limit': 1
+    }
     tic = time.time()
-    u_limit = 1
-    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = offload(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne, Cost_cpu_edge, Cost_mem_edge, None, None, u_limit)
+    result = offload(params)
     toc = time.time()
     print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-    print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
-    best_cost_row[0,a] = best_cost
-    best_delta_row[0,a] = best_delta
-    n_rounds_row[0,a] = n_rounds
+    print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+    best_cost_row[0,a] = result['Cost']
+    best_delta_row[0,a] = result['delay_decrease']
+    n_rounds_row[0,a] = result['n_rounds']
+    p_time_row[0,a] = toc-tic
     
     
     # # MFU ##
     a+=1
     alg_type[a] = "MFU"
-    best_cost = -1
+    params = {
+        'S_edge_b': S_edge_b.copy(),
+        'Rcpu': Rcpu.copy(),
+        'Rmem': Rmem.copy(),
+        'Fcm': Fcm.copy(),
+        'M': M,
+        'lambd': lambda_val,
+        'Rs': Rs,
+        'Di': Di,
+        'delay_decrease_target': delay_decrease_target,
+        'RTT': RTT,
+        'Ne': Ne,
+        'Cost_cpu_edge': Cost_cpu_edge,
+        'Cost_mem_edge': Cost_mem_edge
+    }
     tic = time.time()
-    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = mfu_heuristic(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne)
+    result = mfu_heuristic(params)
     toc = time.time()
     print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-    print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
-    best_cost_row[0,a] = best_cost
-    best_delta_row[0,a] = best_delta
-    n_rounds_row[0,a] = n_rounds
+    print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+    best_cost_row[0,a] = result['Cost']
+    best_delta_row[0,a] = result['delay_decrease']
+    n_rounds_row[0,a] = result['n_rounds']
+    p_time_row[0,a] = toc-tic
     
     ## IA ##
     a+=1
     alg_type[a] = "IA"
-    best_cost = -1
+    params = {
+        'S_edge_b': S_edge_b.copy(),
+        'Rcpu': Rcpu.copy(),
+        'Rmem': Rmem.copy(),
+        'Fcm': Fcm.copy(),
+        'M': M,
+        'lambd': lambda_val,
+        'Rs': Rs,
+        'Di': Di,
+        'delay_decrease_target': delay_decrease_target,
+        'RTT': RTT,
+        'Ne': Ne,
+        'Cost_cpu_edge': Cost_cpu_edge,
+        'Cost_mem_edge': Cost_mem_edge
+    }
     tic = time.time()
-    best_S_edge, best_cost, best_delta, best_delta_cost, n_rounds = IA_heuristic(Rcpu.copy(), Rmem.copy(), Fcm, M, lambda_val, Rs, S_edge_b.copy(), delay_decrease_target, RTT, Ne)
+    result = IA_heuristic(params)
     toc = time.time()
     print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-    print(f"Result {alg_type[a]} for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delta_delay: = {best_delta}, delta_cost: = {best_delta_cost}, rounds: = {n_rounds}")
-    best_cost_row[0,a] = best_cost
-    best_delta_row[0,a] = best_delta
-    n_rounds_row[0,a] = n_rounds
+    print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+    best_cost_row[0,a] = result['Cost']
+    best_delta_row[0,a] = result['delay_decrease']
+    n_rounds_row[0,a] = result['n_rounds']
+    p_time_row[0,a] = toc-tic
 
     best_cost_v = np.vstack((best_cost_v,best_cost_row))
     best_delta_v = np.vstack((best_delta_v,best_delta_row))
@@ -210,7 +300,7 @@ if show_plot:
     for i in range(a+1):
         line, = plt.plot(best_cost_v[:,0], best_cost_v[:,i], label=alg_type[i], linestyle='none', marker=markers[i])
     plt.ylabel('cost')
-    plt.xlabel(f'cost of {alg_type[i]}')
+    plt.xlabel(f'cost of {alg_type[0]}')
     plt.legend()
     plt.show()
 

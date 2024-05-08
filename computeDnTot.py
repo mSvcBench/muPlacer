@@ -23,4 +23,4 @@ def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M):
     
     Dn_tot = np.sum(np.multiply((Nci[M:].reshape(M,1)),(np.sum(np.multiply(Fci[M:,:M],Dn[M:,:M]),axis=1))))
 
-    return Dn_tot
+    return Dn_tot, rhonce

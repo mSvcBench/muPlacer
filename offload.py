@@ -7,23 +7,24 @@ from buildFci import buildFci
 from S2id import S2id
 from id2S import id2S
 from numpy import inf
-from computeDnTot import computeDnTot
+from computeDTot import computeDTot
 import logging
 import sys
 import argparse
 
 np.seterr(divide='ignore', invalid='ignore')
 
-def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delay_decrease_target, RTT, Ne, Cost_cpu_edge, Cost_mem_edge, dependency_paths_b, locked, u_limit):
+def offload(params):
 
     ## INITIALIZE VARIABLES ##
+    #S_edge_old (M,) vector of binary values indicating if the microservice is at the edge or not
     #Rcpu_old (2*M,) vector of CPU req by instance-set at the cloud (:M) and at the edge (M:)
     #Rmem_old (2*M,) vector of Memory req by instance-set at the cloud (:M) and at the edge (M:)
     #Fcm (M,M)microservice call frequency matrix
     #M number of microservices
     #lambd user request rate
     #Rs (M,) vector of response size of microservices
-    #S_edge_old (M,) vector of binary values indicating if the microservice is at the edge or not
+    #Di (M,) vector of internal delay of microservices
     #delay_decrease_target delay reduction target
     #RTT fixed delay to add to microservice interaction in addition to the time depending on the response size
     #Ne cloud-edge network bitrate
@@ -32,7 +33,24 @@ def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delay_decrease_ta
     #locked (M,) vector of binary values indicating if the microservice can not change state
     #u_limit maximum number of microservices upgrade to consider in the greedy iteraction (lower reduce optimality but increase computaiton speed)
 
-     
+    
+    S_edge_old = params['S_edge_b']
+    Rcpu_old = params['Rcpu']
+    Rmem_old = params['Rmem']
+    Fcm = params['Fcm']
+    M = params['M']
+    lambd = params['lambd']
+    Rs = params['Rs']
+    Di = params['Di']
+    delay_decrease_target = params['delay_decrease_target']
+    RTT = params['RTT']
+    Ne = params['Ne']
+    Cost_cpu_edge = params['Cost_cpu_edge']
+    Cost_mem_edge = params['Cost_mem_edge']
+    dependency_paths_b = params['dependency_paths_b']
+    locked = params['locked']
+    u_limit = params['u_limit']
+
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     S_b_old[M-1] = 0  # User is not in the cloud
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to support matrix operations
@@ -40,7 +58,7 @@ def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delay_decrease_ta
     # SAVE CURRENT METRICS VALUES ##
     Fci_old = np.matrix(buildFci(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
     Nci_old = computeNc(Fci_old, M, 2)  # (2*M,) number of instance call per user request
-    delay_old = computeDnTot(S_b_old, Nci_old, Fci_old, Rs, RTT, Ne, lambd, M)  # Total delay of the current configuration. It includes only network delays
+    delay_old,_,_,_ = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)  # Total delay of the current configuration. It includes only network delays
   
     Rcpu_edge_old_sum = np.sum(S_b_old[M:] * Rcpu_old[M:]) # Total CPU requested by instances in the edge
     Rmem_edge_old_sum = np.sum(S_b_old[M:] * Rmem_old[M:]) # Total Memory requested by instances in the edge
@@ -140,7 +158,7 @@ def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delay_decrease_ta
             else:
                 Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
                 Nci_temp = computeNc(Fci_temp, M, 2)    # number of instance call per user request of the temp state
-                delay_temp = computeDnTot(S_b_temp, Nci_temp, Fci_temp, Rs, RTT, Ne, lambd, M) # Total delay of the temp state. It includes only network delays
+                delay_temp,_,_,_ = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M) # Total delay of the temp state. It includes only network delays
                 delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
                 if skip_delay_increase and delay_decrease_temp<0:
                     continue
@@ -240,7 +258,8 @@ def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delay_decrease_ta
             S_b_temp[leaf] = 0
             Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))
             Nci_temp = computeNc(Fci_temp, M, 2)
-            delay_decrease_temp = delay_old - computeDnTot(S_b_temp, Nci_temp, Fci_temp, Rs, RTT, Ne, lambd, M)
+            delay_temp,_,_,_ = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M)
+            delay_decrease_temp = delay_old - delay_temp
             if delay_decrease_temp>=delay_decrease_target:
                 # possible removal
                 if Rcpu_new[leaf]*Cost_cpu_edge + Rmem_new[leaf]*Cost_mem_edge > c_max:
@@ -261,7 +280,7 @@ def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delay_decrease_ta
     n_rounds = 1
     Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
     Nci_new = computeNc(Fci_new, M, 2)
-    delay_new = computeDnTot(S_b_new, Nci_new, Fci_new, Rs, RTT, Ne, lambd, M)
+    delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
     delay_decrease_new = delay_old - delay_new
     np.copyto(Rcpu_new,Rcpu_old) 
     np.copyto(Rmem_new,Rmem_old) 
@@ -278,7 +297,22 @@ def offload(Rcpu_old, Rmem_old, Fcm, M, lambd, Rs, S_edge_old, delay_decrease_ta
     Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
     cost_increase_new = Cost_edge_new - Cost_edge_old 
 
-    return S_b_new[M:].astype(int), Cost_edge_new, delay_decrease_new, cost_increase_new, n_rounds
+    result = dict()
+    result['S_edge_b'] = S_b_new[M:].astype(int)
+    result['Cost'] = Cost_edge_new
+    result['delay_decrease'] = delay_decrease_new
+    result['cost_increase'] = cost_increase_new
+    result['n_rounds'] = n_rounds
+    result['Rcpu'] = Rcpu_new
+    result['Rmem'] = Rmem_new
+    result['Fci'] = Fci_new
+    result['Nci'] = Nci_new
+    result['delay'] = delay_new
+    result['di'] = di_new
+    result['dn'] = dn_new
+    result['rhoce'] = rhoce_new
+
+    return result
 
 
 
@@ -381,9 +415,33 @@ if __name__ == "__main__":
     Rcpu[:M] = Rcpu[:M] - cloud_cpu_decrease # cloud cpu decrease
     Rmem[:M] = Rmem[:M] - cloud_mem_decrease # cloud mem decrease
     Cost_edge = Cost_cpu_edge * np.sum(Rcpu[M:]) + Cost_mem_edge * np.sum(Rmem[M:]) # Total edge cost of the current state
+
+    # set 0 random internal delay
+    Di = np.zeros(2*M)
     
     # Call the unoffload function
-    best_S_edge, best_cost, best_delay_decrease, best_cost_increase, n_rounds = offload(Rcpu, Rmem, Fcm, M, lambda_val, Rs, S_edge_b, delay_decrease_target, RTT, Ne, Cost_cpu_edge, Cost_mem_edge, None, None, 2)
-    
+    params = {
+        'S_edge_b': S_edge_b,
+        'Rcpu': Rcpu,
+        'Rmem': Rmem,
+        'Fcm': Fcm,
+        'M': M,
+        'lambd': lambda_val,
+        'Rs': Rs,
+        'Di': Di,
+        'delay_decrease_target': delay_decrease_target,
+        'RTT': RTT,
+        'Ne': Ne,
+        'Cost_cpu_edge': Cost_cpu_edge,
+        'Cost_mem_edge': Cost_mem_edge,
+        'locked': None,
+        'dependency_paths_b': None,
+        'u_limit': 2
+    }
+
+        
+
+
+    result = offload(params)
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
-    print(f"Result for offload:\n {np.argwhere(best_S_edge==1).squeeze()}, Cost: {best_cost}, delay decrease: = {best_delay_decrease}, cost increase: = {best_cost_increase}, rounds: = {n_rounds}")
+    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")

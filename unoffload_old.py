@@ -8,7 +8,7 @@ from buildFci import buildFci
 from S2id import S2id
 from id2S import id2S
 from numpy import inf
-from computeDnTot import computeDnTot
+from computeDTot import computeDnTot
 
 np.seterr(divide='ignore', invalid='ignore')
 
