@@ -40,7 +40,7 @@ def computeNc(Fc, M, e):
 
 if __name__ == "__main__":
     
-    M = 1000
+    M = 200
     # build dependency graph
     Fcm = np.zeros([M,M])   # microservice call frequency matrix
     n_parents = 3
@@ -56,17 +56,19 @@ if __name__ == "__main__":
             Fcm[i,j]=np.random.uniform(0.1,0.5) if Fcm[i,j]>0 else 0
     Fcm[M-1,0] = 1  # user call microservice 0 (the ingress microservice)
     
-    tic = time.time()
-    NcMat = computeNc(Fcm, M,1)
-    toc = time.time()
-    print(f'processing time {toc-tic}')
+    for i in range(100):
+        tic = time.time()
+        NcMat = computeNc(Fcm, M,1)
+        toc = time.time()
+        print(f'processing time {toc-tic}')
 
-    tic = time.time()
-    NcLS = computeNcLS(Fcm, M,1)
-    toc = time.time()
-    print(f'processing time {toc-tic}')
+        tic = time.time()
+        NcLS = computeNcLS(Fcm, M,1)
+        toc = time.time()
+        print(f'processing time {toc-tic}')
 
-    print(f'Equal computation {np.allclose(NcMat,NcLS)}')
+        print(f'Equal computation {np.allclose(NcMat,NcLS)}')
+        time.sleep(0.1)
 
 
 

@@ -180,7 +180,8 @@ for lambda_val in lambda_range:
         'Cost_mem_edge': Cost_mem_edge,
         'locked': None,
         'dependency_paths_b': None,
-        'u_limit': 2
+        'u_limit': 2,
+        'no_caching': True
     }
     if delay_old > target_delay or k==0:
         delay_decrease_target = delay_old - target_delay

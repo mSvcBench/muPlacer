@@ -50,6 +50,7 @@ def offload(params):
     dependency_paths_b = params['dependency_paths_b']
     locked = params['locked']
     u_limit = params['u_limit']
+    no_caching = params['no_caching']
 
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     S_b_old[M-1] = 0  # User is not in the cloud
@@ -137,17 +138,18 @@ def offload(params):
         chache_hits = 0 # cache hit counter
         for path_b in dependency_paths_b_residual[rl] :
             # merging path_b and S_b_new into S_b_temp
-            path_n = np.argwhere(path_b==1).squeeze() 
+            path_n = np.argwhere(path_b.flatten()==1).squeeze() 
             np.copyto(S_b_temp, S_b_new)
             S_b_temp[M+path_n] = 1
-            S_id_edge_temp=str(S2id(S_b_temp[M:]))  # decimal encoded id of the edge state
+            
             #check looked microservices
             if locking:
                 if not np.equal(S_b_temp[M:]*locked, S_b_old[M:]*locked).all(): # if a locked microservice is moved, skip
                     continue
-           
-            if S_id_edge_temp in delay_cache:
-                logging.debug(f'cache_hit for {np.argwhere(S_b_temp[M:]==1).squeeze()}, path {path_n}')
+            if no_caching == False:
+                S_id_edge_temp=str(S2id(S_b_temp[M:]))  # decimal encoded id of the edge state
+            if no_caching==False and S_id_edge_temp in delay_cache:
+                logging.debug(f'cache_hit for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
                 chache_hits += 1
                 delay_temp = delay_cache[S_id_edge_temp]
                 np.copyto(Rcpu_temp,Rcpu_cache[S_id_edge_temp])
@@ -177,10 +179,11 @@ def offload(params):
                 Rmem_temp[M:] = Rmem_temp[M:] + cloud_mem_reduction # edge mem increase
                 Rcpu_temp[:M] = Rcpu_temp[:M] - cloud_cpu_reduction # cloud cpu decrease
                 Rmem_temp[:M] = Rmem_temp[:M] - cloud_mem_reduction # cloud mem decrease
-                delay_cache[S_id_edge_temp] = delay_temp
-                Rcpu_cache[S_id_edge_temp] = Rcpu_temp.copy() 
-                Rmem_cache[S_id_edge_temp] = Rmem_temp.copy()
-                logging.debug(f'cache insert for {np.argwhere(S_b_temp[M:]==1).squeeze()}, path {path_n}')
+                if no_caching == False:
+                    delay_cache[S_id_edge_temp] = delay_temp
+                    Rcpu_cache[S_id_edge_temp] = Rcpu_temp.copy() 
+                    Rmem_cache[S_id_edge_temp] = Rmem_temp.copy()
+                    logging.debug(f'cache insert for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
             Cost_edge_temp = Cost_cpu_edge * np.sum(Rcpu_temp[M:]) + Cost_mem_edge * np.sum(Rmem_temp[M:]) # Total edge cost of the temp state
             cost_increase_temp = Cost_edge_temp - Cost_edge_new # cost increase wrt the new state
             
@@ -193,7 +196,7 @@ def offload(params):
                 w = cost_increase_temp /  min(1000*delay_decrease_temp, 1000*r_delay_decrease)
                 skip_delay_increase = True
             
-            logging.debug(f'considered state {np.argwhere(S_b_temp[M:]==1).squeeze()}, cost increase {cost_increase_temp},delay decrease {1000*delay_decrease_temp}, weight {w}')
+            logging.debug(f'considered state {np.argwhere(S_b_temp[M:]==1).squeeze()}, cost increase {cost_increase_temp},delay decrease {1000*delay_decrease_temp}, delay {delay_temp}, weight {w}')
 
             if w < w_min:
                 # update best state of the greedy round
@@ -209,7 +212,8 @@ def offload(params):
             # no improvement possible in the greedy round
             break
 
-        logging.debug(f"cache hit prob. {chache_hits/len(dependency_paths_b_residual)}")
+        if no_caching == False:
+            logging.debug(f"cache hit prob. {chache_hits/len(dependency_paths_b_residual)}")
         # Prune not considered dependency paths whose microservices are going to be contained in the edge to accelerate computation
         PR = []
         for pr,path_b in enumerate(dependency_paths_b_residual):
@@ -217,25 +221,27 @@ def offload(params):
                 # dependency path already fully included at edge
                 PR.append(pr)
                 # cache cleaning
-                S_id_edge_temp = str(S2id(S_b_temp[M:]))
-                if S_id_edge_temp in delay_cache:
-                    del delay_cache[S_id_edge_temp]
-                    del Rcpu_cache[S_id_edge_temp]
-                    del Rmem_cache[S_id_edge_temp]
+                if no_caching == False:
+                    S_id_edge_temp = str(S2id(S_b_temp[M:]))
+                    if S_id_edge_temp in delay_cache:
+                        del delay_cache[S_id_edge_temp]
+                        del Rcpu_cache[S_id_edge_temp]
+                        del Rmem_cache[S_id_edge_temp]
         dependency_paths_b_residual = np.delete(dependency_paths_b_residual, PR, axis=0)
         #dependency_paths_b_residual = np.array([dependency_paths_b_residual[pr] for pr in range(len(dependency_paths_b_residual)) if pr not in PR ])
         
         # cache cleaning
-        for S_id_edge_temp_s in list(delay_cache):
-            # when a cached state do not have some edge microservice that are in new (opt) state, it will be never reused for computation
-            S_id_edge_temp = id2S(int(S_id_edge_temp_s),2**M)   # binary encoded state of the edge
-            if np.sum(S_b_opt[M:]) != np.sum(S_id_edge_temp * S_b_opt[M:]):
-                    del delay_cache[S_id_edge_temp_s]
-                    del Rcpu_cache[S_id_edge_temp_s]
-                    del Rmem_cache[S_id_edge_temp_s]
-            else:
-                logging.debug(f"cached state {np.argwhere(np.array(S_id_edge_temp)==1).squeeze()}")
-        logging.debug(f"cache size {len(delay_cache)}")
+        if no_caching == False:
+            for S_id_edge_temp_s in list(delay_cache):
+                # when a cached state do not have some edge microservice that are in new (opt) state, it will be never reused for computation
+                S_id_edge_temp = id2S(int(S_id_edge_temp_s),2**M)   # binary encoded state of the edge
+                if np.sum(S_b_opt[M:]) != np.sum(S_id_edge_temp * S_b_opt[M:]):
+                        del delay_cache[S_id_edge_temp_s]
+                        del Rcpu_cache[S_id_edge_temp_s]
+                        del Rmem_cache[S_id_edge_temp_s]
+                else:
+                    logging.debug(f"cached state {np.argwhere(np.array(S_id_edge_temp)==1).squeeze()}")
+            logging.debug(f"cache size {len(delay_cache)}")
         
 
     
@@ -436,7 +442,8 @@ if __name__ == "__main__":
         'Cost_mem_edge': Cost_mem_edge,
         'locked': None,
         'dependency_paths_b': None,
-        'u_limit': 2
+        'u_limit': 2,
+        'no_caching': False
     }
 
         
