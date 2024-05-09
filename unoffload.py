@@ -46,8 +46,11 @@ def unoffload(params):
     Ne = params['Ne']
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
-    dependency_paths_b = params['dependency_paths_b']
-    u_limit = params['u_limit']
+    
+    # optional parameters
+    dependency_paths_b = params['dependency_paths_b'] if 'dependency_paths_b' in params else None
+    u_limit = params['u_limit'] if 'u_limit' in params else M
+    no_caching = params['no_cache'] if 'no_cache' in params else False
     
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old))
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to support matrix operations
@@ -109,7 +112,8 @@ def unoffload(params):
         'Cost_mem_edge': Cost_mem_edge,
         'locked': None,
         'dependency_paths_b': dependency_paths_b,
-        'u_limit': u_limit
+        'u_limit': u_limit,
+        'no_caching': no_caching
     }
     logging.info(f"unoffload calls offload from void edge with delay_decrease_target: {delay_decrease_target} and estimated void delay: {delay_void}")
     result = offload(params)

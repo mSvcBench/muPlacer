@@ -71,7 +71,7 @@ Di_range_max = 0.08 # max value of internal delay (Sec)
 max_algotithms = 10
 
 show_graph = False
-show_plot = True
+show_plot = False
 
 
 Rs = np.random.randint(Rs_range_min,Rs_range_max,M)  # random response size bytes
@@ -140,13 +140,13 @@ S_edge_b_new = S_b[M:].copy()
 Rcpu_new = Rcpu.copy()
 Rmem_new = Rmem.copy()
 
-cost_v = np.empty((1,max_algotithms,len(lambda_range))) # vector of costs obtained by different algorithms during the load change
-delay_v = np.empty((1,max_algotithms,len(lambda_range))) # vector of delay obtained by different algorithms during the load change
-rhoce_v = np.empty((1,max_algotithms,len(lambda_range))) # vector of rhoce obtained by different algorithms during the load change
-delay_old_v = np.empty((1,max_algotithms,len(lambda_range))) # vector of delay before action obtained by different algorithms during the load change
-rhoce_old_v = np.empty((1,max_algotithms,len(lambda_range))) # vector of rhoch before action obtained by different algorithms during the load change
-nmicros_v = np.empty((1,max_algotithms,len(lambda_range))) # vector of n. edge micros obtained by different algorithms during the load change
-lambda_v = np.empty((1,max_algotithms,len(lambda_range))) # vector of lambdas used for the tests
+cost_v = np.empty((max_algotithms,len(lambda_range))) # vector of costs obtained by different algorithms during the load change
+delay_v = np.empty((max_algotithms,len(lambda_range))) # vector of delay obtained by different algorithms during the load change
+rhoce_v = np.empty((max_algotithms,len(lambda_range))) # vector of rhoce obtained by different algorithms during the load change
+delay_old_v = np.empty((max_algotithms,len(lambda_range))) # vector of delay before action obtained by different algorithms during the load change
+rhoce_old_v = np.empty((max_algotithms,len(lambda_range))) # vector of rhoch before action obtained by different algorithms during the load change
+nmicros_v = np.empty((max_algotithms,len(lambda_range))) # vector of n. edge micros obtained by different algorithms during the load change
+lambda_v = np.empty((max_algotithms,len(lambda_range))) # vector of lambdas used for the tests
 
 alg_type = [""] * max_algotithms # vector of strings describing algorithms used for te tests
 
@@ -181,7 +181,7 @@ for lambda_val in lambda_range:
         'locked': None,
         'dependency_paths_b': None,
         'u_limit': 2,
-        'no_caching': True
+        'no_caching': False
     }
     if delay_old > target_delay or k==0:
         delay_decrease_target = delay_old - target_delay
@@ -195,13 +195,13 @@ for lambda_val in lambda_range:
         result = unoffload(params)
     else:
         print(f"No action, current delay {delay_old} sec, target delay {target_delay} sec")
-        cost_v[0,a,k] = cost_v[0,a,k-1]
-        delay_v[0,a,k] = delay_old
-        rhoce_v[0,a,k] = rhoce_old
-        delay_old_v[0,a,k] = delay_old
-        rhoce_old_v[0,a,k] = rhoce_old
-        nmicros_v[0,a,k] = nmicros_v[0,a,k-1]
-        lambda_v[0,a,k] = lambda_val
+        cost_v[a,k] = cost_v[a,k-1]
+        delay_v[a,k] = delay_old
+        rhoce_v[a,k] = rhoce_old
+        delay_old_v[a,k] = delay_old
+        rhoce_old_v[a,k] = rhoce_old
+        nmicros_v[a,k] = nmicros_v[a,k-1]
+        lambda_v[a,k] = lambda_val
         continue
   
     # update state and values
@@ -214,19 +214,19 @@ for lambda_val in lambda_range:
     rhoce_new = result['rhoce']
     delay_new = result['delay']
     
-    cost_v[0,a,k] = result['Cost']
-    delay_v[0,a,k] = result['delay']
-    delay_old_v[0,a,k] = delay_old
-    rhoce_old_v[0,a,k] = rhoce_old
-    rhoce_v[0,a,k] = result['rhoce']
-    nmicros_v[0,a,k] = np.count_nonzero(result['S_edge_b'] > 0)
-    lambda_v[0,a,k] = lambda_val
+    cost_v[a,k] = result['Cost']
+    delay_v[a,k] = result['delay']
+    delay_old_v[a,k] = delay_old
+    rhoce_old_v[a,k] = rhoce_old
+    rhoce_v[a,k] = result['rhoce']
+    nmicros_v[a,k] = np.count_nonzero(result['S_edge_b'] > 0)
+    lambda_v[a,k] = lambda_val
     print(f"edge instances: {np.argwhere(result['S_edge_b']==1).flatten()}")
-    print(f"Cost: {cost_v[0, a, k]}, Delay: {delay_v[0, a, k]}, Rhoce: {rhoce_v[0, a, k]}, Nmicros: {nmicros_v[0, a, k]}, Lambda: {lambda_v[0, a, k]}")
+    print(f"Cost: {cost_v[a, k]}, Delay: {delay_v[a, k]}, Rhoce: {rhoce_v[a, k]}, Nmicros: {nmicros_v[a, k]}, Lambda: {lambda_v[a, k]}")
 
 
 # Matlab save
-mdic = {"cost_v": cost_v, "delay_v": delay_v, "rhoce_v": rhoce_v, "nmicros_v": nmicros_v,"lambda_v": lambda_v, "alg_type": alg_type}
+mdic = {"cost_v": cost_v, "delay_v": delay_v, "delay_old_v": delay_old_v, "rhoce_v": rhoce_v, "rhoce_old_v": rhoce_old_v, "nmicros_v": nmicros_v,"lambda_v": lambda_v, "alg_type": alg_type}
 savemat("res.mat", mdic)
 
 plt.ion()
@@ -234,7 +234,7 @@ if show_plot:
     markers = ['o', 's', 'D', '^', 'v', 'p', '*', 'h', 'x', '+']
     plt.figure(0)
     for i in range(a+1):
-        line, = plt.plot(lambda_v[0,a,:], cost_v[0,a,:], label=alg_type[i], marker=markers[i])
+        line, = plt.plot(lambda_v[a,:], cost_v[a,:], label=alg_type[i], marker=markers[i])
     plt.ylabel('cost')
     plt.xlabel(f'lambda req/s')
     plt.legend()
@@ -243,8 +243,8 @@ if show_plot:
     
     plt.figure(1)
     for i in range(a+1):
-        line, = plt.plot(lambda_v[0,a,1:], delay_v[0,a,1:], label=alg_type[i], marker=markers[i], linestyle='none')
-        line, = plt.plot(lambda_v[0,a,1:], delay_old_v[0,a,1:], label=alg_type[i], marker=markers[i], linestyle='none')
+        line, = plt.plot(lambda_v[a,1:], delay_v[a,1:], label=alg_type[i], marker=markers[i], linestyle='none')
+        line, = plt.plot(lambda_v[a,1:], delay_old_v[a,1:], label=alg_type[i], marker=markers[i], linestyle='none')
     plt.ylabel('user delay')
     plt.xlabel(f'lambda req/s')
     plt.legend()
@@ -253,13 +253,13 @@ if show_plot:
     
     plt.figure(2)
     for i in range(a+1):
-        line, = plt.plot(lambda_v[0,a,:], rhoce_v[0,a,:], label=alg_type[i], marker=markers[i])
+        line, = plt.plot(lambda_v[a,:], rhoce_v[a,:], label=alg_type[i], marker=markers[i])
     plt.ylabel('metwork load cloud edge')
     plt.xlabel(f'lambda req/s')
     plt.legend()
     plt.show()
     plt.pause(0.1)
 
-    time.sleep(1e6)
+    #time.sleep(1e6)
 
 

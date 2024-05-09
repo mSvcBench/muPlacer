@@ -1,4 +1,11 @@
 # pylint: disable=C0103, C0301
+from os import environ
+N_THREADS = '1'
+environ['OMP_NUM_THREADS'] = N_THREADS
+environ['OPENBLAS_NUM_THREADS'] = N_THREADS
+environ['MKL_NUM_THREADS'] = N_THREADS
+environ['VECLIB_MAXIMUM_THREADS'] = N_THREADS
+environ['NUMEXPR_NUM_THREADS'] = N_THREADS
 
 import numpy as np
 import networkx as nx
@@ -11,6 +18,7 @@ from computeDTot import computeDTot
 import logging
 import sys
 import argparse
+
 
 np.seterr(divide='ignore', invalid='ignore')
 
@@ -33,7 +41,7 @@ def offload(params):
     #locked (M,) vector of binary values indicating if the microservice can not change state
     #u_limit maximum number of microservices upgrade to consider in the greedy iteraction (lower reduce optimality but increase computaiton speed)
 
-    
+    # mandatory paramenters
     S_edge_old = params['S_edge_b']
     Rcpu_old = params['Rcpu']
     Rmem_old = params['Rmem']
@@ -41,16 +49,18 @@ def offload(params):
     M = params['M']
     lambd = params['lambd']
     Rs = params['Rs']
-    Di = params['Di']
     delay_decrease_target = params['delay_decrease_target']
     RTT = params['RTT']
     Ne = params['Ne']
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
-    dependency_paths_b = params['dependency_paths_b']
-    locked = params['locked']
-    u_limit = params['u_limit']
-    no_caching = params['no_caching']
+
+    # optional paramenters
+    Di = params['Di'] if 'Di' in params else np.zeros(M)
+    dependency_paths_b = params['dependency_paths_b'] if 'dependency_paths_b' in params else None
+    locked = params['locked'] if 'locked' in params else None
+    u_limit = params['u_limit'] if 'u_limit' in params else M
+    no_caching = params['no_caching'] if 'no_caching' in params else False
 
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     S_b_old[M-1] = 0  # User is not in the cloud
