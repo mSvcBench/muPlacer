@@ -1,0 +1,19 @@
+load res.mat
+x=[]
+delay_comb=[];
+rhoce_comb=[];
+for i = 1:length(lambda_v(1,:))
+    x=[x i i];
+    delay_comb = [delay_comb delay_old_v(:,i) delay_v(:,i)];
+    
+end
+delay_comb * 1000; % millisec delay
+plot(x,delay_comb(1,:))
+ylim([0 0.2])
+ylabel('request delay (ms)')
+xlabel('placing round')
+
+
+
+
+
