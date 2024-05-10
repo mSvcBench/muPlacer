@@ -2,10 +2,6 @@
 from os import environ
 N_THREADS = '1'
 environ['OMP_NUM_THREADS'] = N_THREADS
-environ['OPENBLAS_NUM_THREADS'] = N_THREADS
-environ['MKL_NUM_THREADS'] = N_THREADS
-environ['VECLIB_MAXIMUM_THREADS'] = N_THREADS
-environ['NUMEXPR_NUM_THREADS'] = N_THREADS
 
 import numpy as np
 import networkx as nx

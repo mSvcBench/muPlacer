@@ -63,7 +63,7 @@ if __name__ == "__main__":
         print(f'processing time {toc-tic}')
 
         tic = time.time()
-        NcLS = computeNcLS(Fcm, M,1)
+        NcLS = computeNc(Fcm, M,1)
         toc = time.time()
         print(f'processing time {toc-tic}')
 

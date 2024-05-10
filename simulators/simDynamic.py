@@ -3,12 +3,14 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
+from os import environ
+N_THREADS = '1'
+environ['OMP_NUM_THREADS'] = N_THREADS
+
 from offload import offload
 from unoffload import unoffload
 from mfu_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
-# from unoffload import unoffload
-# from unoffload2 import unoffload2
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -136,9 +138,7 @@ if show_graph:
     nx.draw(G,with_labels=True)
     plt.show()
 
-S_edge_b_new = S_b[M:].copy()
-Rcpu_new = Rcpu.copy()
-Rmem_new = Rmem.copy()
+
 
 cost_v = np.empty((max_algotithms,len(lambda_range))) # vector of costs obtained by different algorithms during the load change
 delay_v = np.empty((max_algotithms,len(lambda_range))) # vector of delay obtained by different algorithms during the load change
@@ -154,6 +154,9 @@ a=-1
 ## E_PAMP ##
 a+=1
 k=-1
+S_edge_b_new = S_b[M:].copy()
+Rcpu_new = Rcpu.copy()
+Rmem_new = Rmem.copy()
 alg_type[a] = "E_PAMP with upgrade limit 2"
 for lambda_val in lambda_range:
     k+=1
@@ -224,6 +227,83 @@ for lambda_val in lambda_range:
     print(f"edge instances: {np.argwhere(result['S_edge_b']==1).flatten()}")
     print(f"Cost: {cost_v[a, k]}, Delay: {delay_v[a, k]}, Rhoce: {rhoce_v[a, k]}, Nmicros: {nmicros_v[a, k]}, Lambda: {lambda_v[a, k]}")
 
+## MFU ##
+a+=1
+k=-1
+S_edge_b_new = S_b[M:].copy()
+Rcpu_new = Rcpu.copy()
+Rmem_new = Rmem.copy()
+alg_type[a] = "MFU"
+for lambda_val in lambda_range:
+    k+=1
+    print(f'\n lambda {lambda_val} req/s')
+    S_b_old = np.concatenate((np.ones(M), S_edge_b_new)) 
+    S_b_old[M-1] = 0
+    Rcpu_old = Rcpu_new.copy()
+    Rmem_old = Rmem_new.copy()
+    Fci_old = np.matrix(buildFci(S_b_old, Fcm, M))    # microservice call frequency matrix
+    Nci_old = computeNc(Fci_old, M, 2)   # number of instance call per user request of the current state
+    delay_old,di_old,dn_old,rhoce_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambda_val, M)   # total delay of the current state
+    params = {
+        'S_edge_b': S_b_old[M:],
+        'Rcpu': Rcpu_old,
+        'Rmem': Rmem_old,
+        'Fcm': Fcm,
+        'M': M,
+        'lambd': lambda_val,
+        'Rs': Rs,
+        'Di': Di,
+        'RTT': RTT,
+        'Ne': Ne,
+        'Cost_cpu_edge': Cost_cpu_edge,
+        'Cost_mem_edge': Cost_mem_edge,
+        'locked': None,
+        'dependency_paths_b': None,
+        'u_limit': 2,
+        'no_caching': False
+    }
+    if delay_old > target_delay or k==0:
+        delay_decrease_target = delay_old - target_delay
+        params['delay_decrease_target'] = delay_decrease_target
+        print(f"Offloading, current delay {delay_old} sec, target delay {target_delay} sec")
+        params['mode'] = 'offload'
+        result = mfu_heuristic(params)
+    elif delay_old < (1-unoffload_margin)*target_delay:
+        delay_increase_target = target_delay - delay_old
+        params['delay_increase_target'] = delay_increase_target
+        params['mode'] = 'unoffload'
+        print(f"Unoffloading, current delay {delay_old} sec, target delay {target_delay} sec")
+        result = mfu_heuristic(params)
+    else:
+        print(f"No action, current delay {delay_old} sec, target delay {target_delay} sec")
+        cost_v[a,k] = cost_v[a,k-1]
+        delay_v[a,k] = delay_old
+        rhoce_v[a,k] = rhoce_old
+        delay_old_v[a,k] = delay_old
+        rhoce_old_v[a,k] = rhoce_old
+        nmicros_v[a,k] = nmicros_v[a,k-1]
+        lambda_v[a,k] = lambda_val
+        continue
+  
+    # update state and values
+    S_edge_b_new = result['S_edge_b']
+    Rcpu_new = result['Rcpu']
+    Rmem_new = result['Rmem']
+    Fci_new = result['Fci']
+    Nci_new = result['Nci']
+    Cost_new = result['Cost']
+    rhoce_new = result['rhoce']
+    delay_new = result['delay']
+    
+    cost_v[a,k] = result['Cost']
+    delay_v[a,k] = result['delay']
+    delay_old_v[a,k] = delay_old
+    rhoce_old_v[a,k] = rhoce_old
+    rhoce_v[a,k] = result['rhoce']
+    nmicros_v[a,k] = np.count_nonzero(result['S_edge_b'] > 0)
+    lambda_v[a,k] = lambda_val
+    print(f"edge instances: {np.argwhere(result['S_edge_b']==1).flatten()}")
+    print(f"Cost: {cost_v[a, k]}, Delay: {delay_v[a, k]}, Rhoce: {rhoce_v[a, k]}, Nmicros: {nmicros_v[a, k]}, Lambda: {lambda_v[a, k]}")
 
 # Matlab save
 mdic = {"cost_v": cost_v, "delay_v": delay_v, "delay_old_v": delay_old_v, "rhoce_v": rhoce_v, "rhoce_old_v": rhoce_old_v, "nmicros_v": nmicros_v,"lambda_v": lambda_v, "alg_type": alg_type}
