@@ -199,7 +199,7 @@ def offload(params):
                 # addition provides delay increase,  weighting penalize both cost and delay increase
                 w = 1e6 - cost_increase_temp * 1000 * delay_decrease_temp 
             else:
-                w = cost_increase_temp /  min(1000*delay_decrease_temp, 1000*r_delay_decrease)
+                w = cost_increase_temp /  max(min(1000*delay_decrease_temp, 1000*r_delay_decrease),1e-3)
                 skip_delay_increase = True
             
             logging.debug(f'considered state {np.argwhere(S_b_temp[M:]==1).squeeze()}, cost increase {cost_increase_temp},delay decrease {1000*delay_decrease_temp}, delay {delay_temp}, weight {w}')

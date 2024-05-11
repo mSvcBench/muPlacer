@@ -27,10 +27,10 @@ def edges_reversal(graph):
         graph.delete_edges([(edge[0], edge[1])])
         graph.add_edges([(edge[1], edge[0])])
 
-np.random.seed(150273)
+np.random.seed(150272)
 res=np.array([])
 trials = 30
-RTT = 0.0869    # RTT edge-cloud
+RTT = 0.05    # RTT edge-cloud
 M = 100 # n. microservices
 Ne = 100e6    # bitrate cloud-edge
 S_edge_b = np.zeros(M)  # initial state. 
@@ -41,12 +41,12 @@ Cost_cpu_edge = 1 # cost of CPU at the edge
 Cost_mem_edge = 1 # cost of memory at the edge
 unoffload_margin = 0.1 # hysteresys margin for unoffloading
 
-lambda_min = 1000   # min user request rate (req/s)
+lambda_min = 500   # min user request rate (req/s)
 lambda_max = 3000   # max user request rate (req/s)
-lambda_step = 400   # user request rate step (req/s)
+lambda_step = 100   # user request rate step (req/s)
 lambda_range = list(range(lambda_min, lambda_max+lambda_step, lambda_step))  # user request rates (req/s)
 lambda_range = lambda_range + list(range(lambda_max-lambda_step, lambda_min-lambda_step, -lambda_step))  # user request rates (req/s)
-target_delay = 0.15 # target user delay (sec)
+target_delay = 0.25 # target user delay (sec)
 
 graph_algorithm = 'random'
 
@@ -151,7 +151,7 @@ lambda_v = np.empty((max_algotithms,len(lambda_range))) # vector of lambdas used
 alg_type = [""] * max_algotithms # vector of strings describing algorithms used for te tests
 
 a=-1
-## E_PAMP ##
+## E_PAMP limit 2 ##
 a+=1
 k=-1
 S_edge_b_new = S_b[M:].copy()
@@ -184,6 +184,158 @@ for lambda_val in lambda_range:
         'locked': None,
         'dependency_paths_b': None,
         'u_limit': 2,
+        'no_caching': False
+    }
+    if delay_old > target_delay or k==0:
+        delay_decrease_target = delay_old - target_delay
+        params['delay_decrease_target'] = delay_decrease_target
+        print(f"Offloading, current delay {delay_old} sec, target delay {target_delay} sec")
+        result = offload(params)
+    elif delay_old < (1-unoffload_margin)*target_delay:
+        delay_increase_target = target_delay - delay_old
+        params['delay_increase_target'] = delay_increase_target
+        print(f"Unoffloading, current delay {delay_old} sec, target delay {target_delay} sec")
+        result = unoffload(params)
+    else:
+        print(f"No action, current delay {delay_old} sec, target delay {target_delay} sec")
+        cost_v[a,k] = cost_v[a,k-1]
+        delay_v[a,k] = delay_old
+        rhoce_v[a,k] = rhoce_old
+        delay_old_v[a,k] = delay_old
+        rhoce_old_v[a,k] = rhoce_old
+        nmicros_v[a,k] = nmicros_v[a,k-1]
+        lambda_v[a,k] = lambda_val
+        continue
+  
+    # update state and values
+    S_edge_b_new = result['S_edge_b']
+    Rcpu_new = result['Rcpu']
+    Rmem_new = result['Rmem']
+    Fci_new = result['Fci']
+    Nci_new = result['Nci']
+    Cost_new = result['Cost']
+    rhoce_new = result['rhoce']
+    delay_new = result['delay']
+    
+    cost_v[a,k] = result['Cost']
+    delay_v[a,k] = result['delay']
+    delay_old_v[a,k] = delay_old
+    rhoce_old_v[a,k] = rhoce_old
+    rhoce_v[a,k] = result['rhoce']
+    nmicros_v[a,k] = np.count_nonzero(result['S_edge_b'] > 0)
+    lambda_v[a,k] = lambda_val
+    print(f"edge instances: {np.argwhere(result['S_edge_b']==1).flatten()}")
+    print(f"Cost: {cost_v[a, k]}, Delay: {delay_v[a, k]}, Rhoce: {rhoce_v[a, k]}, Nmicros: {nmicros_v[a, k]}, Lambda: {lambda_v[a, k]}")
+
+## E_PAMP limit 1 ##
+a+=1
+k=-1
+S_edge_b_new = S_b[M:].copy()
+Rcpu_new = Rcpu.copy()
+Rmem_new = Rmem.copy()
+alg_type[a] = "E_PAMP with upgrade limit 1"
+for lambda_val in lambda_range:
+    k+=1
+    print(f'\n lambda {lambda_val} req/s')
+    S_b_old = np.concatenate((np.ones(M), S_edge_b_new)) 
+    S_b_old[M-1] = 0
+    Rcpu_old = Rcpu_new.copy()
+    Rmem_old = Rmem_new.copy()
+    Fci_old = np.matrix(buildFci(S_b_old, Fcm, M))    # microservice call frequency matrix
+    Nci_old = computeNc(Fci_old, M, 2)   # number of instance call per user request of the current state
+    delay_old,di_old,dn_old,rhoce_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambda_val, M)   # total delay of the current state
+    params = {
+        'S_edge_b': S_b_old[M:],
+        'Rcpu': Rcpu_old,
+        'Rmem': Rmem_old,
+        'Fcm': Fcm,
+        'M': M,
+        'lambd': lambda_val,
+        'Rs': Rs,
+        'Di': Di,
+        'RTT': RTT,
+        'Ne': Ne,
+        'Cost_cpu_edge': Cost_cpu_edge,
+        'Cost_mem_edge': Cost_mem_edge,
+        'locked': None,
+        'dependency_paths_b': None,
+        'u_limit': 1,
+        'no_caching': False
+    }
+    if delay_old > target_delay or k==0:
+        delay_decrease_target = delay_old - target_delay
+        params['delay_decrease_target'] = delay_decrease_target
+        print(f"Offloading, current delay {delay_old} sec, target delay {target_delay} sec")
+        result = offload(params)
+    elif delay_old < (1-unoffload_margin)*target_delay:
+        delay_increase_target = target_delay - delay_old
+        params['delay_increase_target'] = delay_increase_target
+        print(f"Unoffloading, current delay {delay_old} sec, target delay {target_delay} sec")
+        result = unoffload(params)
+    else:
+        print(f"No action, current delay {delay_old} sec, target delay {target_delay} sec")
+        cost_v[a,k] = cost_v[a,k-1]
+        delay_v[a,k] = delay_old
+        rhoce_v[a,k] = rhoce_old
+        delay_old_v[a,k] = delay_old
+        rhoce_old_v[a,k] = rhoce_old
+        nmicros_v[a,k] = nmicros_v[a,k-1]
+        lambda_v[a,k] = lambda_val
+        continue
+  
+    # update state and values
+    S_edge_b_new = result['S_edge_b']
+    Rcpu_new = result['Rcpu']
+    Rmem_new = result['Rmem']
+    Fci_new = result['Fci']
+    Nci_new = result['Nci']
+    Cost_new = result['Cost']
+    rhoce_new = result['rhoce']
+    delay_new = result['delay']
+    
+    cost_v[a,k] = result['Cost']
+    delay_v[a,k] = result['delay']
+    delay_old_v[a,k] = delay_old
+    rhoce_old_v[a,k] = rhoce_old
+    rhoce_v[a,k] = result['rhoce']
+    nmicros_v[a,k] = np.count_nonzero(result['S_edge_b'] > 0)
+    lambda_v[a,k] = lambda_val
+    print(f"edge instances: {np.argwhere(result['S_edge_b']==1).flatten()}")
+    print(f"Cost: {cost_v[a, k]}, Delay: {delay_v[a, k]}, Rhoce: {rhoce_v[a, k]}, Nmicros: {nmicros_v[a, k]}, Lambda: {lambda_v[a, k]}")
+
+## E_PAMP no limit  ##
+a+=1
+k=-1
+S_edge_b_new = S_b[M:].copy()
+Rcpu_new = Rcpu.copy()
+Rmem_new = Rmem.copy()
+alg_type[a] = "E_PAMP with upgrade limit 1"
+for lambda_val in lambda_range:
+    k+=1
+    print(f'\n lambda {lambda_val} req/s')
+    S_b_old = np.concatenate((np.ones(M), S_edge_b_new)) 
+    S_b_old[M-1] = 0
+    Rcpu_old = Rcpu_new.copy()
+    Rmem_old = Rmem_new.copy()
+    Fci_old = np.matrix(buildFci(S_b_old, Fcm, M))    # microservice call frequency matrix
+    Nci_old = computeNc(Fci_old, M, 2)   # number of instance call per user request of the current state
+    delay_old,di_old,dn_old,rhoce_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambda_val, M)   # total delay of the current state
+    params = {
+        'S_edge_b': S_b_old[M:],
+        'Rcpu': Rcpu_old,
+        'Rmem': Rmem_old,
+        'Fcm': Fcm,
+        'M': M,
+        'lambd': lambda_val,
+        'Rs': Rs,
+        'Di': Di,
+        'RTT': RTT,
+        'Ne': Ne,
+        'Cost_cpu_edge': Cost_cpu_edge,
+        'Cost_mem_edge': Cost_mem_edge,
+        'locked': None,
+        'dependency_paths_b': None,
+        'u_limit': M,
         'no_caching': False
     }
     if delay_old > target_delay or k==0:
