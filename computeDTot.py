@@ -6,7 +6,7 @@ import logging
 def computeDTot(S, Nci, Fci, Di, Rs, RTT, Ne, lambd, M):
 
     # compute cloud-edge traffic
-    max_delay = 1e3 # max delay used to avoid inf problem during optimization
+    max_delay = 1e6 # max delay used to avoid inf problem during optimization
     Dn_tot, rhonce = computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M)
     Di_tot = computeDiTot(Nci, Di)
     if rhonce == 1:

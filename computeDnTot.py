@@ -18,7 +18,7 @@ def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M):
     for i in S_edge_id:
         for j in S_not_edge_id:
             if Fci[M+i,j]>0:
-                Dn[M+i,j] = RTT + ((Rs[j] * 8 / Ne) + 0.015) / (1 - rhonce) 
+                Dn[M+i,j] = RTT + min(((Rs[j] * 8 / Ne) + 0.015) / (1 - rhonce),1e3) # 1e3 is used to avoid infinite values 
     
     
     Dn_tot = np.sum(np.multiply((Nci[M:].reshape(M,1)),(np.sum(np.multiply(Fci[M:,:M],Dn[M:,:M]),axis=1))))
