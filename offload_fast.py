@@ -119,12 +119,13 @@ def offload_fast(params):
 
     # combs
     combs=dict()   # combs is a dictionary of all possible combination of integers from 0 to N
-    N=10
+    N=20
+    mComb = 100
     for n in range(0,N):
         combs[n]=dict()
         values=list(range(0,n+1))
         k=0
-        for L in range(1,len(values) + 1):
+        for L in range(1,min(len(values),mComb)+1):
             for subset in itertools.combinations(values, L):
                 combs[n][k] = list(subset)
                 k=k+1
@@ -162,8 +163,6 @@ def offload_fast(params):
                 path_b = np.zeros((1,M),int)
                 path_b[0,edge_gateway_peer_group[eg][C[c]]]=1
                 dependency_paths_b_residual = np.append(dependency_paths_b_residual,path_b,axis=0)
-
-
 
         if len(edge_gateways) == 0:
             # All dependency path considered no other way to reduce delay

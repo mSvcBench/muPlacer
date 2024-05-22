@@ -1,4 +1,5 @@
 load res.mat
+close all
 x=[];
 a = find(alg_type(:,1)~=' ');   % non void data
 % row1 = string(arrayfun(@(v)num2str(v),1:length(lambda_v(1,:)),'uni',0))

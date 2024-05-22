@@ -28,7 +28,7 @@ def edges_reversal(graph):
         graph.delete_edges([(edge[0], edge[1])])
         graph.add_edges([(edge[1], edge[0])])
 
-np.random.seed(150274)
+np.random.seed(150275)
 res=np.array([])
 trials = 30
 RTT = 0.05    # RTT edge-cloud
@@ -43,7 +43,7 @@ Cost_mem_edge = 1 # cost of memory at the edge
 unoffload_margin = 0.1 # hysteresys margin for unoffloading
 
 lambda_min = 500   # min user request rate (req/s)
-lambda_max = 3000   # max user request rate (req/s)
+lambda_max = 2000   # max user request rate (req/s)
 lambda_step = 100   # user request rate step (req/s)
 lambda_range = list(range(lambda_min, lambda_max+lambda_step, lambda_step))  # user request rates (req/s)
 lambda_range = lambda_range + list(range(lambda_max-lambda_step, lambda_min-lambda_step, -lambda_step))  # user request rates (req/s)
@@ -238,7 +238,7 @@ if True:
     S_edge_b_new = S_b[M:].copy()
     Rcpu_new = Rcpu.copy()
     Rmem_new = Rmem.copy()
-    alg_type[a] = "E_PAMP with upgrade limit 2"
+    alg_type[a] = "EPAMP with upgrade limit 2"
     for lambda_val in lambda_range:
         k+=1
         print(f'\n lambda {lambda_val} req/s')
@@ -265,7 +265,7 @@ if True:
             'locked': None,
             'dependency_paths_b': None,
             'u_limit': 2,
-            'no_caching': False
+            'no_caching': True
         }
         if delay_old > target_delay or k==0:
             delay_decrease_target = delay_old - target_delay
@@ -315,7 +315,7 @@ if False:
     S_edge_b_new = S_b[M:].copy()
     Rcpu_new = Rcpu.copy()
     Rmem_new = Rmem.copy()
-    alg_type[a] = "E_PAMP with upgrade limit 1"
+    alg_type[a] = "EPAMP with upgrade limit 1"
     for lambda_val in lambda_range:
         k+=1
         print(f'\n lambda {lambda_val} req/s')
@@ -392,7 +392,7 @@ if False:
     S_edge_b_new = S_b[M:].copy()
     Rcpu_new = Rcpu.copy()
     Rmem_new = Rmem.copy()
-    alg_type[a] = "E_PAMP with upgrade limit 1"
+    alg_type[a] = "EPAMP with no limit 1"
     for lambda_val in lambda_range:
         k+=1
         print(f'\n lambda {lambda_val} req/s')
@@ -462,14 +462,14 @@ if False:
         print(f"edge instances: {np.argwhere(result['S_edge_b']==1).flatten()}")
         print(f"Cost: {cost_v[a, k]}, Delay: {delay_v[a, k]}, Rhoce: {rhoce_v[a, k]}, Nmicros: {nmicros_v[a, k]}, Lambda: {lambda_v[a, k]}")
 
-## E_PAMP no limit  ##
+## E_PAMP with combination  ##
 if True:
     a+=1
     k=-1
     S_edge_b_new = S_b[M:].copy()
     Rcpu_new = Rcpu.copy()
     Rmem_new = Rmem.copy()
-    alg_type[a] = "E_PAMP with combinations"
+    alg_type[a] = "EPAMP with combinations"
     for lambda_val in lambda_range:
         k+=1
         print(f'\n lambda {lambda_val} req/s')
