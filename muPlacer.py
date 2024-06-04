@@ -342,7 +342,7 @@ def get_traffic():
             for result in r1:
                 TRAFFIC = round(float(result["value"][1]), 2)
                 #print("traffic=",TRAFFIC,"Mbps")
-                with open(f'/home/alex/Downloads/matlab/{FOLDER}/{PLACEMENT_TYPE}_traffic.csv', 'a', newline='') as file:
+                with open(f'/home/ubuntu/Downloads/matlab/{FOLDER}/{PLACEMENT_TYPE}_traffic.csv', 'a', newline='') as file:
                     writer = csv.writer(file)
                     writer.writerow([TRAFFIC])
         time.sleep(1)

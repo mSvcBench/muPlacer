@@ -33,7 +33,7 @@ res=np.array([])
 trials = 30
 RTT = 0.05    # RTT edge-cloud
 M = 100 # n. microservices
-Ne = 100e6    # bitrate cloud-edge
+Ne = 20e6    # bitrate cloud-edge
 S_edge_b = np.zeros(M)  # initial state. 
 S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
 S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
@@ -463,7 +463,7 @@ if False:
         print(f"Cost: {cost_v[a, k]}, Delay: {delay_v[a, k]}, Rhoce: {rhoce_v[a, k]}, Nmicros: {nmicros_v[a, k]}, Lambda: {lambda_v[a, k]}")
 
 ## E_PAMP with combination  ##
-if True:
+if False:
     a+=1
     k=-1
     S_edge_b_new = S_b[M:].copy()
