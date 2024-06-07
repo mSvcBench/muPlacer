@@ -431,7 +431,7 @@ if __name__ == "__main__":
     # set 0 random internal delay
     Di = np.zeros(2*M)
     
-    # Call the unoffload function
+    # Call the offload function
     params = {
         'S_edge_b': S_edge_b,
         'Rcpu': Rcpu,
