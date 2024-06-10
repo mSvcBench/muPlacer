@@ -57,6 +57,7 @@ def offload(params):
     locked = params['locked'] if 'locked' in params else None
     u_limit = params['u_limit'] if 'u_limit' in params else M
     no_caching = params['no_caching'] if 'no_caching' in params else False
+    no_evolutionary = params['no_evolutionary'] if 'no_evolutionary' in params else False
 
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     S_b_old[M-1] = 0  # User is not in the cloud
@@ -261,7 +262,8 @@ def offload(params):
         Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
         S_b_new_a = np.array(S_b_new[M:]).reshape(M,1)
         edge_leaves = np.logical_and(np.sum(Fci_new[M:,:], axis=1)==0, S_b_new_a==1) # edge microservice with no outgoing calls
-        edge_leaves = np.logical_and(edge_leaves, S_b_old_a==0)    # old edge microservice can not be removed for incremental constraint
+        if (no_evolutionary):
+            edge_leaves = np.logical_and(edge_leaves, S_b_old_a==0)    # old edge microservice can not be removed for incremental constraint
         edge_leaves = np.argwhere(edge_leaves)[:,0]
         edge_leaves = edge_leaves+M # index of the edge microservice in the full state
         for leaf in edge_leaves:

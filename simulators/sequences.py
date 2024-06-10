@@ -31,9 +31,9 @@ def edges_reversal(graph):
 np.random.seed(150275)
 res=np.array([])
 trials = 30
-RTT = 0.05    # RTT edge-cloud
+RTT = 0.04    # RTT edge-cloud
 M = 100 # n. microservices
-Ne = 20e6    # bitrate cloud-edge
+Ne = 100e6    # bitrate cloud-edge
 S_edge_b = np.zeros(M)  # initial state. 
 S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
 S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
@@ -62,9 +62,9 @@ random['n_parents'] = 3
 
 Fcm_range_min = 0.1 # min value of microservice call frequency 
 Fcm_range_max = 0.3 # max value of microservice call frequency 
-Rcpu_quota = 0.5    # CPU quota
+Rcpu_quota = 1    # CPU quota
 Rcpu_range_min = 1  # min value of requested CPU quota per instance-set
-Rcpu_range_max = 32 # max value of requested CPU quota per instance-set
+Rcpu_range_max = 4 # max value of requested CPU quota per instance-set
 Rs_range_min = 1000 # min value of response size in bytes
 Rs_range_max = 50000   # max of response size in bytes
 
@@ -151,21 +151,33 @@ lambda_v = np.empty((max_algotithms,len(lambda_range))) # vector of lambdas used
 alg_type = [""] * max_algotithms # vector of strings describing algorithms used for te tests
 
 a=-1
-lambda_val = 10
-
+lambda_val = 200
+delay_decrease_target_min = 1e-4
+delay_decrease_target_max = 1e3
+delay_decrease_target_step = 1e-4
+max_num_seq = 2*M
+sequence = np.ones((M,max_num_seq))
+previous_cost=np.zeros((max_num_seq))
+delay_void,di_void,dn_void,rhoce_void = computeDTot(S_b_void, Nci_void, Fci_void, Di, Rs, RTT, Ne, lambda_val, M)   # total delay of the void state
+Rcpu_new = Rcpu_void.copy()
+Rmem_new = Rmem_void.copy()
+S_b_new = S_b_void.copy()
 if True:
     a+=1
     k=-1
     alg_type[a] = "EPAMP with upgrade limit 2"
-    delay_decrease_target_v = np.arange(10e-3, 1e3,10e-3)
+    delay_decrease_target_v = np.arange(delay_decrease_target_min, delay_decrease_target_max,delay_decrease_target_step)
+    previous_decrease = 0
     for delay_decrease_target in delay_decrease_target_v:
+        if previous_decrease>delay_decrease_target:
+            continue 
         k+=1
         print(f'\n lambda {lambda_val} req/s')
         S_b_old = S_b_void.copy()
         Rcpu_old = Rcpu_void.copy()
         Rmem_old = Rmem_void.copy()
-        Fci_old = Fci_void.copy()    # microservice call frequency matrix
-        Nci_old = Nci_void.copy()   # number of instance call per user request of the current state
+        Fci_old = Fci_void    # microservice call frequency matrix
+        Nci_old = Nci_void   # number of instance call per user request of the current state
         delay_old,di_old,dn_old,rhoce_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambda_val, M)   # total delay of the current state
         params = {
             'S_edge_b': S_b_old[M:],
@@ -184,7 +196,8 @@ if True:
             'dependency_paths_b': None,
             'u_limit': 2,
             'no_caching': True,
-            'delay_decrease_target': delay_decrease_target
+            'delay_decrease_target': delay_decrease_target,
+            'no_evolutionary': False
         }
         result = offload(params)
         # update state and values
@@ -196,10 +209,25 @@ if True:
         Cost_new = result['Cost']
         rhoce_new = result['rhoce']
         delay_new = result['delay']
+        current_decrease = delay_old - delay_new
+        current_cost = Cost_new 
         print(f"edge instances: {np.argwhere(result['S_edge_b']==1).flatten()}")
-        print(f"Cost: {Cost_new}, Delay: {delay_new}, Rhoce: {rhoce_new}, Lambda: {lambda_val}")
+        print(f"Cost: {Cost_new}, Delay: {delay_new}, Delay decrease: {current_decrease}, Rhoce: {rhoce_new}, Lambda: {lambda_val}")
+        i=-1
+        for i in range(k-1,-1,-1):
+            if previous_cost[i]<current_cost:
+                if i < k-1:
+                    print(f'reinsert at position {i+1}')
+                else:
+                    print(f'new insert at position {i+1}')
+                break
+        k=i+1
+        sequence[:,k]=S_edge_b_new
+        previous_cost[k] = current_cost
+        previous_decrease = current_decrease
         if np.sum(S_edge_b_new)==M:
             break
+    np.save('/home/ubuntu/Andrea/muPlacer/simulators/sequence2.npy', sequence)
 
 
 
