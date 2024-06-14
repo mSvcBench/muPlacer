@@ -1,6 +1,6 @@
 # pylint: disable=C0103, C0301
 
-import datetime
+import argparse
 import numpy as np
 import networkx as nx
 from computeNc import computeNc
@@ -10,13 +10,18 @@ from id2S import id2S
 from numpy import inf
 from computeDTot import computeDTot
 import logging
-
-
+import sys
 
 np.seterr(divide='ignore', invalid='ignore')
+# Set up logger
+logger = logging.getLogger('EPAMP_unoffload')
+logger_stream_handler = logging.StreamHandler(sys.stdout)
+logger.addHandler(logger_stream_handler)
+logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s EPAMP unoffload %(levelname)s %(message)s'))
+logger.propagate = False
 
 def unoffload(params):
-    from offload import offload
+    from EPAMP_offload import offload
     ## INITIALIZE VARIABLES ##
     #Rcpu_old (2*M,) vector of CPU req by instance-set at the cloud (:M) and at the edge (M:)
     #Rmem_old (2*M,) vector of Memory req by instance-set at the cloud (:M) and at the edge (M:)
@@ -32,7 +37,9 @@ def unoffload(params):
     #Cost_mem_edge cost of Memory at the edge
     #u_limit maximum number of microservices upgrade to consider in the greedy iteraction (lower reduce optimality but increase computaiton speed)
 
-    
+    def numpy_array_to_list(numpy_array):
+        return list(numpy_array.flatten())
+
     S_edge_old = params['S_edge_b']
     Rcpu_old = params['Rcpu']
     Rmem_old = params['Rmem']
@@ -115,15 +122,31 @@ def unoffload(params):
         'u_limit': u_limit,
         'no_caching': no_caching
     }
-    logging.info(f"unoffload calls offload from void edge with delay_decrease_target: {delay_decrease_target} and estimated void delay: {delay_void}")
-    result = offload(params)
+    logger.info(f"unoffload calls offload with void edge and delay_decrease_target: {delay_decrease_target}")
+    result_list = offload(params)
+    result=result_list[1]
     result['delay_increase'] = (delay_void-result['delay_decrease']) - delay_old
     result['cost_decrease'] = Cost_edge_old-result['Cost']
+    result['to-apply'] = numpy_array_to_list(np.argwhere(result['S_edge_b']-S_b_old[M:]>0))
+    result['to-delete']= numpy_array_to_list(np.argwhere(S_b_old[M:]-result['S_edge_b']>0))
     del result['delay_decrease']
     del result['cost_increase']
-    return result
+    if result['delay_increase'] < delay_increase_target:
+        logger.critical(f"unoffload: delay increase target not reached")
+    message = f"Result for unoffload - edge microservice ids: {result['placement']}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}"
+    result['info'] = message
+    return result_list
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument( '-log',
+                     '--loglevel',
+                     default='warning',
+                     help='Provide logging level. Example --loglevel debug, default=warning' )
+
+    args = parser.parse_args()
+    logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
+    logging.info( 'Logging now setup.' )
     # Define the input variables
     np.random.seed(150273)
     RTT = 0.0869    # RTT edge-cloud
@@ -235,7 +258,7 @@ if __name__ == "__main__":
     }
     
     # Call the unoffload function
-    result = unoffload(params)
-    
-    print(f"Result for unoffload:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
+    result_list = unoffload(params)
+    result=result_list[1]
+    print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
     print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}, rounds = {result['n_rounds']}")

@@ -9,6 +9,7 @@ import time
 
 
 def computeNcMat(Fc, M, e):
+    # Compute Nc matrix through matrix inversion
     MN = len(Fc)
     H = -Fc.copy()
     np.fill_diagonal(H, 1)
@@ -24,6 +25,7 @@ def computeNcMat(Fc, M, e):
     return Nc
 
 def computeNc(Fc, M, e):
+    # Compute Nc vector through linear system solving
     MN = len(Fc)
     H = -Fc.T.copy()
     np.fill_diagonal(H, 1)
@@ -41,7 +43,7 @@ def computeNc(Fc, M, e):
 if __name__ == "__main__":
     
     M = 200
-    # build dependency graph
+    # build dependency graph for testing
     Fcm = np.zeros([M,M])   # microservice call frequency matrix
     n_parents = 3
     for i in range(1,M-1):

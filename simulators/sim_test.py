@@ -8,7 +8,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(current_dir)
 sys.path.append(parent_dir)
 
-from offload import offload
+from EPAMP_offload import offload
 from mfu_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
 from mubenchFcmBuilder import createFcm

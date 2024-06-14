@@ -6,14 +6,13 @@ WORKDIR /app
 
 # Copy the current directory contents into the container at /app
 COPY net-probe-server.py /app
-
+COPY gunicorn.sh /app
 
 # Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir iperf3
-RUN apt-get update && apt-get install -y iperf3
+RUN pip install --no-cache-dir Flask gunicorn
 
 # Make port 5000 available to the world outside this container
 EXPOSE 5000
 
 # Run net_probe/net-probe-server.py when the container launches
-CMD ["python", "net-probe-server.py"]
+CMD ["sh", "gunicorn.sh"]

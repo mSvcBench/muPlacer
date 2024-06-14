@@ -9,7 +9,7 @@ from conf import *
 from E_PAMP_unoff import E_PAMP_unoff
 from E_PAMP_off import E_PAMP_off
 from IA_placement import IA_placement
-from random_placement import random_placement
+from old.random_placement import random_placement
 from mfu_placement import mfu_placement
 
 
@@ -154,6 +154,7 @@ def get_Rmem():
         RMEM = np.concatenate((np.append(Rmem_cloud,0), np.append(Rmem_edge,0)))
         time.sleep(5)
     #return Rmem
+
 
 # Function that get the instance-set already in edge cluster
 def get_app_edge():

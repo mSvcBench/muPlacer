@@ -1,103 +1,123 @@
 apiVersion: geopodautoplacing/v0
-kind: GeoPodAutoPlacerConfig
+kind: MuPlacerConfig
 metadata:
   name: test-config
   namespace: edge
 spec:
   namespace: edge
-  sync-period: 2m
+  sync-period: 1m
   stabilization-window: 2m
   query-period: 2m
-  prometheus-url: "http://160.80.223.232:30000"
-  target-delay: 50ms
+  prometheus-url: http://160.80.223.232:30000
+  offload-delay-threshold: 50ms
+  unoffload-delay-threshold: 20ms
   cloud-area:
     cluster: ""
-    context: ""
+    context: liqo-admin@kubernetes
+    rtt: 20ms
+    network-capacity: 200Mbps
+    cost:
+      cpu: 0
+      memory: 0
   edge-area:
     cluster: ""
-    context: ""
+    context: liqo-admin@kubernetes
+    rtt: -1
+    network-capacity: -1
+    cost:
+      cpu: 1
+      memory: 0
     istio-ingress-source-app: istio-ingress
   explicit-service-id : true
   services:
     - name: s0
       id: 0
-      hpa-cpu-utilization: 0.7
-      gpa-service-label: s0
       instances: 
         cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s0.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s0.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s0.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s0.yaml
     - name: s1
       id: 1
-      hpa-cpu-utilization: 0.7
       instances: 
-        cloud-yamls:  
+        cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s1.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s1.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s1.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s1.yaml
     - name: s2
       id: 2
-      hpa-cpu-utilization: 0.7
       instances: 
-        cloud-yamls:  
+        cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s2.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s2.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s2.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s2.yaml
     - name: s3
       id: 3
-      hpa-cpu-utilization: 0.7
       instances: 
         cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s3.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s3.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s3.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s3.yaml
     - name: s4
       id: 4
-      hpa-cpu-utilization: 0.7
       instances: 
-        cloud-yamls:  
+        cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s4.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s4.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s4.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s4.yaml
     - name: s5
       id: 5
-      hpa-cpu-utilization: 0.7
       instances: 
-        cloud-yamls:  
+        cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s5.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s5.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s5.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s5.yaml
     - name: s6
       id: 6
-      hpa-cpu-utilization: 0.7
       instances: 
-        cloud-yamls:  
+        cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s6.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s6.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s6.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s6.yaml
     - name: s7
       id: 7
-      hpa-cpu-utilization: 0.7
       instances: 
         cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s7.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s7.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s7.yaml
-    - name: s8
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s7.yaml
+    - name: s8 
       id: 8
-      hpa-cpu-utilization: 0.7
       instances: 
-        cloud-yamls:  
+        cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s8.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s8.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s8.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s8.yaml
     - name: s9
       id: 9
-      hpa-cpu-utilization: 0.7
       instances: 
-        cloud-yamls:  
+        cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s9.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s9.yaml
         edge-yamls:
           - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s9.yaml
+          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s9.yaml
         

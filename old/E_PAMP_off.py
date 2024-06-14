@@ -3,8 +3,8 @@ import os
 import subprocess
 import time
 from kubernetes import client, config
-from offload import offload
-from build_Fcm import Fcm
+from EPAMP_offload import offload
+from buildFcm import Fcm
 
 
 #   E_PAMP function to offload microservice instance-sets from cloud cluster to edge cluster

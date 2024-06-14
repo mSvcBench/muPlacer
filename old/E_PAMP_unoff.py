@@ -3,7 +3,7 @@ import os
 import subprocess
 import time
 from kubernetes import client, config
-from offload import offload
+from EPAMP_offload import offload
 from build_Fcm import Fcm
 
 

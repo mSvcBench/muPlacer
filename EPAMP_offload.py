@@ -18,6 +18,13 @@ import argparse
 
 np.seterr(divide='ignore', invalid='ignore')
 
+# Set up logger
+logger = logging.getLogger('EPAMP_offload')
+logger_stream_handler = logging.StreamHandler(sys.stdout)
+logger.addHandler(logger_stream_handler)
+logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s EPAMP offload %(levelname)s %(message)s'))
+logger.propagate = False
+
 def offload(params):
 
     ## INITIALIZE VARIABLES ##
@@ -37,6 +44,9 @@ def offload(params):
     #locked (M,) vector of binary values indicating if the microservice can not change state
     #u_limit maximum number of microservices upgrade to consider in the greedy iteraction (lower reduce optimality but increase computaiton speed)
 
+    def numpy_array_to_list(numpy_array):
+        return list(numpy_array.flatten())
+    
     # mandatory paramenters
     S_edge_old = params['S_edge_b']
     Rcpu_old = params['Rcpu']
@@ -61,6 +71,18 @@ def offload(params):
 
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     S_b_old[M-1] = 0  # User is not in the cloud
+    
+    G = nx.DiGraph(Fcm) # Create microservice dependency graph
+    if nx.is_directed_acyclic_graph(G)==False: # Check if the graph is acyclic
+        logger.critical(f"Microservice dependency graph is not acyclic, EPAMP optimization can not be used")
+        result_edge=dict()
+        result_edge['S_edge_b'] = S_b_old[M:].astype(int)
+        result_edge['to-apply'] = list()
+        result_edge['to-delete'] = list()
+        result_edge['placement'] = numpy_array_to_list(np.argwhere(S_b_old[M:]==1))
+        result_edge['info'] = f"Result for offload - edge microservice ids: {result_edge['placement']}, Cost: {result_edge['Cost']}, delay decrease: {result_edge['delay_decrease']}, cost increase: {result_edge['cost_increase']}"
+        return result_edge 
+    
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to support matrix operations
     
     # SAVE CURRENT METRICS VALUES ##
@@ -76,15 +98,14 @@ def offload(params):
 
     ## BUILDING OF DEPENDENCY PATHS ##
     if dependency_paths_b is None:
-        G = nx.DiGraph(Fcm) # Create microservice dependency graph 
         dependency_paths_b = np.empty((0,M), int) # Storage of binary-based (b) encoded dependency paths
 
-        ## COMPUTE "CLOUD ONLY" DEPENDENCY PATHS ##
+        ## COMPUTE "CLOUD JOINED" DEPENDENCY PATHS ##
         for ms in range(M-1):
             paths_n = list(nx.all_simple_paths(G, source=M-1, target=ms)) 
             for path_n in paths_n:
                 # path_n numerical id (n) of the microservices of the dependency path
-                # If all microservices in the path are in the edge this path is not a cloud-only
+                # If all microservices in the path are in the edge this path is not a cloud-joined path
                 if all(S_b_old[M+np.array([path_n])].squeeze()==1):
                     continue
                 else:
@@ -93,7 +114,7 @@ def offload(params):
                     dependency_paths_b = np.append(dependency_paths_b,path_b,axis=0)
     
 
-    ## GREEDY ADDITION OF DEPENDECY PATHS TO EDGE CLUSTER ##
+    ## GREEDY ADDITION OF CLOUD JOINED DEPENDECY PATHS TO EDGE CLUSTER ##
     dependency_paths_b_residual = dependency_paths_b.copy() # residual dependency path to consider in a greedy round, \Pi_r of paper
     S_b_opt = S_b_old.copy()  # S_b_opt is the best placement state computed by a greedy round
     S_b_temp = np.zeros(2*M) # S_b_temp is the temporary placement state used in a greedy round
@@ -116,9 +137,9 @@ def offload(params):
     cost_increase_opt=0    # cost_increase_opt is the best cost increase computed by a greedy round
     delay_decrease_opt=1   # delay_decrease_opt is the best delay reduction computed by a greedy round
     
-    logging.info(f"ADDING PHASE")
+    logger.info(f"ADDING PHASE")
     while True:
-        logging.info(f'-----------------------')
+        logger.info(f'-----------------------')
         w_min = float("inf") # Initialize the weight
         skip_delay_increase = False    # Skip negative weight to accelerate computation
         np.copyto(S_b_new,S_b_opt)  
@@ -126,7 +147,7 @@ def offload(params):
         np.copyto(Rmem_new,Rmem_opt)    # Rmem_new is the new Memory request vector, Rmem_opt is the best Memory request vector computed by the previos greedy round
         delay_new = delay_opt   # delay_new is the new delay. It includes only network delays
         Cost_edge_new  = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost of the new configuration
-        logging.info(f'new state {np.argwhere(S_b_new[M:]==1).squeeze()}, delay decrease {1000*(delay_old-delay_new)}, cost {Cost_edge_new}, cost increase / delay decrease {cost_increase_opt/(1000*delay_decrease_opt)}')
+        logger.info(f'new state {np.argwhere(S_b_new[M:]==1).squeeze()}, delay decrease {1000*(delay_old-delay_new)}, cost {Cost_edge_new}, cost increase / delay decrease {cost_increase_opt/(1000*delay_decrease_opt)}')
         
         # Check if the delay reduction is reached
         if delay_old-delay_new >= delay_decrease_target:
@@ -139,9 +160,9 @@ def offload(params):
 
         ## GREEDY ROUND ##
         # for the next greedy round, select dependency paths providing a number of microservice upgrade not greater than u_limit
-        logging.debug(f"depencency path no upgrade limit: {len(dependency_paths_b_residual)}")
+        logger.debug(f"depencency path no upgrade limit: {len(dependency_paths_b_residual)}")
         rl = np.argwhere(np.sum(np.maximum(dependency_paths_b_residual-S_b_new[M:],0),axis=1)<=u_limit)   # index of dependency paths with microservices upgrade less than u_limit
-        logging.debug(f"depencency path with upgrade limit: {len(rl)}")
+        logger.debug(f"depencency path with upgrade limit: {len(rl)}")
         chache_hits = 0 # cache hit counter
         for path_b in dependency_paths_b_residual[rl] :
             # merging path_b and S_b_new into S_b_temp
@@ -156,7 +177,7 @@ def offload(params):
             if no_caching == False:
                 S_id_edge_temp=str(S2id(S_b_temp[M:]))  # decimal encoded id of the edge state
             if no_caching==False and S_id_edge_temp in delay_cache:
-                logging.debug(f'cache_hit for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
+                logger.debug(f'cache_hit for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
                 chache_hits += 1
                 delay_temp = delay_cache[S_id_edge_temp]
                 np.copyto(Rcpu_temp,Rcpu_cache[S_id_edge_temp])
@@ -190,7 +211,7 @@ def offload(params):
                     delay_cache[S_id_edge_temp] = delay_temp
                     Rcpu_cache[S_id_edge_temp] = Rcpu_temp.copy() 
                     Rmem_cache[S_id_edge_temp] = Rmem_temp.copy()
-                    logging.debug(f'cache insert for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
+                    logger.debug(f'cache insert for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
             Cost_edge_temp = Cost_cpu_edge * np.sum(Rcpu_temp[M:]) + Cost_mem_edge * np.sum(Rmem_temp[M:]) # Total edge cost of the temp state
             cost_increase_temp = Cost_edge_temp - Cost_edge_new # cost increase wrt the new state
             
@@ -203,7 +224,7 @@ def offload(params):
                 w = cost_increase_temp /  max(min(1000*delay_decrease_temp, 1000*r_delay_decrease),1e-3) # 1e-3 used to avoid division by zero
                 skip_delay_increase = True
             
-            logging.debug(f'considered state {np.argwhere(S_b_temp[M:]==1).squeeze()}, cost increase {cost_increase_temp},delay decrease {1000*delay_decrease_temp}, delay {delay_temp}, weight {w}')
+            logger.debug(f'considered state {np.argwhere(S_b_temp[M:]==1).squeeze()}, cost increase {cost_increase_temp},delay decrease {1000*delay_decrease_temp}, delay {delay_temp}, weight {w}')
 
             if w < w_min:
                 # update best state of the greedy round
@@ -220,7 +241,7 @@ def offload(params):
             break
 
         if no_caching == False:
-            logging.debug(f"cache hit prob. {chache_hits/len(dependency_paths_b_residual)}")
+            logger.debug(f"cache hit prob. {chache_hits/len(dependency_paths_b_residual)}")
         # Prune not considered dependency paths whose microservices are going to be contained in the edge to accelerate computation
         PR = []
         for pr,path_b in enumerate(dependency_paths_b_residual):
@@ -247,12 +268,12 @@ def offload(params):
                         del Rcpu_cache[S_id_edge_temp_s]
                         del Rmem_cache[S_id_edge_temp_s]
                 else:
-                    logging.debug(f"cached state {np.argwhere(np.array(S_id_edge_temp)==1).squeeze()}")
-            logging.debug(f"cache size {len(delay_cache)}")
+                    logger.debug(f"cached state {np.argwhere(np.array(S_id_edge_temp)==1).squeeze()}")
+            logger.debug(f"cache size {len(delay_cache)}")
         
 
     
-    logging.info(f"PRUNING PHASE")
+    logger.info(f"PRUNING PHASE")
     # Remove microservice from leaves to reduce cost
     S_b_old_a = np.array(S_b_old[M:]).reshape(M,1)
     while True:
@@ -280,7 +301,7 @@ def offload(params):
                     leaf_max = leaf
                     c_max = Rcpu_new[leaf]*Cost_cpu_edge + Rmem_new[leaf]*Cost_mem_edge
         if leaf_max>-1:
-            logging.debug(f'cleaning microservice {leaf_max}')
+            logger.debug(f'cleaning microservice {leaf_max}')
             S_b_new[leaf_max] = 0
             Rcpu_new[leaf_max-M] = Rcpu_new[leaf_max-M] + Rcpu_new[leaf_max] # cloud cpu increase
             Rmem_new[leaf_max-M] = Rmem_new[leaf_max-M] + Rmem_new[leaf_max] # cloud mem increase
@@ -289,7 +310,7 @@ def offload(params):
         else:
             break
             
-    logging.info(f"++++++++++++++++++++++++++++++")
+    logger.info(f"++++++++++++++++++++++++++++++")
     # compute final values
     n_rounds = 1
     Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
@@ -311,38 +332,60 @@ def offload(params):
     Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
     cost_increase_new = Cost_edge_new - Cost_edge_old 
 
-    result = dict()
-    result['S_edge_b'] = S_b_new[M:].astype(int)
-    result['Cost'] = Cost_edge_new
-    result['delay_decrease'] = delay_decrease_new
-    result['cost_increase'] = cost_increase_new
-    result['n_rounds'] = n_rounds
-    result['Rcpu'] = Rcpu_new
-    result['Rmem'] = Rmem_new
-    result['Fci'] = Fci_new
-    result['Nci'] = Nci_new
-    result['delay'] = delay_new
-    result['di'] = di_new
-    result['dn'] = dn_new
-    result['rhoce'] = rhoce_new
+    result_edge = dict()
+    
+    # extra information
+    result_edge['S_edge_b'] = S_b_new[M:].astype(int)
+    result_edge['Cost'] = Cost_edge_new
+    result_edge['delay_decrease'] = delay_decrease_new
+    result_edge['cost_increase'] = cost_increase_new
+    result_edge['n_rounds'] = n_rounds
+    result_edge['Rcpu'] = Rcpu_new
+    result_edge['Rmem'] = Rmem_new
+    result_edge['Fci'] = Fci_new
+    result_edge['Nci'] = Nci_new
+    result_edge['delay'] = delay_new
+    result_edge['di'] = di_new
+    result_edge['dn'] = dn_new
+    result_edge['rhoce'] = rhoce_new
+    
+    # required return information
+     
+    result_cloud = dict()
+    result_cloud['to-apply'] = list()
+    result_cloud['to-delete'] = list()
+    result_cloud['placement'] = numpy_array_to_list(np.argwhere(S_b_new[:M]==1))
+    result_cloud['info'] = f"Result for offload - cloud microservice ids: {result_cloud['placement']}"
 
-    return result
+
+    result_edge['to-apply'] = numpy_array_to_list(np.argwhere(S_b_new[M:]-S_b_old[M:]>0))
+    result_edge['to-delete'] = numpy_array_to_list(np.argwhere(S_b_old[M:]-S_b_new[M:]>0))
+    result_edge['placement'] = numpy_array_to_list(np.argwhere(S_b_new[M:]==1))
+
+    result_edge['info'] = f"Result for offload - edge microservice ids: {result_edge['placement']}"
+
+    if result_edge['delay_decrease'] < delay_decrease_target:
+        logger.critical(f"offload: delay decrease target not reached")
+    
+    result_return=list()
+    result_return.append(result_cloud)  
+    result_return.append(result_edge)
+    return result_return
 
 
 
 # MAIN
-parser = argparse.ArgumentParser()
-parser.add_argument( '-log',
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument( '-log',
                      '--loglevel',
                      default='warning',
                      help='Provide logging level. Example --loglevel debug, default=warning' )
 
-args = parser.parse_args()
-logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(levelname)s %(message)s')
+    args = parser.parse_args()
+    logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
 
-logging.info( 'Logging now setup.' )
-
-if __name__ == "__main__":
+    logging.info( 'Logging now setup.' )
     # Define the input variables
     np.random.seed(150273)
     RTT = 0.0869    # RTT edge-cloud
@@ -455,8 +498,7 @@ if __name__ == "__main__":
     }
 
         
-
-
-    result = offload(params)
+    result_list = offload(params)
+    result=result_list[1]
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
     print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
