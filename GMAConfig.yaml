@@ -7,27 +7,34 @@ spec:
   namespace: edge
   sync-period: 1m
   stabilization-window: 2m
-  query-period: 2m
+  query-period: 1m
   prometheus-url: http://160.80.223.232:30000
-  offload-delay-threshold: 50ms
-  unoffload-delay-threshold: 20ms
+  offload-delay-threshold: 130ms
+  unoffload-delay-threshold: 100ms
   cloud-area:
     cluster: ""
     context: liqo-admin@kubernetes
-    rtt: 20ms
-    network-capacity: 200Mbps
     cost:
       cpu: 0
       memory: 0
   edge-area:
     cluster: ""
     context: liqo-admin@kubernetes
-    rtt: -1
-    network-capacity: -1
+    
     cost:
       cpu: 1
       memory: 0
     istio-ingress-source-app: istio-ingress
+    istio-ingress-namespace: istio-ingress
+    netprobe-server: ""
+    resource-scaling: 1
+  network:
+    netprobe-server-edge: http://160.80.223.212:31051/httpnetprobe-edge
+    netprobe-server-cloud: http://httpnetprober-cloud:8080
+    network-capacity-from-cloud: 100Mbps
+    network-capacity-to-cloud: 100Mbps
+    edge-cloud-rtt: 80ms
+
   explicit-service-id : true
   services:
     - name: s0
