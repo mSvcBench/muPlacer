@@ -21,22 +21,25 @@ from scipy.io import savemat
 from buildFci import buildFci
 from numpy import inf
 import time
+import logging
 
 def edges_reversal(graph):
     for edge in graph.get_edgelist():
         graph.delete_edges([(edge[0], edge[1])])
         graph.add_edges([(edge[1], edge[0])])
 
-RTT = 0.04    # RTT edge-cloud
+logging.basicConfig(stream=sys.stdout, level="INFO",format='%(asctime)s GMA %(levelname)s %(message)s')
+
+RTT = 0.1   # RTT edge-cloud
 input_file = "simulators/workmodel.json"
-Fcm,Rcpu_x_rep,Rs = createFcm(input_file) # Call frequency matrix, CPU requirements x replica, average response size
+Fcm,Acpu_x_rep,Rs = createFcm(input_file) # Call frequency matrix, CPU requirements x replica, average response size
 M = len(Fcm) # n. microservices + user
-delay_decrease_target = 0.04    # requested delay reduction
-lambda_val = 20     # request per second
-Ne = 100e3    # bitrate cloud-edge
+delay_decrease_target = 0.1    # requested delay reduction
+lambda_val = 50     # request per second
+Ne = 1e9    # bitrate cloud-edge
 # set random  internal delay equal to 0 since assuming equal computing performance
 Di = np.zeros(2*M) # internal delay of microservices
-Rmem = np.zeros(2*M) # void memory requirements
+Amem = np.zeros(2*M) # void memory requirements
 
 # current status of the system
 replicas=np.zeros(2*M) # current replica configuration
@@ -55,15 +58,15 @@ Cost_cpu_edge = 1 # cost of CPU at the edge
 Cost_mem_edge = 1 # cost of memory at the edge
 
 
-Rcpu_x_rep = np.repeat(Rcpu_x_rep, 2, axis=0)
-Rcpu = np.multiply(Rcpu_x_rep, replicas)
-Cost_edge = Cost_cpu_edge * np.sum(Rcpu[M:]) + Cost_mem_edge * np.sum(Rmem[M:]) # Total edge cost of the current state
+Acpu_x_rep = np.repeat(Acpu_x_rep, 2, axis=0)
+Acpu = np.multiply(Acpu_x_rep, replicas)
+Cost_edge = Cost_cpu_edge * np.sum(Acpu[M:]) + Cost_mem_edge * np.sum(Amem[M:]) # Total edge cost of the current state
 
 # Call the offload function
 params = {
     'S_edge_b': S_edge_b,
-    'Rcpu': Rcpu,
-    'Rmem': Rmem,
+    'Acpu': Acpu,
+    'Amem': Amem,
     'Fcm': Fcm,
     'M': M,
     'lambd': lambda_val,
@@ -74,6 +77,8 @@ params = {
     'Ne': Ne,
     'Cost_cpu_edge': Cost_cpu_edge,
     'Cost_mem_edge': Cost_mem_edge,
+    'Qcpu': np.ones(M),
+    'Qmem': np.zeros(M),
     'locked': None,
     'dependency_paths_b': None,
     'u_limit': 2,
@@ -83,5 +88,5 @@ params = {
         
 result = offload(params)
 print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
-print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+print(f"Result for offload:\n {np.argwhere(result[1]['S_edge_b']==1).squeeze()}, Cost: {result[1]['Cost']}, delay decrease: {result[1]['delay_decrease']}, cost increase: {result[1]['cost_increase']}, rounds = {result[1]['n_rounds']}")
 

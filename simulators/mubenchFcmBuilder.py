@@ -11,7 +11,7 @@ def createFcm(input_file):
     Rs = np.zeros(M)
     for ms in workmodel:
         Rcpu[name2id(ms)] = int(workmodel[ms]['cpu-limits'][:-1])/1000.0
-        Rs[name2id(ms)] = int(workmodel[ms]['internal_service']['loader']['mean_bandwidth'])
+        Rs[name2id(ms)] = int(workmodel[ms]['internal_service']['loader']['mean_bandwidth']*1000)
         for external_services_group in workmodel[ms]['external_services']:
             services = external_services_group['services']
             probabilities = external_services_group['probabilities']

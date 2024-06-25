@@ -5,9 +5,9 @@ metadata:
   namespace: edge
 spec:
   namespace: edge
-  sync-period: 1m
+  sync-period: 30s
   stabilization-window: 2m
-  query-period: 1m
+  query-period: 2m  # no less than 1 minute
   prometheus-url: http://160.80.223.232:30000
   offload-delay-threshold: 130ms
   unoffload-delay-threshold: 100ms
@@ -29,11 +29,15 @@ spec:
     netprobe-server: ""
     resource-scaling: 1
   network:
-    netprobe-server-edge: http://160.80.223.212:31051/httpnetprobe-edge
-    netprobe-server-cloud: http://httpnetprober-cloud:8080
-    network-capacity-from-cloud: 100Mbps
-    network-capacity-to-cloud: 100Mbps
-    edge-cloud-rtt: 80ms
+    netprober-server-edge: http://160.80.223.212:31051/httpnetprober-edge
+    netprober-server-cloud: http://httpnetprober-cloud:8080
+    cloud-edge-bps: 1000Mbps
+    edge-cloud-bps: 1000Mbps
+    edge-cloud-rtt: 100ms
+  epamp:
+    u-limit: 1
+    # no-caching: False,
+    # locked: 
 
   explicit-service-id : true
   services:

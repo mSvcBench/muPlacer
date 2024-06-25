@@ -29,12 +29,13 @@ def offload(params):
 
     ## INITIALIZE VARIABLES ##
     #S_edge_old (M,) vector of binary values indicating if the microservice is at the edge or not
-    #Rcpu_old (2*M,) vector of CPU req by instance-set at the cloud (:M) and at the edge (M:)
-    #Rmem_old (2*M,) vector of Memory req by instance-set at the cloud (:M) and at the edge (M:)
+    #Acpu_old (2*M,) vector of CPU req by instance-set at the cloud (:M) and at the edge (M:)
+    #Amem_old (2*M,) vector of Memory req by instance-set at the cloud (:M) and at the edge (M:)
     #Fcm (M,M)microservice call frequency matrix
     #M number of microservices
     #lambd user request rate
     #Rs (M,) vector of response size of microservices
+    #Rsd (M,) vector of average delay of response sizes Rs
     #Di (M,) vector of internal delay of microservices
     #delay_decrease_target delay reduction target
     #RTT fixed delay to add to microservice interaction in addition to the time depending on the response size
@@ -43,14 +44,27 @@ def offload(params):
     #Cost_mem_edge cost of Memory at the edge
     #locked (M,) vector of binary values indicating if the microservice can not change state
     #u_limit maximum number of microservices upgrade to consider in the greedy iteraction (lower reduce optimality but increase computaiton speed)
-
+    # no_caching if True, disable caching of the delay computation
+    # no_evolutionary if True, disable the removal of microservices from the edge to reduce cost
+    # max_added_dp max added dependency path before stopping the greedy iteration
+    # min_added_dp min missing dependency path to add before stopping the greedy iteration
+    # Qmem (M,) memory quantum in bytes
+    # Qcpu (M,) CPU quantum in cpu sec
     def numpy_array_to_list(numpy_array):
         return list(numpy_array.flatten())
     
+    def qz(x,y):
+        res = np.zeros(len(x))
+        z = np.argwhere(y==0)
+        res[z] = x[z]
+        nz = np.argwhere(y>0)
+        res[nz] = np.ceil(x[nz]/y[nz])*y[nz]
+        return res
+
     # mandatory paramenters
     S_edge_old = params['S_edge_b']
-    Rcpu_old = params['Rcpu']
-    Rmem_old = params['Rmem']
+    Acpu_old = params['Acpu']
+    Amem_old = params['Amem']
     Fcm = params['Fcm']
     M = params['M']
     lambd = params['lambd']
@@ -60,7 +74,11 @@ def offload(params):
     Ne = params['Ne']
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
-
+    Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(M) # memory quantum in bytes
+    Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(M) # CPU quantum in cpu sec
+    max_added_dp = params['max_added_dp'] if 'max_added_dp' in params else 1000000 # maximum number of dependency path added in the greedy iteration
+    min_added_dp = params['min_added_dp'] if 'min_added_dp' in params else 0 # minimum number of dependency path added in the greeedy iteration, negative value means that the minimum is equal to the whole set of dependency path minus the passed value
+    
     # optional paramenters
     Di = params['Di'] if 'Di' in params else np.zeros(M)
     dependency_paths_b = params['dependency_paths_b'] if 'dependency_paths_b' in params else None
@@ -68,6 +86,7 @@ def offload(params):
     u_limit = params['u_limit'] if 'u_limit' in params else M
     no_caching = params['no_caching'] if 'no_caching' in params else False
     no_evolutionary = params['no_evolutionary'] if 'no_evolutionary' in params else False
+    Rsd = params['Rsd'] if 'Rsd' in params else np.empty(0)
 
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     S_b_old[M-1] = 0  # User is not in the cloud
@@ -88,12 +107,12 @@ def offload(params):
     # SAVE CURRENT METRICS VALUES ##
     Fci_old = np.matrix(buildFci(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
     Nci_old = computeNc(Fci_old, M, 2)  # (2*M,) number of instance call per user request
-    delay_old,_,_,_ = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)  # Total delay of the current configuration. It includes only network delays
+    delay_old,_,_,_ = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M, Rsd)  # Total delay of the current configuration. It includes only network delays
   
-    Rcpu_edge_old_sum = np.sum(S_b_old[M:] * Rcpu_old[M:]) # Total CPU requested by instances in the edge
-    Rmem_edge_old_sum = np.sum(S_b_old[M:] * Rmem_old[M:]) # Total Memory requested by instances in the edge
-    Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_edge_old_sum # Total CPU cost at the edge
-    Cost_mem_edge_old_sum = Cost_mem_edge * Rmem_edge_old_sum # Total Mem cost at the edge
+    Acpu_edge_old_sum = np.sum(qz(S_b_old[M:] * Acpu_old[M:],Qcpu[M:])) # Total CPU requested by instances in the edge
+    Amem_edge_old_sum = np.sum(qz(S_b_old[M:] * Amem_old[M:],Qmem[M:])) # Total Memory requested by instances in the edge
+    Cost_cpu_edge_old_sum = Cost_cpu_edge * Acpu_edge_old_sum # Total CPU cost at the edge
+    Cost_mem_edge_old_sum = Cost_mem_edge * Amem_edge_old_sum # Total Mem cost at the edge
     Cost_edge_old = Cost_cpu_edge_old_sum + Cost_mem_edge_old_sum # Total cost at the edge
 
     ## BUILDING OF DEPENDENCY PATHS ##
@@ -119,41 +138,51 @@ def offload(params):
     S_b_opt = S_b_old.copy()  # S_b_opt is the best placement state computed by a greedy round
     S_b_temp = np.zeros(2*M) # S_b_temp is the temporary placement state used in a greedy round
     S_b_new = np.zeros(2*M) # S_b_new is the new placement state 
-    Rcpu_opt = Rcpu_old.copy()  # Rcpu_opt is the best CPU request vector computed by a greedy round
-    Rmem_opt = Rmem_old.copy()  # Rmem_opt is the best Memory request vector computed by a greedy round
-    Rcpu_new = np.zeros(2*M)    # Rcpu_new is the new CPU request vector
-    Rmem_new = np.zeros(2*M)    # Rmem_new is the new Memory request vector
-    Rcpu_temp = np.zeros(2*M)   # Rcpu_temp is the temporary CPU request vector used in a greedy round
-    Rmem_temp = np.zeros(2*M)   # Rmem_temp is the temporary Memory request vector used in a greedy round
+    Acpu_opt = Acpu_old.copy()  # Acpu_opt is the best CPU request vector computed by a greedy round
+    Amem_opt = Amem_old.copy()  # Amem_opt is the best Memory request vector computed by a greedy round
+    Acpu_new = np.zeros(2*M)    # Acpu_new is the new CPU request vector
+    Amem_new = np.zeros(2*M)    # Amem_new is the new Memory request vector
+    Acpu_temp = np.zeros(2*M)   # Acpu_temp is the temporary CPU request vector used in a greedy round
+    Amem_temp = np.zeros(2*M)   # Amem_temp is the temporary Memory request vector used in a greedy round
     delay_opt = delay_old   # delay_opt is the best delay computed by a greedy round. It includes only network delays
 
     # result caching to accelerate computation
     delay_cache=dict()  # cache for delay computation
-    Rcpu_cache=dict()   # cache for CPU request vector
-    Rmem_cache=dict()   # cache for Memory request vector
+    Acpu_cache=dict()   # cache for CPU request vector
+    Amem_cache=dict()   # cache for Memory request vector
 
     skip_delay_increase = False    # Skip delay increase states to accelerate computation wheter possible
     locking = False if locked is None else True # avoid locking control if no microservice is locked
     cost_increase_opt=0    # cost_increase_opt is the best cost increase computed by a greedy round
     delay_decrease_opt=1   # delay_decrease_opt is the best delay reduction computed by a greedy round
-    
     logger.info(f"ADDING PHASE")
+
+    if min_added_dp < 0:
+        # min_added_dp is the number of dependency path to add before stopping the greedy iteration
+        # negative value means that the minimum is equal to the whole set of dependency path minus the passed value
+        min_added_dp = len(dependency_paths_b_residual) + min_added_dp
     while True:
         logger.info(f'-----------------------')
         w_min = float("inf") # Initialize the weight
         skip_delay_increase = False    # Skip negative weight to accelerate computation
         np.copyto(S_b_new,S_b_opt)  
-        np.copyto(Rcpu_new,Rcpu_opt)    # Rcpu_new is the new CPU request vector, Rcpu_opt is the best CPU request vector computed by the previos greedy round
-        np.copyto(Rmem_new,Rmem_opt)    # Rmem_new is the new Memory request vector, Rmem_opt is the best Memory request vector computed by the previos greedy round
+        np.copyto(Acpu_new,Acpu_opt)    # Acpu_new is the new CPU request vector, Acpu_opt is the best CPU request vector computed by the previos greedy round
+        np.copyto(Amem_new,Amem_opt)    # Amem_new is the new Memory request vector, Amem_opt is the best Memory request vector computed by the previos greedy round
         delay_new = delay_opt   # delay_new is the new delay. It includes only network delays
-        Cost_edge_new  = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost of the new configuration
+        Cost_edge_new  = Cost_cpu_edge * np.sum(qz(Acpu_new[M:],Qcpu[M:])) + Cost_mem_edge * np.sum(qz(Amem_new[M:],Qmem[M:])) # Total edge cost of the new configuration
         logger.info(f'new state {np.argwhere(S_b_new[M:]==1).squeeze()}, delay decrease {1000*(delay_old-delay_new)}, cost {Cost_edge_new}, cost increase / delay decrease {cost_increase_opt/(1000*delay_decrease_opt)}')
         
-        # Check if the delay reduction is reached
-        if delay_old-delay_new >= delay_decrease_target:
-            #delay reduction reached
+        # Check if the delay reduction and other constraints are reached
+        added_dp = len(dependency_paths_b)-len(dependency_paths_b_residual)
+
+        if delay_old-delay_new >= delay_decrease_target and added_dp >= min_added_dp:
+            #delay reduction reached with minimum number of dependency paths added
             break
-        
+
+        if added_dp >= max_added_dp:
+            # max number of dependency paths to add reached
+            break
+
         if len(dependency_paths_b_residual) == 0:
             # All dependency path considered no other way to reduce delay
             break
@@ -180,39 +209,39 @@ def offload(params):
                 logger.debug(f'cache_hit for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
                 chache_hits += 1
                 delay_temp = delay_cache[S_id_edge_temp]
-                np.copyto(Rcpu_temp,Rcpu_cache[S_id_edge_temp])
-                np.copyto(Rmem_temp,Rmem_cache[S_id_edge_temp])
+                np.copyto(Acpu_temp,Acpu_cache[S_id_edge_temp])
+                np.copyto(Amem_temp,Amem_cache[S_id_edge_temp])
                 delay_decrease_temp = delay_new - delay_temp
                 if skip_delay_increase and delay_decrease_temp<0:
                     continue
             else:
                 Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
                 Nci_temp = computeNc(Fci_temp, M, 2)    # number of instance call per user request of the temp state
-                delay_temp,_,_,_ = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M) # Total delay of the temp state. It includes only network delays
+                delay_temp,_,_,_ = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, Rsd) # Total delay of the temp state. It includes only network delays
                 delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
                 if skip_delay_increase and delay_decrease_temp<0:
                     continue
                 
                 # compute the cost increase adding this dependency path 
                 # assumption is that cloud resource are reduce proportionally with respect to the reduction of the number of times instances are called
-                np.copyto(Rcpu_temp,Rcpu_old) 
-                np.copyto(Rmem_temp,Rmem_old) 
-                cloud_cpu_reduction = (1-Nci_temp[:M]/Nci_old[:M]) * Rcpu_old[:M]  
-                cloud_mem_reduction = (1-Nci_temp[:M]/Nci_old[:M]) * Rmem_old[:M]
+                np.copyto(Acpu_temp,Acpu_old) 
+                np.copyto(Amem_temp,Amem_old) 
+                cloud_cpu_reduction = (1-Nci_temp[:M]/Nci_old[:M]) * Acpu_old[:M]  
+                cloud_mem_reduction = (1-Nci_temp[:M]/Nci_old[:M]) * Amem_old[:M]
                 cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
                 cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
                 cloud_cpu_reduction[cloud_cpu_reduction==-inf] = 0
                 cloud_mem_reduction[cloud_mem_reduction==-inf] = 0
-                Rcpu_temp[M:] = Rcpu_temp[M:] + cloud_cpu_reduction # edge cpu increase
-                Rmem_temp[M:] = Rmem_temp[M:] + cloud_mem_reduction # edge mem increase
-                Rcpu_temp[:M] = Rcpu_temp[:M] - cloud_cpu_reduction # cloud cpu decrease
-                Rmem_temp[:M] = Rmem_temp[:M] - cloud_mem_reduction # cloud mem decrease
+                Acpu_temp[M:] = Acpu_temp[M:] + cloud_cpu_reduction # edge cpu increase
+                Amem_temp[M:] = Amem_temp[M:] + cloud_mem_reduction # edge mem increase
+                Acpu_temp[:M] = Acpu_temp[:M] - cloud_cpu_reduction # cloud cpu decrease
+                Amem_temp[:M] = Amem_temp[:M] - cloud_mem_reduction # cloud mem decrease
                 if no_caching == False:
                     delay_cache[S_id_edge_temp] = delay_temp
-                    Rcpu_cache[S_id_edge_temp] = Rcpu_temp.copy() 
-                    Rmem_cache[S_id_edge_temp] = Rmem_temp.copy()
+                    Acpu_cache[S_id_edge_temp] = Acpu_temp.copy() 
+                    Amem_cache[S_id_edge_temp] = Amem_temp.copy()
                     logger.debug(f'cache insert for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
-            Cost_edge_temp = Cost_cpu_edge * np.sum(Rcpu_temp[M:]) + Cost_mem_edge * np.sum(Rmem_temp[M:]) # Total edge cost of the temp state
+            Cost_edge_temp = Cost_cpu_edge * np.sum(qz(Acpu_temp[M:],Qcpu[M:])) + Cost_mem_edge * np.sum(qz(Amem_temp[M:],Qmem[M:])) # Total edge cost of the temp state
             cost_increase_temp = Cost_edge_temp - Cost_edge_new # cost increase wrt the new state
             
             # weighting
@@ -229,8 +258,8 @@ def offload(params):
             if w < w_min:
                 # update best state of the greedy round
                 np.copyto(S_b_opt,S_b_temp)
-                np.copyto(Rcpu_opt,Rcpu_temp)
-                np.copyto(Rmem_opt,Rmem_temp)
+                np.copyto(Acpu_opt,Acpu_temp)
+                np.copyto(Amem_opt,Amem_temp)
                 cost_increase_opt = cost_increase_temp
                 delay_decrease_opt = delay_decrease_temp
                 delay_opt = delay_temp
@@ -253,8 +282,8 @@ def offload(params):
                     S_id_edge_temp = str(S2id(S_b_temp[M:]))
                     if S_id_edge_temp in delay_cache:
                         del delay_cache[S_id_edge_temp]
-                        del Rcpu_cache[S_id_edge_temp]
-                        del Rmem_cache[S_id_edge_temp]
+                        del Acpu_cache[S_id_edge_temp]
+                        del Amem_cache[S_id_edge_temp]
         dependency_paths_b_residual = np.delete(dependency_paths_b_residual, PR, axis=0)
         #dependency_paths_b_residual = np.array([dependency_paths_b_residual[pr] for pr in range(len(dependency_paths_b_residual)) if pr not in PR ])
         
@@ -265,8 +294,8 @@ def offload(params):
                 S_id_edge_temp = id2S(int(S_id_edge_temp_s),2**M)   # binary encoded state of the edge
                 if np.sum(S_b_opt[M:]) != np.sum(S_id_edge_temp * S_b_opt[M:]):
                         del delay_cache[S_id_edge_temp_s]
-                        del Rcpu_cache[S_id_edge_temp_s]
-                        del Rmem_cache[S_id_edge_temp_s]
+                        del Acpu_cache[S_id_edge_temp_s]
+                        del Amem_cache[S_id_edge_temp_s]
                 else:
                     logger.debug(f"cached state {np.argwhere(np.array(S_id_edge_temp)==1).squeeze()}")
             logger.debug(f"cache size {len(delay_cache)}")
@@ -293,20 +322,20 @@ def offload(params):
             S_b_temp[leaf] = 0
             Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))
             Nci_temp = computeNc(Fci_temp, M, 2)
-            delay_temp,_,_,_ = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M)
+            delay_temp,_,_,_ = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, Rsd)
             delay_decrease_temp = delay_old - delay_temp
             if delay_decrease_temp>=delay_decrease_target:
                 # possible removal
-                if Rcpu_new[leaf]*Cost_cpu_edge + Rmem_new[leaf]*Cost_mem_edge > c_max:
+                if qz(Acpu_new[leaf],Qcpu[leaf-M])*Cost_cpu_edge + qz(Amem_new[leaf],Qmem[leaf-M])*Cost_mem_edge > c_max:
                     leaf_max = leaf
-                    c_max = Rcpu_new[leaf]*Cost_cpu_edge + Rmem_new[leaf]*Cost_mem_edge
+                    c_max = qz(Acpu_new[leaf],Qcpu[leaf-M])*Cost_cpu_edge + qz(Amem_new[leaf],Qmem[leaf-M])*Cost_mem_edge
         if leaf_max>-1:
             logger.debug(f'cleaning microservice {leaf_max}')
             S_b_new[leaf_max] = 0
-            Rcpu_new[leaf_max-M] = Rcpu_new[leaf_max-M] + Rcpu_new[leaf_max] # cloud cpu increase
-            Rmem_new[leaf_max-M] = Rmem_new[leaf_max-M] + Rmem_new[leaf_max] # cloud mem increase
-            Rcpu_new[leaf_max] = 0 # edge cpu decrease
-            Rmem_new[leaf_max] = 0 # edge mem decrease
+            Acpu_new[leaf_max-M] = Acpu_new[leaf_max-M] + Acpu_new[leaf_max] # cloud cpu increase
+            Amem_new[leaf_max-M] = Amem_new[leaf_max-M] + Amem_new[leaf_max] # cloud mem increase
+            Acpu_new[leaf_max] = 0 # edge cpu decrease
+            Amem_new[leaf_max] = 0 # edge mem decrease
         else:
             break
             
@@ -315,22 +344,22 @@ def offload(params):
     n_rounds = 1
     Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
     Nci_new = computeNc(Fci_new, M, 2)
-    delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
+    delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, Rsd)
     delay_decrease_new = delay_old - delay_new
-    np.copyto(Rcpu_new,Rcpu_old) 
-    np.copyto(Rmem_new,Rmem_old) 
-    cloud_cpu_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Rcpu_old[:M]
-    cloud_mem_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Rmem_old[:M]
+    np.copyto(Acpu_new,Acpu_old) 
+    np.copyto(Amem_new,Amem_old) 
+    cloud_cpu_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Acpu_old[:M]
+    cloud_mem_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Amem_old[:M]
     cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
     cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
     cloud_cpu_reduction[cloud_cpu_reduction==-inf] = 0
     cloud_mem_reduction[cloud_mem_reduction==-inf] = 0
-    Rcpu_new[M:] = Rcpu_new[M:] + cloud_cpu_reduction # edge cpu increase
-    Rmem_new[M:] = Rmem_new[M:] + cloud_mem_reduction # edge mem increase
-    Rcpu_new[:M] = Rcpu_new[:M] - cloud_cpu_reduction # cloud cpu decrease
-    Rmem_new[:M] = Rmem_new[:M] - cloud_mem_reduction     # cloud mem decrease
-    Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
-    cost_increase_new = Cost_edge_new - Cost_edge_old 
+    Acpu_new[M:] = Acpu_new[M:] + cloud_cpu_reduction # edge cpu increase
+    Amem_new[M:] = Amem_new[M:] + cloud_mem_reduction # edge mem increase
+    Acpu_new[:M] = Acpu_new[:M] - cloud_cpu_reduction # cloud cpu decrease
+    Amem_new[:M] = Amem_new[:M] - cloud_mem_reduction     # cloud mem decrease
+    Cost_edge_new = Cost_cpu_edge * np.sum(qz(Acpu_new[M:],Qcpu[M:])) + Cost_mem_edge * np.sum(qz(Amem_new[M:],Qmem[M:])) # Total edge cost
+    cost_increase_new = Cost_edge_new - Cost_edge_old
 
     result_edge = dict()
     
@@ -340,8 +369,8 @@ def offload(params):
     result_edge['delay_decrease'] = delay_decrease_new
     result_edge['cost_increase'] = cost_increase_new
     result_edge['n_rounds'] = n_rounds
-    result_edge['Rcpu'] = Rcpu_new
-    result_edge['Rmem'] = Rmem_new
+    result_edge['Acpu'] = Acpu_new
+    result_edge['Amem'] = Amem_new
     result_edge['Fci'] = Fci_new
     result_edge['Nci'] = Nci_new
     result_edge['delay'] = delay_new
@@ -365,7 +394,7 @@ def offload(params):
     result_edge['info'] = f"Result for offload - edge microservice ids: {result_edge['placement']}"
 
     if result_edge['delay_decrease'] < delay_decrease_target:
-        logger.critical(f"offload: delay decrease target not reached")
+        logger.warning(f"offload: delay decrease target not reached")
     
     result_return=list()
     result_return.append(result_cloud)  
@@ -375,23 +404,22 @@ def offload(params):
 
 
 # MAIN
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument( '-log',
-                     '--loglevel',
-                     default='warning',
-                     help='Provide logging level. Example --loglevel debug, default=warning' )
 
-    args = parser.parse_args()
-    logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
-
-    logging.info( 'Logging now setup.' )
+def main():
+    # small simulation to test the offload function
+    def qz(x,y):
+        res = np.zeros(len(x))
+        z = np.argwhere(y==0)
+        res[z] = x[z]
+        nz = np.argwhere(y>0)
+        res[nz] = np.ceil(x[nz]/y[nz])*y[nz]
+        return res
     # Define the input variables
-    np.random.seed(150273)
-    RTT = 0.0869    # RTT edge-cloud
+    np.random.seed(150271)
+    RTT = 0.106    # RTT edge-cloud
     M = 30 # n. microservices
-    delay_decrease_target = 0.03    # requested delay reduction
-    lambda_val = 20     # request per second
+    delay_decrease_target = 0.08    # requested delay reduction
+    lambda_val = 50     # request per second
     Ne = 1e9    # bitrate cloud-edge
     
     S_edge_b = np.zeros(M)  # initial state. 
@@ -405,14 +433,15 @@ if __name__ == "__main__":
 
     Fcm_range_min = 0.1 # min value of microservice call frequency 
     Fcm_range_max = 0.5 # max value of microservice call frequency 
-    Rcpu_quota = 0.5    # CPU quota
-    Rcpu_range_min = 1  # min value of requested CPU quota per instance-set
-    Rcpu_range_max = 32 # max value of requested CPU quota per instance-set
+    Acpu_quota = 0.5    # CPU quota
+    Acpu_range_min = 1  # min value of requested CPU quota per instance-set
+    Acpu_range_max = 32 # max value of requested CPU quota per instance-set
     Rs_range_min = 1000 # min value of response size in bytes
     Rs_range_max = 50000   # max of response size in bytes
     
     Rs = np.random.randint(Rs_range_min,Rs_range_max,M)  # random response size bytes
     Rs[M-1]=0 # user has no response size
+    Rsd = None
     
     # build dependency graph
     Fcm = np.zeros([M,M])   # microservice call frequency matrix
@@ -445,33 +474,35 @@ if __name__ == "__main__":
     S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
     S_b[M-1] = 0  # User is not in the cloud
     # set random values for CPU and memory requests
-    Rcpu_void = (np.random.randint(32,size=M)+1) * Rcpu_quota
-    Rcpu_void[M-1]=0   # user has no CPU request
-    Rcpu_void = np.concatenate((Rcpu_void, np.zeros(M))) # (2*M,) vector of CPU requests for void state
-    Rmem_void = np.zeros(2*M)
+    Acpu_void = (np.random.randint(32,size=M)+1) * Acpu_quota
+    Acpu_void[M-1]=0   # user has no CPU request
+    Acpu_void = np.concatenate((Acpu_void, np.zeros(M))) # (2*M,) vector of CPU requests for void state
+    Amem_void = np.zeros(2*M)
+    Qcpu = np.ones(M)   # CPU quantum in cpu sec
+    Qmem = np.zeros(M)   # Memory quantum in bytes
     S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
     S_b_void[M-1] = 0  # User is not in the cloud
     S_b_void[2*M-1] = 1  # User is in the cloud
     Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
     Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
     
-    # compute Rcpu and Rmem for the current state
+    # compute Acpu and Amem for the current state
     # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
     Fci = np.matrix(buildFci(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
     Nci = computeNc(Fci, M, 2)    # number of instance call per user request of the current state
-    Rcpu = Rcpu_void.copy()
-    Rmem = Rmem_void.copy()
-    cloud_cpu_decrease = (1-Nci[:M]/Nci_void[:M]) * Rcpu_void[:M]
-    cloud_mem_decrease = (1-Nci[:M]/Nci_void[:M]) * Rmem_void[:M]
+    Acpu = Acpu_void.copy()
+    Amem = Amem_void.copy()
+    cloud_cpu_decrease = (1-Nci[:M]/Nci_void[:M]) * Acpu_void[:M]
+    cloud_mem_decrease = (1-Nci[:M]/Nci_void[:M]) * Amem_void[:M]
     cloud_cpu_decrease[np.isnan(cloud_cpu_decrease)] = 0
     cloud_mem_decrease[np.isnan(cloud_mem_decrease)] = 0
     cloud_cpu_decrease[cloud_cpu_decrease==-inf] = 0
     cloud_mem_decrease[cloud_mem_decrease==-inf] = 0
-    Rcpu[M:] = Rcpu[M:] + cloud_cpu_decrease # edge cpu increase
-    Rmem[M:] = Rmem[M:] + cloud_mem_decrease # edge mem increase
-    Rcpu[:M] = Rcpu[:M] - cloud_cpu_decrease # cloud cpu decrease
-    Rmem[:M] = Rmem[:M] - cloud_mem_decrease # cloud mem decrease
-    Cost_edge = Cost_cpu_edge * np.sum(Rcpu[M:]) + Cost_mem_edge * np.sum(Rmem[M:]) # Total edge cost of the current state
+    Acpu[M:] = Acpu[M:] + cloud_cpu_decrease # edge cpu increase
+    Amem[M:] = Amem[M:] + cloud_mem_decrease # edge mem increase
+    Acpu[:M] = Acpu[:M] - cloud_cpu_decrease # cloud cpu decrease
+    Amem[:M] = Amem[:M] - cloud_mem_decrease # cloud mem decrease
+    Cost_edge = Cost_cpu_edge * np.sum(qz(Acpu[M:],Qcpu[M:])) + Cost_mem_edge * np.sum(qz(Amem[M:],Qmem[M:])) # Total edge cost of the current state
 
     # set 0 random internal delay
     Di = np.zeros(2*M)
@@ -479,8 +510,8 @@ if __name__ == "__main__":
     # Call the offload function
     params = {
         'S_edge_b': S_edge_b,
-        'Rcpu': Rcpu,
-        'Rmem': Rmem,
+        'Acpu': Acpu,
+        'Amem': Amem,
         'Fcm': Fcm,
         'M': M,
         'lambd': lambda_val,
@@ -494,7 +525,11 @@ if __name__ == "__main__":
         'locked': None,
         'dependency_paths_b': None,
         'u_limit': 2,
-        'no_caching': False
+        'no_caching': False,
+        'Qcpu': np.ones(M),
+        'Qmem': np.ones(M),
+        'no_evolutionary': False,
+        'max_added_dp': 1
     }
 
         
@@ -502,3 +537,17 @@ if __name__ == "__main__":
     result=result_list[1]
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
     print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument( '-log',
+                     '--loglevel',
+                     default='warning',
+                     help='Provide logging level. Example --loglevel debug, default=warning' )
+
+    args = parser.parse_args()
+    logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
+
+    logging.info( 'Logging now setup.' )
+    main()
+

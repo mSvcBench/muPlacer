@@ -1,6 +1,6 @@
 import numpy as np 
 
-def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M):
+def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
 
     # compute cloud-edge traffic
     max_delay = 1e6 # max delay used to avoid inf problem during optimization
@@ -19,7 +19,10 @@ def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M):
     for i in S_edge_id:
         for j in S_not_edge_id:
             if Fci[M+i,j]>0:
-                Dn[M+i,j] = RTT + min((Rs[j] * 8 / Ne)/(1 - rhonce),max_delay) # M/M/1 with processor sharing. 
+                if Rsd.size==0 or Rsd[j]==0:
+                    Dn[M+i,j] = RTT + min((Rs[j] * 8 / Ne)/(1 - rhonce),max_delay) # M/M/1 with processor sharing. 
+                else:
+                    Dn[M+i,j] = Rsd[j]  # Use the provided delay
     
     Dn_tot = np.sum(np.multiply((Nci[M:].reshape(M,1)),(np.sum(np.multiply(Fci[M:,:M],Dn[M:,:M]),axis=1))))
 

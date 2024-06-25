@@ -26,6 +26,7 @@ spec:
         image: msvcbench/go-httpnetprober-server:latest
         ports:
         - containerPort: 8080
+        imagePullPolicy: Always
 
 ---
 apiVersion: v1

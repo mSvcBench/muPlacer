@@ -1,87 +1,82 @@
 package client
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 func Client(w http.ResponseWriter, r *http.Request) {
 
-	var s, d int
-
-	length := r.URL.Query().Get("length")
-	duration := r.URL.Query().Get("duration")
-	dest_url := r.URL.Query().Get("url")
+	duration_string := r.URL.Query().Get("duration") // duration of the test
+	dest_url := r.URL.Query().Get("url")             // destination URL
+	chunk_str := r.URL.Query().Get("chunk")          // chunk size_str of the server write buffer
+	size_str := r.URL.Query().Get("size")            // size of the server response, used only when duration is 0
 	client := http.Client{}
-
-	// Check if the length parameter is empty
-	if length == "" {
-		s = 1000000 // default byte size
-	} else {
-		// println(length)
-		s, _ = strconv.Atoi(length)
-	}
+	total_bytes := 0
+	buf := make([]byte, 256*1024) //the chunk size
 
 	// Check if the duration parameter is empty
-	if duration == "" {
-		d = 60 // default byte size
-	} else {
-		// println(duration)
-		d, _ = strconv.Atoi(duration)
+	if duration_string == "" {
+		duration_string = "0" // default duration string
 	}
 
-	// Check if the duration parameter is empty
+	// Check if the dest parameter is empty
 	if dest_url == "" {
-		dest_url = "netprobe-server:8080" // default destination url
+		dest_url = "http://127.0.0.1:8080" // default destination url
 	}
 
-	// Get the current time
+	// Check if the dest parameter is empty
+	if chunk_str == "" {
+		chunk_str = strconv.Itoa(256 * 1024) // default chunk size
+	}
+
+	// Check if the size parameter is empty
+	if size_str == "" {
+		size_str = "0" // default size, used for ping
+	}
+
+	// Make an HTTP request to the destination URL
+	full_dest_url := dest_url + "/generate?duration=" + duration_string + "&chunk=" + chunk_str + "&size=" + size_str
+	glog.Info("Making request to: " + full_dest_url + " for " + duration_string + "s" + " with chunk size " + chunk_str + "bytes and message size " + size_str + " bytes")
+	req, _ := http.NewRequest("GET", full_dest_url, nil)
 	start := time.Now()
-	total_bytes := int(0)
-	full_dest_url := dest_url + "/generate?length=" + strconv.Itoa(s)
-	if d > 0 {
-		for time.Since(start) < time.Duration(d)*time.Second {
-			// Make an HTTP request to the destination URL
-			fmt.Println("Making request to:", full_dest_url)
-			req, _ := http.NewRequest("GET", full_dest_url, nil)
-			res, err := client.Do(req)
-			if err != nil {
-				// Handle error
-				fmt.Println("Error making HTTP request:", err)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-			body, _ := io.ReadAll(res.Body) // ensure the complete reception of the response
-			res.Body.Close()
-			// Get the length of the response body
-			total_bytes += len(body)
-		}
-	} else {
-		// Make an single HTTP request to the destination URL
-		fmt.Println("Making request to:", full_dest_url)
-		req, _ := http.NewRequest("GET", full_dest_url, nil)
-		res, err := client.Do(req)
-		if err != nil {
-			// Handle error
-			fmt.Println("Error making HTTP request:", err)
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		body, _ := io.ReadAll(res.Body) // ensure the complete reception of the response
-		res.Body.Close()
-		// Get the length of the response body
-		total_bytes += len(body) // Make an HTTP request to the destination URL
+	res, err := client.Do(req)
+	if err != nil {
+		// Handle error
+		glog.Errorf("Error making HTTP request: %s", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
+	rd := bufio.NewReader(res.Body)
+	for {
+		n, err := rd.Read(buf) //loading chunk into buffer
+		total_bytes += n
+		if n == 0 {
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				glog.Errorf("Error making HTTP request: %s", err)
+				break
+			}
 
+		}
+	}
+	res.Body.Close()
 	total_duration := time.Since(start).Seconds()
+
 	// Create a JSON object with keys total_bytes and total_duration
 	result := map[string]any{
 		"total_bytes":    total_bytes,
 		"total_duration": total_duration,
+		"total_speed":    float64(total_bytes) * 8.0 / total_duration,
 	}
 	// Convert the JSON object to a string
 	jsonString, _ := json.Marshal(result)

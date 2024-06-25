@@ -17,4 +17,4 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /docker-netprobe-server
 EXPOSE 8080
  
 # Specifies the executable command that runs when the container starts
-CMD [ "/docker-netprobe-server" ]
+CMD ["/docker-netprobe-server","-stderrthreshold=INFO", "-logtostderr=true"]

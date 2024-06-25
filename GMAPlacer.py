@@ -33,17 +33,18 @@ def update_acpu():
     # update values
     for area in areas:
         pod_regex = status['global-regex'][area]['pod']
-        query_cpu = f'sum by (pod) (rate(container_cpu_usage_seconds_total{{cluster="{cluster}",namespace="{namespace}",pod=~"{pod_regex}"}}[{query_period_str}]))'
+        query_cpu = f'sum by (pod) (rate(container_cpu_usage_seconds_total{{cluster="{cluster[area]}",namespace="{namespace}",pod=~"{pod_regex}"}}[{query_period_str}]))'
         query_results = prom_client.custom_query(query=query_cpu)
         if query_results:
             for result in query_results:
                 for service_name in services:
                     service=services[service_name]
                     if re.search(service['regex'][area]['pod'], result['metric']['pod'], re.IGNORECASE):
-                        if status['service-metrics']['acpu'][area]['value'][service['id']] != 0:
-                            logger.error(f"Multiple results for the cpu query {query_cpu} and service {service_name}")
-                            exit(1)
-                        status['service-metrics']['acpu'][area]['value'][service['id']] = service['acpu'][area]['value']
+                        if result["value"][1]=="NaN":
+                            value = 0
+                        else:
+                            value = float(result["value"][1])
+                        status['service-metrics']['acpu'][area]['value'][service['id']] = status['service-metrics']['acpu'][area]['value'][service['id']]+value
 
 def update_amem():
     global gma_config, prom_client, metrics
@@ -61,17 +62,18 @@ def update_amem():
     # update values
     for area in areas:
         pod_regex = status['global-regex'][area]['pod']
-        query_mem = f'sum by (pod) (container_memory_usage_bytes{{cluster="{cluster}", namespace="{namespace}",pod=~"{pod_regex}"}})'
+        query_mem = f'sum by (pod) (container_memory_usage_bytes{{cluster="{cluster[area]}", namespace="{namespace}",pod=~"{pod_regex}"}})'
         query_results = prom_client.custom_query(query=query_mem)
         if query_results:
             for result in query_results:
                 for service_name in services:
                     service=services[service_name]
                     if re.search(service['regex'][area]['pod'], result['metric']['pod'], re.IGNORECASE):
-                        if status['service-metrics']['amem'][area]['value'][service['id']] != 0:
-                            logger.error(f"Multiple results for the memory query {query_mem} and service {service_name}")
-                            exit(1)
-                        status['service-metrics']['amem'][area]['value'][service['id']] = service['amem'][area]['value']
+                        if result["value"][1]=="NaN":
+                            value = 0
+                        else:
+                            value = float(result["value"][1])
+                        status['service-metrics']['amem'][area]['value'][service['id']] = status['service-metrics']['amem'][area]['value'][service['id']] + value
 
 def update_ingress_lambda():
     global gma_config, prom_client, status, M
@@ -288,7 +290,7 @@ def update_metrics():
     update_Rs()
     update_Fcm_and_lambda()
     update_ingress_delay()
-    #update_replicas()
+    net_probing()
     return
 
 def apply_configuration(result_list):
@@ -309,7 +311,8 @@ def apply_configuration(result_list):
         workload_type = service['regex']['cloud-area']['workload']['type']
         if workload_type != 'daemonset':
             cloud_replicas = status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id]+status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]
-            cloud_replicas = max(status['service-metrics']['hpa']['cloud-area']['max-replicas'][service_id],cloud_replicas)
+            cloud_replicas = min(status['service-metrics']['hpa']['cloud-area']['max-replicas'][service_id],cloud_replicas)
+            cloud_replicas = max(status['service-metrics']['hpa']['cloud-area']['min-replicas'][service_id],cloud_replicas)
             command = f'kubectl --context {gma_config['spec']['cloud-area']['context']} -n {namespace} scale {workload_type} {workload_name} --replicas {int(cloud_replicas)}'
             try:
                 result = subprocess.run(command, shell=True, check=True, text=True, stdout=subprocess.PIPE)
@@ -365,132 +368,162 @@ def apply_configuration(result_list):
 def net_probing():
     global gma_config, status, query_period_sec
 
-    logger.info(f"Performing HTTP GET to netprobe-server")
+    logger.info(f"Performing net probing")
+    netprobe_server_edge = gma_config['spec']['network']['netprober-server-edge']
+    netprobe_server_cloud = gma_config['spec']['network']['netprober-server-cloud']
+    if netprobe_server_edge == '' or netprobe_server_cloud == '':
+        logger.info(f"Netprobe servers not properly configured in the configuration file, no net probing performed")
+        return
     
+    # measure http rtt from edge to cloud with n_rtt_samples samples
+    logger.info(f"Measuring RTT from edge to cloud")
+    params = {'duration': 0, 'url': netprobe_server_cloud}
+    n_rtt_samples = 30
+    rtt = 1000
+    for _ in range(n_rtt_samples):
+        response = requests.get(f'{netprobe_server_edge}/get',params=params)
+        if response.status_code != 200:
+            logger.error(f"HTTP GET to netprobe-server failed with status code {response.status_code}")
+            return
+        response_json = response.json()
+        rtt = min(rtt,float(response_json['total_duration']))
+        time.sleep(0.1)
+    logger.info(f"Estimated RTT from edge to cloud: {rtt*1000} ms")
 
-    netprobe_length_bytes = int(10000000)    # 10MB
-    netprobe_server_edge = gma_config['spec']['network']['netprobe-server-edge']
-    netprobe_server_cloud = gma_config['spec']['network']['netprobe-server-cloud']
-    params = {'length': netprobe_length_bytes, 'duration': int(1.5*query_period_sec), 'url': netprobe_server_cloud}
-    response = requests.get(f'{netprobe_server_edge}/get',params=params)
-    print(response.text)
+    # get the netprobe traffic from cloud to edge 
+    probing_period = 10
+    logger.info(f"Measuring cloud-edge probing bitrate for {probing_period}s")
+    netprobe_server_edge = gma_config['spec']['network']['netprober-server-edge']
+    netprobe_server_cloud = gma_config['spec']['network']['netprober-server-cloud']
+    params = {'duration': {int(probing_period)}, 'chunk': 4096, 'url': netprobe_server_cloud}
+    try:
+        response = requests.get(f'{netprobe_server_edge}/get', params=params)
+        if response.status_code != 200:
+            logger.error(f"HTTP GET to netprobe-server failed with status code {response.status_code}")
+            return
+        response_json = response.json()
+        prober_bps = int(response_json['total_speed'])
+        logger.info(f"Measured cloud-edge probing bitrate: {prober_bps/1e6} Mbps")
+    except Exception as e:
+        logger.error(f"An error occurred during net probing: {str(e)}")
+        return
 
+    # evaluate background edge cloud traffic
+    logger.info(f"Measuring cloud-edge service bitrate")
+    background_bps=0
+    edge_workload_regex = status['global-regex']['edge-area']['workload']+f'|{edge_istio_ingress_app}'
+    cloud_workload_regex = status['global-regex']['cloud-area']['workload']
+    query = f'sum (rate(istio_response_bytes_sum{{cluster="{cluster['edge-area']}",namespace="{namespace}",source_workload=~"{edge_workload_regex}, destination_workload=~{cloud_workload_regex}"}}[{query_period_str}]))'
+    query_results = prom_client.custom_query(query=query)
+    if query_results:
+        for result in query_results:
+            if result["value"][1]=="NaN":
+                background_bps=0
+            else:
+                background_bps=8.0*float(result["value"][1])
+            break
+    logger.info(f"Measured cloud-edge service bitrate: {background_bps/1e6} Mbps")
+    measured_cloud_edge_bps = prober_bps + background_bps
+    logger.info(f"Estimated cloud-edge service bitrate: {measured_cloud_edge_bps/1e6} Mbps")
+
+    status['service-metrics']['network']['edge-cloud-rtt']['value'] = rtt*1000
+    status['service-metrics']['network']['edge-cloud-rtt']['last-update'] = time.time()
+    status['service-metrics']['network']['cloud-edge-bps']['value'] = measured_cloud_edge_bps
+    status['service-metrics']['network']['cloud-edge-bps']['last-update'] = time.time()
     
-
-    # edge_pod_regex = status['global-regex']['edge-area']['pod']+f'|{edge_istio_ingress_app}-.*'
-    # cloud_pod_regex = status['global-regex']['cloud-area']['pod']
-    # query = f'sum (rate(istio_response_bytes_sum{{cluster="{cluster['edge-area']}",namespace="{namespace}",source_pod=~"{edge_pod_regex}, destination_pod"}}[{query_period_str}]))'
-
+    # Evaluate average response duration per service
+    logger.info(f"Measuring average response duration per service")
+    trials=5 # number of trials to measure the probing delay
+    for i in range(M-1):
+        rsv = int(status['service-metrics']['rs']['value'][i])
+        status['service-metrics']['rsd']['value'][i] = 0
+        params = {'duration': 0, 'size': {rsv}, 'chunk': 4096, 'url': netprobe_server_cloud}
+        for _ in range(trials):
+            try:
+                response = requests.get(f'{netprobe_server_edge}/get', params=params)
+                if response.status_code != 200:
+                    logger.error(f"HTTP GET to netprobe-server failed with status code {response.status_code}")
+                    return
+                response_json = response.json()
+                prober_time_sec = float(response_json['total_duration'])
+                status['service-metrics']['rsd']['value'][i] = status['service-metrics']['rsd']['value'][i] + prober_time_sec*1000.0
+            except Exception as e:
+                logger.error(f"An error occurred during net probing: {str(e)}")
+        status['service-metrics']['rsd']['value'][i] = status['service-metrics']['rsd']['value'][i]/trials
+        logger.info(f"Measured probing delay for {rsv} bytes: {status['service-metrics']['rsd']['value'][i]} ms")
+    status['service-metrics']['rsd']['last-update'] = time.time()
     return
+
 def parse_yaml():
     global gma_config, status
 
     logger.info(f"Parse yaml files")
 
     # compute the pod/deployment regex for each service
-    for sc in gma_config['spec']['services']:
-        # compute the pod regex for the edge area
-        items = sc['instances']['cloud-yamls']
-        s = status['service-info'][sc['name']]
-        for item in items:
-            yaml_to_apply = item
-            with open(yaml_to_apply) as f:
-                complete_yaml = yaml.load_all(f,Loader=yaml.FullLoader)
-                for partial_yaml in complete_yaml:
-                    if partial_yaml['kind'] == 'Deployment' or partial_yaml['kind'] == 'StatefulSet' or partial_yaml['kind'] == 'DaemonSet':
-                        # update pod information
-                        if s['regex']['cloud-area']['pod'] == '':
-                            s['regex']['cloud-area']['pod'] = f'{partial_yaml['metadata']['name']}-.*'
-                        else:
-                            s['regex']['cloud-area']['pod'] = f'{s['regex']['cloud-area']['pod']}|{partial_yaml['metadata']['name']}-.*'
-                        
-                        if status['global-regex']['cloud-area']['pod'] == '':
-                            status['global-regex']['cloud-area']['pod'] = f'{partial_yaml['metadata']['name']}-.*'
-                        else:
-                            status['global-regex']['cloud-area']['pod'] = f'{status['global-regex']['cloud-area']['pod']}|{partial_yaml['metadata']['name']}-.*'    
-                        
-                        # update workload information
-                        if s['regex']['cloud-area']['workload']['regex'] != '':
-                            logger.error(f"Multiple deployments/statefulset/daemonset for the service {sc['name']} in the cloud-area not supported")
-                            exit(1)
-                        if partial_yaml['kind'] == 'Deployment':
-                            s['regex']['cloud-area']['workload']['type'] == 'deployment'
-                            s['regex']['cloud-area']['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
-                        if partial_yaml['kind'] == 'StatefulSet':
-                            s['regex']['cloud-area']['workload']['type'] == 'statefulset'
-                            s['regex']['cloud-area']['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
-                        if partial_yaml['kind'] == 'DaemonSet':
-                            s['regex']['cloud-area']['workload']['type'] == 'daemonset'
-                            s['regex']['cloud-area']['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
-                                                                                                                                  
-                        if status['global-regex']['cloud-area']['workload'] == '':
-                            status['global-regex']['cloud-area']['workload'] = f'{partial_yaml['metadata']['name']}'
-                        else:
-                            status['global-regex']['cloud-area']['workload'] = f'{status['global-regex']['cloud-area']['workload']}|{partial_yaml['metadata']['name']}'
-                    
-                    # update hpa information
-                    if partial_yaml['kind'] == 'HorizontalPodAutoscaler' :
-                        if s['regex']['cloud-area']['hpa'] == '':
-                            s['regex']['cloud-area']['hpa'] = f'{partial_yaml['metadata']['name']}'
-                            status['service-metrics']['hpa']['cloud-area']['min-replicas'][s['id']] = int(partial_yaml['spec']['minReplicas'])
-                            status['service-metrics']['hpa']['cloud-area']['max-replicas'][s['id']] = int(partial_yaml['spec']['maxReplicas'])
-                        else:
-                            logger.error(f"Multiple HPA for the service {sc['name']} in the cloud-area not supported")
-                            exit(1)
-                        if status['global-regex']['cloud-area']['hpa'] == '':
-                            status['global-regex']['cloud-area']['hpa'] = f'{partial_yaml['metadata']['name']}'
-                        else:
-                            status['global-regex']['cloud-area']['hpa'] = f'{status['global-regex']['cloud-area']['hpa']}|{partial_yaml['metadata']['name']}'
+
+    for area in areas:
+        for sc in gma_config['spec']['services']:
+            # compute the pod regex for the edge area
+            if area == 'edge-area':
+                items = sc['instances']['edge-yamls']
+            else:
+                items = sc['instances']['cloud-yamls']
+            s = status['service-info'][sc['name']]
+            for item in items:
+                yaml_to_apply = item
+                with open(yaml_to_apply) as f:
+                    complete_yaml = yaml.load_all(f,Loader=yaml.FullLoader)
+                    for partial_yaml in complete_yaml:
+                        if partial_yaml['kind'] == 'Deployment' or partial_yaml['kind'] == 'StatefulSet' or partial_yaml['kind'] == 'DaemonSet':
+                            # update pod information
+                            if s['regex'][area]['pod'] == '':
+                                s['regex'][area]['pod'] = f'{partial_yaml['metadata']['name']}-.*'
+                            else:
+                                s['regex'][area]['pod'] = f'{s['regex'][area]['pod']}|{partial_yaml['metadata']['name']}-.*'
+                            
+                            if status['global-regex'][area]['pod'] == '':
+                                status['global-regex'][area]['pod'] = f'{partial_yaml['metadata']['name']}-.*'
+                            else:
+                                status['global-regex'][area]['pod'] = f'{status['global-regex'][area]['pod']}|{partial_yaml['metadata']['name']}-.*'    
+                            
+                            # update workload information
+                            if s['regex'][area]['workload']['regex'] != '':
+                                logger.error(f"Multiple deployments/statefulset/daemonset for the service {sc['name']} in the cloud-area not supported")
+                                exit(1)
+                            if partial_yaml['kind'] == 'Deployment':
+                                s['regex'][area]['workload']['type'] == 'deployment'
+                                s['regex'][area]['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
+                            if partial_yaml['kind'] == 'StatefulSet':
+                                s['regex'][area]['workload']['type'] == 'statefulset'
+                                s['regex'][area]['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
+                            if partial_yaml['kind'] == 'DaemonSet':
+                                s['regex'][area]['workload']['type'] == 'daemonset'
+                                s['regex'][area]['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
+                                                                                                                                    
+                            if status['global-regex'][area]['workload'] == '':
+                                status['global-regex'][area]['workload'] = f'{partial_yaml['metadata']['name']}'
+                            else:
+                                status['global-regex'][area]['workload'] = f'{status['global-regex'][area]['workload']}|{partial_yaml['metadata']['name']}'
+                            for container in partial_yaml['spec']['template']['spec']['containers']:
+                                if 'resources' in container and 'requests' in container['resources'] and 'cpu' in container['resources']['requests']:
+                                    status['service-metrics']['qcpu'][area]['value'][s['id']] = status['service-metrics']['qcpu'][area]['value'][s['id']] + cpu_to_sec(container['resources']['requests']['cpu'])
+                                if 'resources' in container and 'requests' in container['resources'] and 'memory' in container['resources']['requests']:
+                                    status['service-metrics']['qmem'][area]['value'][s['id']] = status['service-metrics']['qmem'][area]['value'][s['id']] + mem_to_byte(container['resources']['requests']['memory'])
+                        # update hpa information
+                        if partial_yaml['kind'] == 'HorizontalPodAutoscaler' :
+                            if s['regex'][area]['hpa'] == '':
+                                s['regex'][area]['hpa'] = f'{partial_yaml['metadata']['name']}'
+                                status['service-metrics']['hpa'][area]['min-replicas'][s['id']] = int(partial_yaml['spec']['minReplicas'])
+                                status['service-metrics']['hpa'][area]['max-replicas'][s['id']] = int(partial_yaml['spec']['maxReplicas'])
+                            else:
+                                logger.error(f"Multiple HPA for the service {sc['name']} in the cloud-area not supported")
+                                exit(1)
+                            if status['global-regex'][area]['hpa'] == '':
+                                status['global-regex'][area]['hpa'] = f'{partial_yaml['metadata']['name']}'
+                            else:
+                                status['global-regex'][area]['hpa'] = f'{status['global-regex'][area]['hpa']}|{partial_yaml['metadata']['name']}'
         
-        items = sc['instances']['edge-yamls']
-        s = status['service-info'][sc['name']]
-        for item in items:
-            yaml_to_apply = item
-            with open(yaml_to_apply) as f:
-                complete_yaml = yaml.load_all(f,Loader=yaml.FullLoader)
-                for partial_yaml in complete_yaml:
-                    if partial_yaml['kind'] == 'Deployment' or partial_yaml['kind'] == 'StatefulSet' or partial_yaml['kind'] == 'DaemonSet':
-                        # update pod information
-                        if s['regex']['edge-area']['pod'] == '':
-                            s['regex']['edge-area']['pod'] = f'{partial_yaml['metadata']['name']}-.*'
-                        else:
-                            s['regex']['edge-area']['pod'] = f'{s['regex']['edge-area']['pod']}|{partial_yaml['metadata']['name']}-.*'
-                        
-                        if status['global-regex']['edge-area']['pod'] == '':
-                            status['global-regex']['edge-area']['pod'] = f'{partial_yaml['metadata']['name']}-.*'
-                        else:
-                            status['global-regex']['edge-area']['pod'] = f'{status['global-regex']['edge-area']['pod']}|{partial_yaml['metadata']['name']}-.*'
-                        # update workload information
-                        if s['regex']['edge-area']['workload']['regex'] != '':
-                            logger.error(f"Multiple deployments/statefulset/daemonset for the service {sc['name']} in the edge-area not supported")
-                            exit(1)
-                        if partial_yaml['kind'] == 'Deployment':
-                            s['regex']['edge-area']['workload']['type'] == 'deployment'
-                            s['regex']['edge-area']['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
-                        if partial_yaml['kind'] == 'StatefulSet':
-                            s['regex']['edge-area']['workload']['type'] == 'statefulset'
-                            s['regex']['edge-area']['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
-                        if partial_yaml['kind'] == 'DaemonSet':
-                            s['regex']['edge-area']['workload']['type'] == 'daemonset'
-                            s['regex']['edge-area']['workload']['regex'] = f'{partial_yaml['metadata']['name']}'
-                                                                                                                                  
-                        if status['global-regex']['edge-area']['workload'] == '':
-                            status['global-regex']['edge-area']['workload'] = f'{partial_yaml['metadata']['name']}'
-                        else:
-                            status['global-regex']['edge-area']['workload'] = f'{status['global-regex']['edge-area']['workload']}|{partial_yaml['metadata']['name']}'
-                    
-                    if partial_yaml['kind'] == 'HorizontalPodAutoscaler' :
-                        if s['regex']['edge-area']['hpa'] == '':
-                            s['regex']['edge-area']['hpa'] = f'{partial_yaml['metadata']['name']}'
-                            status['service-metrics']['hpa']['edge-area']['min-replicas'][s['id']] = int(partial_yaml['spec']['minReplicas'])
-                            status['service-metrics']['hpa']['edge-area']['max-replicas'][s['id']] = int(partial_yaml['spec']['maxReplicas'])
-                        else:
-                            logger.error(f"Multiple HPA for the service {sc['name']} in the edge-area not supported")
-                            exit(1)
-                        if status['global-regex']['edge-area']['hpa'] == '':
-                            status['global-regex']['edge-area']['hpa'] = f'{partial_yaml['metadata']['name']}'
-                        else:
-                            status['global-regex']['edge-area']['hpa'] = f'{status['global-regex']['edge-area']['hpa']}|{partial_yaml['metadata']['name']}'
+        
 
 def init():
     global gma_config, status, service_id_to_name
@@ -568,6 +601,11 @@ def init():
     status['service-metrics']['rs']['value'] = np.zeros(M,dtype=float)
     status['service-metrics']['rs']['last-update'] = 0 # last update time
 
+    status['service-metrics']['rsd'] = dict()
+    status['service-metrics']['rsd']['info'] = 'Average delay for response size vector in milliseconds'
+    status['service-metrics']['rsd']['value'] = np.zeros(M,dtype=float)
+    status['service-metrics']['rsd']['last-update'] = 0 # last update time
+
     status['service-metrics']['hpa'] = dict()
     status['service-metrics']['hpa']['cloud-area'] = dict()
     status['service-metrics']['hpa']['cloud-area']['info'] = 'hpa vectors for cloud area'
@@ -592,7 +630,7 @@ def init():
     status['service-metrics']['acpu']['cloud-area']['value'] = np.zeros(M, dtype=float)
     status['service-metrics']['acpu']['cloud-area']['last-update'] = 0 # last update time
     status['service-metrics']['acpu']['edge-area'] = dict()
-    status['service-metrics']['acpu']['edge-area']['info'] = 'Actual CPU utilizatiion vector in seconds per second for cloud area'
+    status['service-metrics']['acpu']['edge-area']['info'] = 'Actual CPU utilizatiion vector in seconds per second for edge area'
     status['service-metrics']['acpu']['edge-area']['value'] = np.zeros(M, dtype=float)
     status['service-metrics']['acpu']['edge-area']['last-update'] = 0 # last update time
     
@@ -606,6 +644,27 @@ def init():
     status['service-metrics']['amem']['edge-area']['value'] = np.zeros(M, dtype=float)
     status['service-metrics']['amem']['edge-area']['last-update'] = 0 # last update time
     
+    status['service-metrics']['qcpu'] = dict()
+    status['service-metrics']['qcpu']['cloud-area'] = dict()
+    status['service-metrics']['qcpu']['cloud-area']['info'] = 'Requested CPU per pod in seconds per second for cloud area'
+    status['service-metrics']['qcpu']['cloud-area']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['qcpu']['cloud-area']['last-update'] = 0 # last update time
+    status['service-metrics']['qcpu']['edge-area'] = dict()
+    status['service-metrics']['qcpu']['edge-area']['info'] = 'Requested CPU per pod in seconds per second for edge area'
+    status['service-metrics']['qcpu']['edge-area']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['qcpu']['edge-area']['last-update'] = 0 # last update time
+    
+    status['service-metrics']['qmem'] = dict()
+    status['service-metrics']['qmem']['cloud-area'] = dict()
+    status['service-metrics']['qmem']['cloud-area']['info'] = 'Requested Mem per pod in seconds per second for cloud area'
+    status['service-metrics']['qmem']['cloud-area']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['qmem']['cloud-area']['last-update'] = 0 # last update time
+    status['service-metrics']['qmem']['edge-area'] = dict()
+    status['service-metrics']['qmem']['edge-area']['info'] = 'Requested Mem per pod in seconds per second for edge area'
+    status['service-metrics']['qmem']['edge-area']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['qmem']['edge-area']['last-update'] = 0 # last update time
+
+
     status['service-metrics']['service-lambda'] = dict()   
     status['service-metrics']['service-lambda']['info'] = 'Request rate vector in req/s'
     status['service-metrics']['service-lambda']['value'] = np.zeros(M, dtype=float)
@@ -626,16 +685,16 @@ def init():
     status['service-metrics']['network']['edge-cloud-rtt']['value'] = time_to_ms_converter(gma_config['spec']['network']['edge-cloud-rtt'])
     status['service-metrics']['network']['edge-cloud-rtt']['info'] = 'Round trip time from edge area to cloud area in ms'
     status['service-metrics']['network']['edge-cloud-rtt']['last-update'] = 0 # last update time
-    status['service-metrics']['network']['network-capacity-from-cloud'] = dict()
-    status['service-metrics']['network']['network-capacity-from-cloud']['value'] = gma_config['spec']['network']['network-capacity-from-cloud']
-    status['service-metrics']['network']['network-capacity-from-cloud']['info'] = 'Network capacity in bit per second from cloud area to edge area in bps'
-    status['service-metrics']['network']['network-capacity-from-cloud']['last-update'] = 0 # last update time
-    status['service-metrics']['network']['network-capacity-to-cloud'] = dict()
-    status['service-metrics']['network']['network-capacity-to-cloud']['value'] = gma_config['spec']['network']['network-capacity-to-cloud']
-    status['service-metrics']['network']['network-capacity-to-cloud']['info'] = 'Network capacity in bit per second from edge area to cloud area in bps'
-    status['service-metrics']['network']['network-capacity-to-cloud']['last-update'] = 0 # last update time
-    status['service-metrics']['network']['netprobe-server-edge'] = gma_config['spec']['network']['netprobe-server-edge']
-    status['service-metrics']['network']['netprobe-server-cloud'] = gma_config['spec']['network']['netprobe-server-cloud']
+    status['service-metrics']['network']['cloud-edge-bps'] = dict()
+    status['service-metrics']['network']['cloud-edge-bps']['value'] = bitrate_to_bps_converter(gma_config['spec']['network']['cloud-edge-bps'])
+    status['service-metrics']['network']['cloud-edge-bps']['info'] = 'Network capacity in bit per second from cloud area to edge area in bps'
+    status['service-metrics']['network']['cloud-edge-bps']['last-update'] = 0 # last update time
+    status['service-metrics']['network']['edge-cloud-bps'] = dict()
+    status['service-metrics']['network']['edge-cloud-bps']['value'] = bitrate_to_bps_converter(gma_config['spec']['network']['edge-cloud-bps'])
+    status['service-metrics']['network']['edge-cloud-bps']['info'] = 'Network capacity in bit per second from edge area to cloud area in bps'
+    status['service-metrics']['network']['edge-cloud-bps']['last-update'] = 0 # last update time
+    status['service-metrics']['network']['netprober-server-edge'] = gma_config['spec']['network']['netprober-server-edge']
+    status['service-metrics']['network']['netprober-server-cloud'] = gma_config['spec']['network']['netprober-server-cloud']
 
     status['service-metrics']['cost'] = dict()
     status['service-metrics']['cost']['edge-area'] = dict()
@@ -682,6 +741,22 @@ def check_inits():
     #TODO check the node of the cluster have different topology labels
 
     
+
+def cpu_to_sec(cpu_string):
+    cpu_string = str(cpu_string)
+    if cpu_string.endswith("m"):
+        value = float(cpu_string.split("m")[0])/1000.0
+    else:
+        value = float(cpu_string)
+    return value
+
+def mem_to_byte(mem_string):
+    mem_string = str(mem_string)
+    if mem_string.endswith("m"):
+        value = float(mem_string.split("M")[0])*1e6
+    else:
+        value = float(mem_string)
+    return value
 
 def time_to_ms_converter(delay_string):
     delay_string = str(delay_string)
@@ -811,14 +886,26 @@ class GMAStataMachine():
         logger.info('_________________________________________________________')
         logger.info('Entering Offloading')
         update_metrics()
-        metric_to_pass = status['service-metrics'].copy()
-        metric_to_pass['acpu']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * metric_to_pass['acpu']['cloud-area']['value'] # scaling the cloud cpu resources used by requests from the edge area
-        metric_to_pass['amem']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * metric_to_pass['amem']['cloud-area']['value'] # scaling the cloud memory resources used by requests from the edge area
-        metric_to_pass['edge-user-target-delay']['value'] = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
-        metric_to_pass['edge-user-target-delay']['last-update'] = time.time()
-        logger.info(f"Offloading with target delay reduction {metric_to_pass['edge-user-delay']['value']-metric_to_pass['edge-user-target-delay']['value']}ms ")
+        
+        offload_parameters = status['service-metrics'].copy()
+        offload_parameters['acpu']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * offload_parameters['acpu']['cloud-area']['value'] # scaling the cloud cpu resources used by requests from the edge area
+        offload_parameters['amem']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * offload_parameters['amem']['cloud-area']['value'] # scaling the cloud memory resources used by requests from the edge area
+        offload_parameters['edge-user-target-delay']['value'] = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
+        offload_parameters['edge-user-target-delay']['last-update'] = time.time()
+        
+        offload_parameters['epamp'] = dict()
+        if 'u-limit' in gma_config['spec']['epamp']:
+            offload_parameters['epamp']['u-limit'] = int(gma_config['spec']['epamp']['u-limit'])
+        if 'locked' in gma_config['spec']['epamp']:
+            offload_parameters['epamp']['locked'] = gma_config['spec']['epamp']['locked']
+        if 'no-caching' in gma_config['spec']['epamp']:
+            offload_parameters['epamp']['no-caching'] = gma_config['spec']['epamp']['no-caching']
+        
+        offload_parameters['epamp']['max-added-dp'] = 1
+
+        logger.info(f"Offloading with target delay reduction {offload_parameters['edge-user-delay']['value']-offload_parameters['edge-user-target-delay']['value']}ms ")
         # offloading logic
-        params = EPAMP_GMA_Connector.Connector(metric_to_pass)
+        params = EPAMP_GMA_Connector.Connector(offload_parameters)
         result_list = EPAMP_offload.offload(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
@@ -832,14 +919,25 @@ class GMAStataMachine():
         logger.info('_________________________________________________________')
         logger.info('Entering Unoffloading')
         update_metrics()
-        metric_to_pass = status['service-metrics'].copy()
-        metric_to_pass['acpu']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * metric_to_pass['acpu']['cloud-area']['value'] # scaling the cloud cpu resources used by requests from the edge area
-        metric_to_pass['amem']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * metric_to_pass['amem']['cloud-area']['value'] # scaling the cloud memory resources used by requests from the edge area
-        metric_to_pass['edge-user-target-delay']['value'] = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
-        metric_to_pass['edge-user-target-delay']['last-update'] = time.time()
-        logger.info(f"Unoffloading with target delay increase {metric_to_pass['edge-user-target-delay']['value']-metric_to_pass['edge-user-delay']['value']}ms ")
+        unoffload_parameters = status['service-metrics'].copy()
+        unoffload_parameters['acpu']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * unoffload_parameters['acpu']['cloud-area']['value'] # scaling the cloud cpu resources used by requests from the edge area
+        unoffload_parameters['amem']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * unoffload_parameters['amem']['cloud-area']['value'] # scaling the cloud memory resources used by requests from the edge area
+        unoffload_parameters['edge-user-target-delay']['value'] = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
+        unoffload_parameters['edge-user-target-delay']['last-update'] = time.time()
+        
+        unoffload_parameters['epamp'] = dict()
+        if 'u-limit' in gma_config['spec']['epamp']:
+            unoffload_parameters['epamp']['u_limit'] = int(gma_config['spec']['epamp']['u-limit'])
+        if 'locked' in gma_config['spec']['epamp']:
+            unoffload_parameters['epamp']['locked'] = gma_config['spec']['epamp']['locked']
+        if 'no-caching' in gma_config['spec']['epamp']:
+            unoffload_parameters['epamp']['no_caching'] = gma_config['spec']['epamp']['no-caching']
+        
+        unoffload_parameters['epamp']['min-added-dp'] = -1
+        
+        logger.info(f"Unoffloading with target delay increase {unoffload_parameters['edge-user-target-delay']['value']-unoffload_parameters['edge-user-delay']['value']}ms ")
         # unoffloading logic
-        params = EPAMP_GMA_Connector.Connector(metric_to_pass)
+        params = EPAMP_GMA_Connector.Connector(unoffload_parameters)
         result_list = EPAMP_unoffload.unoffload(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
@@ -851,6 +949,7 @@ class GMAStataMachine():
     
     def run(self):
         self.next = self.camping
+        self.next = self.offloading
         while True:
             self.next()
 
@@ -924,6 +1023,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Initialize the microservice metrics dictionary
+    areas = ['edge-area','cloud-area']  # set of areas, sequence matters for hpa check
     init()
 
     # global variables short-names
@@ -937,14 +1037,9 @@ if __name__ == "__main__":
     edge_istio_ingress_app = gma_config['spec']['edge-area']['istio-ingress-source-app']
     namespace = gma_config['spec']['namespace']
     cluster=dict()
-    areas = ['cloud-area','edge-area']
     for area in areas:
         cluster[area] = gma_config['spec'][area]['cluster']
-
-    #update_and_check_HPA()
-    #update_metrics() 
-
-    net_probing()
+    
     
     # Run the state machine
     sm = GMAStataMachine()
