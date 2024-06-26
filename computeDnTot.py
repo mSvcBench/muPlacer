@@ -3,6 +3,17 @@ import numpy as np
 def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
 
     # compute cloud-edge traffic
+    
+    # S : binary presence vector
+    # Nci : average number of calls per user request per microservice
+    # Fci : call frequency matrix
+    # Rs : response size of microservices
+    # RTT : round trip time
+    # Ne : network bandwidth
+    # lambd : average number of requests per second
+    # M : number of microservices
+    # Rsd : duration of cloud edge data transfer for Rs
+
     max_delay = 1e6 # max delay used to avoid inf problem during optimization
     MN = 2*M  # edge+cloud microservice instance-sets
     Tnce = 0  # Inizialization of array for volume of cloud-edge traffic

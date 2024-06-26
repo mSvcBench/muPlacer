@@ -11,6 +11,9 @@ spec:
   prometheus-url: http://160.80.223.232:30000
   offload-delay-threshold: 130ms
   unoffload-delay-threshold: 100ms
+  offload-delay-bucket-threshold: 0.95
+  unoffload-delay-bucket-threshold: 0.99
+  reference-bucket: 250ms
   cloud-area:
     cluster: ""
     context: liqo-admin@kubernetes
@@ -29,14 +32,16 @@ spec:
     netprobe-server: ""
     resource-scaling: 1
   network:
-    netprober-server-edge: http://160.80.223.212:31051/httpnetprober-edge
-    netprober-server-cloud: http://httpnetprober-cloud:8080
+    netprober-server-edge: ""
+    netprober-server-cloud: ""
+    #netprober-server-edge: http://160.80.223.212:31051/httpnetprober-edge
+    #netprober-server-cloud: http://httpnetprober-cloud:8080
     cloud-edge-bps: 1000Mbps
     edge-cloud-bps: 1000Mbps
     edge-cloud-rtt: 100ms
   epamp:
-    u-limit: 1
-    # no-caching: False,
+    u-limit: 2
+    safe-mode : true
     # locked: 
 
   explicit-service-id : true
