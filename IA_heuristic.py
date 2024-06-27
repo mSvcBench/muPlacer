@@ -1,4 +1,5 @@
 import numpy as np
+import utils
 from computeNc import computeNc
 from buildFci import buildFci
 from computeDTot import computeDTot
@@ -7,10 +8,9 @@ from numpy import inf
 
 def IA_heuristic(params):
 
-
     S_edge_old = params['S_edge_b']
-    Rcpu_old = params['Rcpu']
-    Rmem_old = params['Rmem']
+    Acpu_old = params['Acpu']
+    Amem_old = params['Amem']
     Fcm = params['Fcm']
     M = params['M']
     lambd = params['lambd']
@@ -22,27 +22,22 @@ def IA_heuristic(params):
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
 
-    Cost_cpu_edge = 1
-    Cost_mem_edge = 1
+    Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*M)
+    Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*M)
+
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to to include edge and cloud
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old))
     S_b_old[M-1] = 0  # User is not in the cloud
-    Rcpu_edge_old_sum = np.sum(S_b_old[M:] * Rcpu_old[M:]) # Total CPU requested by instances in the edge
-    Rmem_edge_old_sum = np.sum(S_b_old[M:] * Rmem_old[M:]) # Total Memory requested by instances in the edge
-    Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_edge_old_sum # Total CPU cost
-    Cost_mem_edge_old_sum = Cost_mem_edge * Rmem_edge_old_sum # Total Mem cost
-    Cost_edge_old = Cost_cpu_edge_old_sum + Cost_mem_edge_old_sum # Total cost of old state
-
-    n_rounds = 0
+    Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:] ,Cost_cpu_edge, Cost_mem_edge)[0] # Total cost of old state
     
     ## COMPUTE THE DELAY OF THE OLD STATE ##
     Fci_old = np.matrix(buildFci(S_b_old, Fcm, M))
     Nci_old = computeNc(Fci_old, M, 2)
-    delay_old,_,_,_ = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)
-    Nc = computeNc(Fcm, M, 1) 
+    delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)[0]
+    Nc = computeNc(Fcm, M, 1)
     delay_decrease_new = 0
     S_b_new = S_b_old.copy()
-    n_rounds = 0
+
 
     # DEFINE DICTIONARY FOR INTERACTION AWARE MATRIX ##
     maxes = {
@@ -54,12 +49,11 @@ def IA_heuristic(params):
     if delay_decrease_target > 0:
         ## OFFLOAD ##
         while delay_decrease_target > delay_decrease_new:
-            n_rounds = n_rounds + 1
             maxes["interaction_freq"] = -1
             maxes["ms_i"] = 0
             maxes["ms_j"] = 0
 
-            ## FIND THE MICROSERVICES WITH THE MOST INTERACTIONS ##
+            ## FIND THE COUPLE OF  MICROSERVICES WITH THE MOST INTERACTIONS ##
             for i in range (M):
                 for j in range (M):
                     if i==j:
@@ -76,7 +70,7 @@ def IA_heuristic(params):
             
             Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
             Nci_new = computeNc(Fci_new, M, 2)
-            delay_new,_,_,_ = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M) 
+            delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)[0] 
             delay_decrease_new = delay_old - delay_new
             if np.all(S_b_new[M:] == 1):
                 # all instances at the edge
@@ -87,25 +81,14 @@ def IA_heuristic(params):
         print("ToDo")
 
     # compute final values
-    Rcpu_new = np.zeros(2*M)
-    Rmem_new = np.zeros(2*M)
+    Acpu_new = np.zeros(2*M)
+    Amem_new = np.zeros(2*M)
     Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
     Nci_new = computeNc(Fci_new, M, 2)
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
     delay_decrease_new = delay_old - delay_new
-    np.copyto(Rcpu_new,Rcpu_old) 
-    np.copyto(Rmem_new,Rmem_old) 
-    cloud_cpu_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Rcpu_old[:M]
-    cloud_mem_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Rmem_old[:M]
-    cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
-    cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
-    cloud_cpu_reduction[cloud_cpu_reduction==-inf] = 0
-    cloud_mem_reduction[cloud_mem_reduction==-inf] = 0
-    Rcpu_new[M:] = Rcpu_new[M:] + cloud_cpu_reduction # edge cpu increase
-    Rmem_new[M:] = Rmem_new[M:] + cloud_mem_reduction # edge mem increase
-    Rcpu_new[:M] = Rcpu_new[:M] - cloud_cpu_reduction # cloud cpu decrease
-    Rmem_new[:M] = Rmem_new[:M] - cloud_mem_reduction     # cloud mem decrease
-    Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
+    utils.computeResourceShift(Acpu_new, Amem_new, Nci_new, Acpu_old, Amem_old, Nci_old)
+    Cost_edge_new = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total cost of new state
     cost_increase_new = Cost_edge_new - Cost_edge_old 
 
     result = dict()
@@ -113,9 +96,8 @@ def IA_heuristic(params):
     result['Cost'] = Cost_edge_new
     result['delay_decrease'] = delay_decrease_new
     result['cost_increase'] = cost_increase_new
-    result['n_rounds'] = n_rounds
-    result['Rcpu'] = Rcpu_new
-    result['Rmem'] = Rmem_new
+    result['Acpu'] = Acpu_new
+    result['Amem'] = Amem_new
     result['Fci'] = Fci_new
     result['Nci'] = Nci_new
     result['delay'] = delay_new

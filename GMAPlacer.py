@@ -112,6 +112,10 @@ def update_Rs():
 
     now = time.time()
 
+    if status['service-metrics']['service-lambda']['value'][M-1] == 0:
+        logger.info(f"Lambda value for the istio-ingress is 0, skipping Rs update")
+        return
+
     # clean Rs values
     status['service-metrics']['rs']['value'] = np.zeros(M, dtype=float)
     status['service-metrics']['rs']['last-update'] = now
@@ -143,6 +147,10 @@ def update_Fcm_and_lambda():
     logger.info(f"Update call frequency matrix")
 
     now = time.time()
+
+    if status['service-metrics']['service-lambda']['value'][M-1] == 0:
+        logger.info(f"Lambda value for the istio-ingress is 0, skipping Fcm and lambda update")
+        return
 
     # clean lambda and Fcm values
     status['service-metrics']['fcm']['value'] = np.zeros((M,M),dtype=float)
@@ -239,7 +247,7 @@ def update_ingress_delay():
 def update_ingress_delay_buckets():
     global gma_config, prom_client, metrics
 
-    logger.info(f"Update delay values from istio ingress in the edge area")
+    logger.info(f"Update delay bucket values from istio ingress in the edge area")
 
     now = time.time()
     # clean the delay value
@@ -262,8 +270,8 @@ def update_ingress_delay_buckets():
         for result in result_query:
             if result["metric"]["le"]in status['service-metrics']['edge-user-delay-bucket']['value']:
                 le = result["metric"]["le"]
-                if result["value"][1]=="NaN":
-                    value=0
+                if result["value"][1]=="NaN":   # if the value is NaN, we set the value to 1 because NaN comes out from a division by 0 thus no delay
+                    value=1
                 else:
                     value=float(result["value"][1])
                 if status['service-metrics']['edge-user-delay-bucket']['value'][le] != 0:
@@ -347,7 +355,8 @@ def apply_configuration(result_list):
         workload_name = service['regex']['cloud-area']['workload']['regex']
         workload_type = service['regex']['cloud-area']['workload']['type']
         if workload_type != 'daemonset':
-            cloud_replicas = status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id]+status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]
+            cloud_replicas_increase = np.ceil(status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]/gma_config['spec']['edge-area']['resource-scaling']-status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
+            cloud_replicas = status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id]+cloud_replicas_increase
             cloud_replicas = min(status['service-metrics']['hpa']['cloud-area']['max-replicas'][service_id],cloud_replicas)
             cloud_replicas = max(status['service-metrics']['hpa']['cloud-area']['min-replicas'][service_id],cloud_replicas)
             command = f'kubectl --context {gma_config['spec']['cloud-area']['context']} -n {namespace} scale {workload_type} {workload_name} --replicas {int(cloud_replicas)}'
@@ -468,27 +477,6 @@ def net_probing():
     status['service-metrics']['network']['cloud-edge-bps']['value'] = measured_cloud_edge_bps
     status['service-metrics']['network']['cloud-edge-bps']['last-update'] = time.time()
     
-    # Evaluate average response duration per service
-    logger.info(f"Measuring average response duration per service")
-    trials=5 # number of trials to measure the probing delay
-    for i in range(M-1):
-        rsv = int(status['service-metrics']['rs']['value'][i])
-        status['service-metrics']['rsd']['value'][i] = 0
-        params = {'duration': 0, 'size': {rsv}, 'chunk': 4096, 'url': netprobe_server_cloud}
-        for _ in range(trials):
-            try:
-                response = requests.get(f'{netprobe_server_edge}/get', params=params)
-                if response.status_code != 200:
-                    logger.error(f"HTTP GET to netprobe-server failed with status code {response.status_code}")
-                    return
-                response_json = response.json()
-                prober_time_sec = float(response_json['total_duration'])
-                status['service-metrics']['rsd']['value'][i] = status['service-metrics']['rsd']['value'][i] + prober_time_sec*1000.0
-            except Exception as e:
-                logger.error(f"An error occurred during net probing: {str(e)}")
-        status['service-metrics']['rsd']['value'][i] = status['service-metrics']['rsd']['value'][i]/trials
-        logger.info(f"Measured probing delay for {rsv} bytes: {status['service-metrics']['rsd']['value'][i]} ms")
-    status['service-metrics']['rsd']['last-update'] = time.time()
     return
 
 def parse_yaml():
@@ -637,11 +625,6 @@ def init():
     status['service-metrics']['rs']['info'] = 'Response size vector in bytes'
     status['service-metrics']['rs']['value'] = np.zeros(M,dtype=float)
     status['service-metrics']['rs']['last-update'] = 0 # last update time
-
-    status['service-metrics']['rsd'] = dict()
-    status['service-metrics']['rsd']['info'] = 'Average delay for response size vector in milliseconds'
-    status['service-metrics']['rsd']['value'] = np.zeros(M,dtype=float)
-    status['service-metrics']['rsd']['last-update'] = 0 # last update time
 
     status['service-metrics']['hpa'] = dict()
     status['service-metrics']['hpa']['cloud-area'] = dict()
@@ -920,10 +903,10 @@ class GMAStataMachine():
                 return
             else:
                 unoffload_cond2 = True
-            return
 
         if unoffload_cond1 and unoffload_cond2:
             self.next = self.unoffload_alarm
+            return
         else:
             self.next = self.camping
             logger.info(f'sleeping for {sync_period_sec} sync sec')
@@ -1068,6 +1051,7 @@ class GMAStataMachine():
     def run(self):
         self.next = self.camping
         self.next = self.unoffloading
+        
         while True:
             self.next()
 
@@ -1162,7 +1146,7 @@ if __name__ == "__main__":
     for area in areas:
         cluster[area] = gma_config['spec'][area]['cluster']
     
-    update_and_check_HPA()
-    update_ingress_delay_buckets()
     # Run the state machine
+    update_metrics()
+    update_and_check_HPA()
     sm = GMAStataMachine()

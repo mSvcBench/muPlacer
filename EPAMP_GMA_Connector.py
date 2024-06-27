@@ -20,7 +20,6 @@ def Connector(GMA_params):
     Fcm = GMA_params['fcm']['value']
     lambda_val = GMA_params['service-lambda']['value'][M-1]
     Rs = GMA_params['rs']['value']
-    Rsd = GMA_params['rsd']['value']/1000.0
     if 'di' in GMA_params:
         Di = GMA_params['di']['value']
     else:
@@ -61,7 +60,6 @@ def Connector(GMA_params):
         'M': M,
         'lambd': lambda_val,
         'Rs': Rs,
-        'Rsd': Rsd,
         'Di': Di,
         'delay_decrease_target': delay_decrease_target,
         'delay_increase_target': delay_increase_target,

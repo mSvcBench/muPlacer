@@ -3,6 +3,7 @@ N_THREADS = '1'
 environ['OMP_NUM_THREADS'] = N_THREADS
 
 import numpy as np
+import utils
 from numpy import inf
 from computeNc import computeNc
 from buildFci import buildFci
@@ -14,8 +15,8 @@ def mfu_heuristic(params):
     ## VARIABLES INITIALIZATION ##
         
     S_edge_old = params['S_edge_b']
-    Rcpu_old = params['Rcpu']
-    Rmem_old = params['Rmem']
+    Acpu_old = params['Acpu']
+    Amem_old = params['Amem']
     Fcm = params['Fcm']
     M = params['M']
     lambd = params['lambd']
@@ -27,24 +28,19 @@ def mfu_heuristic(params):
     Ne = params['Ne']
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
+    Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*M)
+    Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*M)
 
-    Cost_cpu_edge = 1
-    Cost_mem_edge = 1
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to to include edge and cloud
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old))
     S_b_old[M-1] = 0  # User is not in the cloud
-    Rcpu_edge_old_sum = np.sum(S_b_old[M:] * Rcpu_old[M:]) # Total CPU requested by instances in the edge
-    Rmem_edge_old_sum = np.sum(S_b_old[M:] * Rmem_old[M:]) # Total Memory requested by instances in the edge
-    Cost_cpu_edge_old_sum = Cost_cpu_edge * Rcpu_edge_old_sum # Total CPU cost
-    Cost_mem_edge_old_sum = Cost_mem_edge * Rmem_edge_old_sum # Total Mem cost
-    Cost_edge_old = Cost_cpu_edge_old_sum + Cost_mem_edge_old_sum # Total cost of old state
+    Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:] ,Cost_cpu_edge, Cost_mem_edge)[0] # Total cost of old state
 
-    n_rounds = 0
-    
+
     ## COMPUTE THE DELAY OF THE OLD STATE ##
     Fci_old = np.matrix(buildFci(S_b_old, Fcm, M))
     Nci_old = computeNc(Fci_old, M, 2)
-    delay_old,_,_,_ = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)
+    delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)[0]
     Nc = computeNc(Fcm, M, 1) 
 
     delay_decrease_new = 0
@@ -54,7 +50,6 @@ def mfu_heuristic(params):
     ## OFFLOAD ##
     if params['mode'] == 'offload':
         while delay_decrease_target > delay_decrease_new:
-            n_rounds = n_rounds + 1
             Nc_max=-1
             argmax = -1
             for i in range(M-1):
@@ -64,7 +59,7 @@ def mfu_heuristic(params):
             S_b_new[argmax+M] = 1
             Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
             Nci_new = computeNc(Fci_new, M, 2)
-            delay_new,_,_,_ = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M) 
+            delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)[0] 
             delay_decrease_new = delay_old - delay_new
             if np.all(S_b_new[M:] == 1):
                 break
@@ -72,7 +67,6 @@ def mfu_heuristic(params):
     ## UNOFFLOAD  ##
     else:
         while delay_increase_target > delay_increase_new:
-            n_rounds = n_rounds + 1
             Nc_min=inf
             argmin = -1
             for i in range(M-1):
@@ -82,7 +76,7 @@ def mfu_heuristic(params):
             S_b_new[argmin+M] = 0
             Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
             Nci_new = computeNc(Fci_new, M, 2)
-            delay_new,_,_,_ = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M) 
+            delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)[0] 
             delay_increase_new = delay_new - delay_old  
             if delay_increase_new > delay_increase_target:
                     # excessive delay increase, revert and exit
@@ -91,28 +85,19 @@ def mfu_heuristic(params):
             if np.all(S_b_new[M:2*M-1] == 0):
                 # no other instance at the edge
                 break
-                
-    Rcpu_new = np.zeros(2*M)
-    Rmem_new = np.zeros(2*M)            
+ 
+    Acpu_new = np.zeros(2*M)
+    Amem_new = np.zeros(2*M)            
     if params['mode'] == 'offload':
         # compute final values
         Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
         Nci_new = computeNc(Fci_new, M, 2)
         delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
         delay_decrease_new = delay_old - delay_new
-        np.copyto(Rcpu_new,Rcpu_old) 
-        np.copyto(Rmem_new,Rmem_old) 
-        cloud_cpu_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Rcpu_old[:M]
-        cloud_mem_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Rmem_old[:M]
-        cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
-        cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
-        cloud_cpu_reduction[cloud_cpu_reduction==-inf] = 0
-        cloud_mem_reduction[cloud_mem_reduction==-inf] = 0
-        Rcpu_new[M:] = Rcpu_new[M:] + cloud_cpu_reduction # edge cpu increase
-        Rmem_new[M:] = Rmem_new[M:] + cloud_mem_reduction # edge mem increase
-        Rcpu_new[:M] = Rcpu_new[:M] - cloud_cpu_reduction # cloud cpu decrease
-        Rmem_new[:M] = Rmem_new[:M] - cloud_mem_reduction     # cloud mem decrease
-        Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
+        np.copyto(Acpu_new,Acpu_old) 
+        np.copyto(Amem_new,Amem_old)
+        utils.computeResourceShift(Acpu_new, Amem_new, Nci_new, Acpu_old, Amem_old, Nci_old) 
+        Cost_edge_new = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
         cost_increase_new = Cost_edge_new - Cost_edge_old 
 
         result = dict()
@@ -120,9 +105,8 @@ def mfu_heuristic(params):
         result['Cost'] = Cost_edge_new
         result['delay_decrease'] = delay_decrease_new
         result['cost_increase'] = cost_increase_new
-        result['n_rounds'] = n_rounds
-        result['Rcpu'] = Rcpu_new
-        result['Rmem'] = Rmem_new
+        result['Acpu'] = Acpu_new
+        result['Amem'] = Amem_new
         result['Fci'] = Fci_new
         result['Nci'] = Nci_new
         result['delay'] = delay_new
@@ -135,29 +119,19 @@ def mfu_heuristic(params):
         Nci_new = computeNc(Fci_new, M, 2)
         delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
         delay_increase_new = delay_new - delay_old
-        np.copyto(Rcpu_new,Rcpu_old) 
-        np.copyto(Rmem_new,Rmem_old) 
-        edge_cpu_reduction = (1-Nci_new[M:]/Nci_old[M:]) * Rcpu_old[M:]
-        edge_mem_reduction = (1-Nci_new[M:]/Nci_old[M:]) * Rmem_old[M:]
-        edge_cpu_reduction[np.isnan(edge_cpu_reduction)] = 0
-        edge_mem_reduction[np.isnan(edge_mem_reduction)] = 0
-        edge_cpu_reduction[edge_cpu_reduction==-inf] = 0
-        edge_mem_reduction[edge_mem_reduction==-inf] = 0
-        Rcpu_new[:M] = Rcpu_new[:M] + edge_cpu_reduction # cloud cpu increase
-        Rmem_new[:M] = Rmem_new[:M] + edge_mem_reduction # cloud mem increase
-        Rcpu_new[M:] = Rcpu_new[M:] - edge_cpu_reduction # edge cpu decrease
-        Rmem_new[M:] = Rmem_new[M:] - edge_mem_reduction # edge mem decrease
-        Cost_edge_new = Cost_cpu_edge * np.sum(Rcpu_new[M:]) + Cost_mem_edge * np.sum(Rmem_new[M:]) # Total edge cost
-        cost_decrease_new = Cost_edge_old - Cost_edge_new 
+        np.copyto(Acpu_new,Acpu_old) 
+        np.copyto(Amem_new,Amem_old) 
+        utils.computeResourceShift(Acpu_new, Amem_new, Nci_new, Acpu_old, Amem_old, Nci_old) 
+        Cost_edge_new = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
+        cost_decrease_new = Cost_edge_old - Cost_edge_new
 
         result = dict()
         result['S_edge_b'] = S_b_new[M:].astype(int)
         result['Cost'] = Cost_edge_new
         result['delay_increase'] = delay_increase_new
         result['cost_decrease'] = cost_decrease_new
-        result['n_rounds'] = n_rounds
-        result['Rcpu'] = Rcpu_new
-        result['Rmem'] = Rmem_new
+        result['Acpu'] = Acpu_new
+        result['Amem'] = Amem_new
         result['Fci'] = Fci_new
         result['Nci'] = Nci_new
         result['delay'] = delay_new
@@ -189,9 +163,9 @@ if __name__ == "__main__":
 
     Fcm_range_min = 0.1 # min value of microservice call frequency 
     Fcm_range_max = 0.5 # max value of microservice call frequency 
-    Rcpu_quota = 0.5    # CPU quota
-    Rcpu_range_min = 1  # min value of requested CPU quota per instance-set
-    Rcpu_range_max = 32 # max value of requested CPU quota per instance-set
+    Acpu_quota = 0.5    # CPU quota
+    Acpu_range_min = 1  # min value of requested CPU quota per instance-set
+    Acpu_range_max = 32 # max value of requested CPU quota per instance-set
     Rs_range_min = 1000 # min value of response size in bytes
     Rs_range_max = 50000   # max of response size in bytes
     
@@ -229,33 +203,33 @@ if __name__ == "__main__":
     S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
     S_b[M-1] = 0  # User is not in the cloud
     # set random values for CPU and memory requests
-    Rcpu_void = (np.random.randint(32,size=M)+1) * Rcpu_quota
-    Rcpu_void[M-1]=0   # user has no CPU request
-    Rcpu_void = np.concatenate((Rcpu_void, np.zeros(M))) # (2*M,) vector of CPU requests for void state
-    Rmem_void = np.zeros(2*M)
+    Acpu_void = (np.random.randint(32,size=M)+1) * Acpu_quota
+    Acpu_void[M-1]=0   # user has no CPU request
+    Acpu_void = np.concatenate((Acpu_void, np.zeros(M))) # (2*M,) vector of CPU requests for void state
+    Amem_void = np.zeros(2*M)
     S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
     S_b_void[M-1] = 0  # User is not in the cloud
     S_b_void[2*M-1] = 1  # User is in the cloud
     Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
     Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
     
-    # compute Rcpu and Rmem for the current state
+    # compute Acpu and Amem for the current state
     # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
     Fci = np.matrix(buildFci(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
     Nci = computeNc(Fci, M, 2)    # number of instance call per user request of the current state
-    Rcpu = Rcpu_void.copy()
-    Rmem = Rmem_void.copy()
-    cloud_cpu_decrease = (1-Nci[:M]/Nci_void[:M]) * Rcpu_void[:M]
-    cloud_mem_decrease = (1-Nci[:M]/Nci_void[:M]) * Rmem_void[:M]
+    Acpu = Acpu_void.copy()
+    Amem = Amem_void.copy()
+    cloud_cpu_decrease = (1-Nci[:M]/Nci_void[:M]) * Acpu_void[:M]
+    cloud_mem_decrease = (1-Nci[:M]/Nci_void[:M]) * Amem_void[:M]
     cloud_cpu_decrease[np.isnan(cloud_cpu_decrease)] = 0
     cloud_mem_decrease[np.isnan(cloud_mem_decrease)] = 0
     cloud_cpu_decrease[cloud_cpu_decrease==-inf] = 0
     cloud_mem_decrease[cloud_mem_decrease==-inf] = 0
-    Rcpu[M:] = Rcpu[M:] + cloud_cpu_decrease # edge cpu increase
-    Rmem[M:] = Rmem[M:] + cloud_mem_decrease # edge mem increase
-    Rcpu[:M] = Rcpu[:M] - cloud_cpu_decrease # cloud cpu decrease
-    Rmem[:M] = Rmem[:M] - cloud_mem_decrease # cloud mem decrease
-    Cost_edge = Cost_cpu_edge * np.sum(Rcpu[M:]) + Cost_mem_edge * np.sum(Rmem[M:]) # Total edge cost of the current state
+    Acpu[M:] = Acpu[M:] + cloud_cpu_decrease # edge cpu increase
+    Amem[M:] = Amem[M:] + cloud_mem_decrease # edge mem increase
+    Acpu[:M] = Acpu[:M] - cloud_cpu_decrease # cloud cpu decrease
+    Amem[:M] = Amem[:M] - cloud_mem_decrease # cloud mem decrease
+    Cost_edge = Cost_cpu_edge * np.sum(Acpu[M:]) + Cost_mem_edge * np.sum(Amem[M:]) # Total edge cost of the current state
 
     # set 0 random internal delay
     Di = np.zeros(2*M)
@@ -263,8 +237,8 @@ if __name__ == "__main__":
     # Call the unoffload function
     params = {
         'S_edge_b': S_edge_b,
-        'Rcpu': Rcpu,
-        'Rmem': Rmem,
+        'Acpu': Acpu,
+        'Amem': Amem,
         'Fcm': Fcm,
         'M': M,
         'lambd': lambda_val,
@@ -281,13 +255,13 @@ if __name__ == "__main__":
 
     result = mfu_heuristic(params)
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
-    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
 
     # Call the unoffload function
     params = {
         'S_edge_b': result['S_edge_b'],
-        'Rcpu': result['Rcpu'],
-        'Rmem': result['Rmem'],
+        'Acpu': result['Acpu'],
+        'Amem': result['Amem'],
         'Fcm': Fcm,
         'M': M,
         'lambd': lambda_val,
@@ -303,4 +277,4 @@ if __name__ == "__main__":
 
     result = mfu_heuristic(params)
     print(f"Result for unoffload:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
-    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}, rounds = {result['n_rounds']}")
+    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}")

@@ -7,13 +7,10 @@ import numpy as np
 import networkx as nx
 from computeNc import computeNc
 from buildFci import buildFci
-from S2id import S2id
-from id2S import id2S
 from numpy import inf
 from computeDTot import computeDTot
 import logging
 import sys
-import argparse
 import utils
 
 
@@ -282,7 +279,6 @@ def offload(params):
     logger.info(f"++++++++++++++++++++++++++++++")
     
     # compute final values
-    n_rounds = 1
     Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
     Nci_new = computeNc(Fci_new, M, 2)
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
@@ -298,7 +294,6 @@ def offload(params):
     result_edge['Cost'] = Cost_edge_new
     result_edge['delay_decrease'] = delay_decrease_new
     result_edge['cost_increase'] = cost_increase_new
-    result_edge['n_rounds'] = n_rounds
     result_edge['Acpu'] = Acpu_new
     result_edge['Amem'] = Amem_new
     result_edge['Fci'] = Fci_new
