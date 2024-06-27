@@ -25,16 +25,21 @@ def update_acpu():
     now = time.time()
 
     services=status['service-info']
-    # clean the acpu values
-    for area in areas:
-        status['service-metrics']['acpu'][area]['value'] = np.zeros(M, dtype=float)
-        status['service-metrics']['acpu'][area]['last-update'] = now
-
+    
     # update values
     for area in areas:
         pod_regex = status['global-regex'][area]['pod']
         query_cpu = f'sum by (pod) (rate(container_cpu_usage_seconds_total{{cluster="{cluster[area]}",namespace="{namespace}",pod=~"{pod_regex}",container!="istio-proxy",container!=""}}[{query_period_str}]))'
-        query_results = prom_client.custom_query(query=query_cpu)
+        try:
+            query_results = prom_client.custom_query(query=query_cpu)
+        except PrometheusApiClientException as e:
+            logger.error(f"Prometheus query exception for query {query_cpu}: {str(e)}")
+            return
+        
+        # clean the acpu values
+        status['service-metrics']['acpu'][area]['value'] = np.zeros(M, dtype=float)
+        status['service-metrics']['acpu'][area]['last-update'] = now
+        
         if query_results:
             for result in query_results:
                 for service_name in services:
@@ -54,16 +59,19 @@ def update_amem():
     now = time.time()
 
     services=status['service-info']
-    # clean the amem values
-    for area in areas:
-        status['service-metrics']['amem'][area]['value'] = np.zeros(M, dtype=float)
-        status['service-metrics']['amem'][area]['last-update'] = now
     
     # update values
     for area in areas:
         pod_regex = status['global-regex'][area]['pod']
         query_mem = f'sum by (pod) (container_memory_usage_bytes{{cluster="{cluster[area]}", namespace="{namespace}",pod=~"{pod_regex}",container!="istio-proxy",container!=""}})'
-        query_results = prom_client.custom_query(query=query_mem)
+        try:
+            query_results = prom_client.custom_query(query=query_mem)
+        except PrometheusApiClientException as e:
+            logger.error(f"Prometheus query exception for query {query_mem}: {str(e)}")
+            return
+        
+        status['service-metrics']['amem'][area]['value'] = np.zeros(M, dtype=float)
+        status['service-metrics']['amem'][area]['last-update'] = now
         if query_results:
             for result in query_results:
                 for service_name in services:
@@ -82,14 +90,18 @@ def update_ingress_lambda():
 
     now = time.time()
 
-    #clean ingress lambda values
-    status['service-metrics']['service-lambda']['value'][M-1] = 0 # M-1 is the index of the istio-ingress in the global lambda vector
-    status['service-metrics']['service-lambda']['last-update'] = now
- 
     # update lambda values
     destination_app_regex = "|".join(status['service-info'].keys())
     query_lambda = f'sum by (source_app) (rate(istio_requests_total{{cluster="{cluster['edge-area']}", namespace="{namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="destination", response_code="200"}}[{query_period_str}]))'
-    query_result = prom_client.custom_query(query=query_lambda)
+    try:
+        query_result = prom_client.custom_query(query=query_lambda)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {query_lambda}: {str(e)}")
+        return
+    
+    #clean ingress lambda values
+    status['service-metrics']['service-lambda']['value'][M-1] = 0 # M-1 is the index of the istio-ingress in the global lambda vector
+    status['service-metrics']['service-lambda']['last-update'] = now
     
     if query_result:
         for result in query_result:
@@ -98,7 +110,7 @@ def update_ingress_lambda():
             else:
                 value = float(result["value"][1])
             if status['service-metrics']['service-lambda']['value'][M-1] != 0:
-                logger.error(f"Multiple results for the lambda query {query_lambda} and service {edge_istio_ingress_app}")
+                logger.critical(f"Multiple results for the lambda query {query_lambda} and service {edge_istio_ingress_app}")
                 exit(1)
             status['service-metrics']['service-lambda']['value'][M-1] = value # M-1 is the index of the istio-ingress in the global lambda vector
             break
@@ -116,15 +128,20 @@ def update_Rs():
         logger.info(f"Lambda value for the istio-ingress is 0, skipping Rs update")
         return
 
-    # clean Rs values
-    status['service-metrics']['rs']['value'] = np.zeros(M, dtype=float)
-    status['service-metrics']['rs']['last-update'] = now
-
     # update Rs values
     destination_app_regex = "|".join(status['service-info'].keys())
     cluster_regex = cluster['cloud-area']+"|"+cluster['edge-area'] 
     query_Rs = f'sum by (destination_app) (increase(istio_response_bytes_sum{{cluster=~"{cluster_regex}",namespace="{namespace}", response_code="200", destination_app=~"{destination_app_regex}", reporter="destination"}}[{query_period_str}]))/sum by (destination_app) (increase(istio_response_bytes_count{{cluster=~"{cluster_regex}",namespace="{namespace}", response_code="200", destination_app=~"{destination_app_regex}", reporter="destination"}}[{query_period_str}]))'
-    r1 = prom_client.custom_query(query=query_Rs)
+    try:
+        r1 = prom_client.custom_query(query=query_Rs)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {query_Rs}: {str(e)}")
+        return
+    
+    # clean Rs values
+    status['service-metrics']['rs']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['rs']['last-update'] = now
+    
     if r1:
         for result in r1:
             service_name = result["metric"]["destination_app"]
@@ -135,11 +152,50 @@ def update_Rs():
                 else:
                     value = float(result["value"][1])
                 if status['service-metrics']['rs']['value'][service['id']] != 0:
-                    logger.error(f"Multiple results for the Rs query {query_Rs} and service {service_name}")
+                    logger.critical(f"Multiple results for the Rs query {query_Rs} and service {service_name}")
                     exit(1)
                 status['service-metrics']['rs']['value'][service['id']] = value
                 status['service-metrics']['rs']['last-update'] = now
     return
+
+def update_resource_scaling():
+    global gma_config, prom_client, metrics
+    
+    logger.info(f"Update cloud to edge resource scaling")
+
+    now = time.time()
+
+    edge_workload_regex = status['global-regex']['edge-area']['workload']+f'|{edge_istio_ingress_app}'
+    cloud_workload_regex = status['global-regex']['cloud-area']['workload']
+
+    if status['service-metrics']['service-lambda']['value'][M-1] == 0:
+        logger.info(f"Lambda value for the istio-ingress is 0, skipping resource scaling update")
+        return
+
+    # update lambda and Fcm values
+    resource_scaling_query = f'sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}",source_workload=~"{edge_workload_regex}",reporter="destination"}}[{query_period_str}])) / sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}", reporter="destination"}}[{query_period_str}]))'
+    try:
+        r = prom_client.custom_query(query=resource_scaling_query)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {resource_scaling_query}: {str(e)}")
+    
+    # clean rsource scaling values
+    status['service-metrics']['resource-scaling']['value'] = np.ones(M,dtype=float)*default_resource_scaling
+    status['service-metrics']['resource-scaling']['last-update'] = now
+    services=status['service-info']
+    for result in r:
+        for service_name in services:
+                    service=services[service_name]
+                    if re.search(service['regex']['cloud-area']['workload']['regex'], result['metric']['destination_workload'], re.IGNORECASE):
+                        if result["value"][1]=="NaN":
+                            value = 0
+                        else:
+                            value = float(result["value"][1])
+                        if status['service-metrics']['resource-scaling']['value'][service['id']] != default_resource_scaling:
+                            logger.critical(f"Multiple results for the resource scaling query and service {service_name}")
+                            exit(1)
+                        status['service-metrics']['resource-scaling']['value'][service['id']] = value
+                        break
 
 def update_Fcm_and_lambda():
     global gma_config, prom_client, metrics
@@ -152,20 +208,29 @@ def update_Fcm_and_lambda():
         logger.info(f"Lambda value for the istio-ingress is 0, skipping Fcm and lambda update")
         return
 
-    # clean lambda and Fcm values
-    status['service-metrics']['fcm']['value'] = np.zeros((M,M),dtype=float)
-    status['service-metrics']['fcm']['last-update'] = now
-    status['service-metrics']['service-lambda']['value'][:M-1] = 0 # M-1 is the index of the istio-ingress in the global lambda vector and this function does not update the lambda of the istio-ingress due to the reporter="destination" filter. update_ingress_lambda() function is responsible for that.
-    status['service-metrics']['service-lambda']['last-update'] = now
-
     # update lambda and Fcm values
     destination_app_regex = "|".join(status['service-info'].keys())
     cluster_regex = cluster['cloud-area']+"|"+cluster['edge-area']
     source_app_regex = edge_istio_ingress_app+"|"+destination_app_regex
     fcm_query_num=f'sum by (source_app,destination_app) (rate(istio_requests_total{{cluster=~"{cluster_regex}",namespace="{namespace}",source_app=~"{source_app_regex}",destination_app=~"{destination_app_regex}",reporter="destination",response_code="200"}}[{query_period_str}])) '
     lambda_query=f'sum by (destination_app) (rate(istio_requests_total{{cluster=~"{cluster_regex}",namespace="{namespace}",source_app=~"{source_app_regex}",destination_app=~"{destination_app_regex}",reporter="destination",response_code="200"}}[{query_period_str}])) '
-    r = prom_client.custom_query(query=lambda_query)
-    r2 = prom_client.custom_query(query=fcm_query_num)
+    try:
+        r = prom_client.custom_query(query=lambda_query)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {lambda_query}: {str(e)}")
+        return
+    try:
+        r2 = prom_client.custom_query(query=fcm_query_num)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {fcm_query_num}: {str(e)}")
+        return
+    
+    # clean lambda and Fcm values
+    status['service-metrics']['fcm']['value'] = np.zeros((M,M),dtype=float)
+    status['service-metrics']['fcm']['last-update'] = now
+    status['service-metrics']['service-lambda']['value'][:M-1] = 0 # M-1 is the index of the istio-ingress in the global lambda vector and this function does not update the lambda of the istio-ingress due to the reporter="destination" filter. update_ingress_lambda() function is responsible for that.
+    status['service-metrics']['service-lambda']['last-update'] = now
+    
     for result in r:
         destination_service_name = result["metric"]["destination_app"]
         if destination_service_name in status['service-info']:
@@ -175,7 +240,7 @@ def update_Fcm_and_lambda():
             else:
                 value = float(result["value"][1])
             if status['service-metrics']['service-lambda']['value'][destination_service['id']] != 0:
-                logger.error(f"Multiple results for the lambda query {lambda_query} and service {destination_service_name}")
+                logger.critical(f"Multiple results for the lambda query {lambda_query} and service {destination_service_name}")
                 exit(1)
             status['service-metrics']['service-lambda']['value'][destination_service['id']] = value
             status['service-metrics']['service-lambda']['last-update'] = now
@@ -196,7 +261,7 @@ def update_Fcm_and_lambda():
                     value = float(result["value"][1])/status['service-metrics']['service-lambda']['value'][source_service['id']]
 
             if status['service-metrics']['fcm']['value'][source_service['id']][destination_service['id']]!=0:
-                logger.error(f"Multiple results for the Fcm query {fcm_query_num} and source service {source_service_name}, destination service {destination_service_name}")
+                logger.critical(f"Multiple results for the Fcm query {fcm_query_num} and source service {source_service_name}, destination service {destination_service_name}")
                 exit(1)
             status['service-metrics']['fcm']['value'][source_service['id']][destination_service['id']] = value
             status['service-metrics']['fcm']['last-update'] = now
@@ -210,7 +275,7 @@ def update_Fcm_and_lambda():
                 else:
                     value = float(result["value"][1])/status['service-metrics']['service-lambda']['value'][M-1]
             if status['service-metrics']['fcm']['value'][M-1][status['service-info'][destination_service_name]['id']] != 0:
-                logger.error(f"Multiple results for the Fcm query {fcm_query_num} and source service {source_service_name}, destination service {destination_service_name}")
+                logger.critical(f"Multiple results for the Fcm query {fcm_query_num} and source service {source_service_name}, destination service {destination_service_name}")
                 exit(1)
             status['service-metrics']['fcm']['value'][M-1][status['service-info'][destination_service_name]['id']] = value
             status['service-metrics']['fcm']['last-update'] = now
@@ -223,15 +288,21 @@ def update_ingress_delay():
     logger.info(f"Update delay values from istio ingress in the edge area")
 
     now = time.time()
+
+    # update the delay value
+    destination_app_regex = "|".join(status['service-info'].keys())
+    
+    query_avg_delay = f'sum by (source_app) (rate(istio_request_duration_milliseconds_sum{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200"}}[{query_period_str}])) / sum by (source_app) (rate(istio_request_duration_milliseconds_count{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200"}}[{query_period_str}]))'
+    try:
+        result_query = prom_client.custom_query(query=query_avg_delay)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {query_avg_delay}: {str(e)}")
+        return
+    
     # clean the delay value
     status['service-metrics']['edge-user-delay']['value'] = 0
     status['service-metrics']['edge-user-delay']['last-update'] = now
 
-    # update the delay value
-    destination_app_regex = "|".join(status['service-info'].keys())
-    query_avg_delay = f'sum by (source_app) (rate(istio_request_duration_milliseconds_sum{{cluster=~"{cluster['edge-area']}", namespace="{gma_config['spec']['edge-area']['istio-ingress-namespace']}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200"}}[{query_period_str}])) / sum by (source_app) (rate(istio_request_duration_milliseconds_count{{cluster=~"{cluster['edge-area']}", namespace="{gma_config['spec']['edge-area']['istio-ingress-namespace']}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200"}}[{query_period_str}]))'
-    result_query = prom_client.custom_query(query=query_avg_delay)
-    
     if result_query:
         for result in result_query:
             if result["value"][1]=="NaN":
@@ -239,7 +310,7 @@ def update_ingress_delay():
             else:
                 value=float(result["value"][1])
             if status['service-metrics']['edge-user-delay']['value'] != 0:
-                logger.error(f"Multiple results for the delay query {query_avg_delay} and service {edge_istio_ingress_app}")
+                logger.critical(f"Multiple results for the delay query {query_avg_delay} and service {edge_istio_ingress_app}")
                 exit(1)
             status['service-metrics']['edge-user-delay']['value'] = value
             status['service-metrics']['edge-user-delay']['last-update'] = now
@@ -250,6 +321,17 @@ def update_ingress_delay_buckets():
     logger.info(f"Update delay bucket values from istio ingress in the edge area")
 
     now = time.time()
+
+
+    # update the delay bucket value
+    destination_app_regex = "|".join(status['service-info'].keys())
+    query_bucket_delay = f'sum by (source_app,le) (rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200",le=~"10|25|50|100|250|500"}}[{query_period_str}])) / scalar(sum by (source_app) (rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200", le="+Inf"}}[{query_period_str}])))'
+    try:
+        result_query = prom_client.custom_query(query=query_bucket_delay)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {query_bucket_delay}: {str(e)}")
+        return
+    
     # clean the delay value
     status['service-metrics']['edge-user-delay-bucket']['value']['10'] = 0
     status['service-metrics']['edge-user-delay-bucket']['value']['25'] = 0
@@ -258,13 +340,6 @@ def update_ingress_delay_buckets():
     status['service-metrics']['edge-user-delay-bucket']['value']['250'] = 0
     status['service-metrics']['edge-user-delay-bucket']['value']['500'] = 0
     status['service-metrics']['edge-user-delay-bucket']['last-update'] = now
-
-    # update the delay value
-    destination_app_regex = "|".join(status['service-info'].keys())
-
-
-    query_bucket_delay = f'sum by (source_app,le) (rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{gma_config['spec']['edge-area']['istio-ingress-namespace']}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200",le=~"10|25|50|100|250|500"}}[{query_period_str}])) / scalar(sum by (source_app) (rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{gma_config['spec']['edge-area']['istio-ingress-namespace']}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200", le="+Inf"}}[{query_period_str}])))'
-    result_query = prom_client.custom_query(query=query_bucket_delay)
     
     if result_query:
         for result in result_query:
@@ -275,7 +350,7 @@ def update_ingress_delay_buckets():
                 else:
                     value=float(result["value"][1])
                 if status['service-metrics']['edge-user-delay-bucket']['value'][le] != 0:
-                    logger.error(f"Multiple results for the bucket delay query {query_bucket_delay}")
+                    logger.critical(f"Multiple results for the bucket delay query {query_bucket_delay}")
                     exit(1)
                 status['service-metrics']['edge-user-delay-bucket']['value'][le] = value
                 status['service-metrics']['edge-user-delay-bucket']['last-update'] = now
@@ -290,15 +365,8 @@ def update_and_check_HPA():
     services=status['service-info']
     hpa_running = False
     
-    # reset the hpa values
-    for area in areas:    
-        status['service-metrics']['hpa'][area]['current-replicas'] = np.zeros(M, dtype=int)
-        status['service-metrics']['hpa'][area]['desired-replicas'] = np.zeros(M, dtype=int)
-        status['service-metrics']['hpa'][area]['last-update'] = now
-    
-    # no check for the istio-ingress
-    status['service-metrics']['hpa']['edge-area']['current-replicas'][M-1] = 1 # the istio-ingress is always running on the edge area and the number of replicas do not matter but must be set to 1 as current-replicas is used to compute the current position of microservices
-    status['service-metrics']['hpa']['edge-area']['desired-replicas'][M-1] = 1
+
+
         
     # update the hpa values
     for area in areas:
@@ -310,6 +378,15 @@ def update_and_check_HPA():
             except kubernetes.client.rest.ApiException as e:
                 print("Exception when calling AutoscalingV1Api->list_namespaced_horizontal_pod_autoscaler: %s\n" % e)
                 return
+            
+            # clean values
+            status['service-metrics']['hpa'][area]['current-replicas'] = np.zeros(M, dtype=int)
+            status['service-metrics']['hpa'][area]['desired-replicas'] = np.zeros(M, dtype=int)
+            status['service-metrics']['hpa'][area]['last-update'] = now
+            # no check for the istio-ingress
+            status['service-metrics']['hpa']['edge-area']['current-replicas'][M-1] = 1 # the istio-ingress is always running on the edge area and the number of replicas do not matter but must be set to 1 as current-replicas is used to compute the current position of microservices
+            status['service-metrics']['hpa']['edge-area']['desired-replicas'][M-1] = 1
+            
             for hpa in api_response.items:
                 if re.search(status['global-regex'][area]['hpa'], hpa.metadata.name, re.IGNORECASE):
                     for service_name in status['service-info']:
@@ -513,7 +590,7 @@ def parse_yaml():
                             
                             # update workload information
                             if s['regex'][area]['workload']['regex'] != '':
-                                logger.error(f"Multiple deployments/statefulset/daemonset for the service {sc['name']} in the cloud-area not supported")
+                                logger.critical(f"Multiple deployments/statefulset/daemonset for the service {sc['name']} in the cloud-area not supported")
                                 exit(1)
                             if partial_yaml['kind'] == 'Deployment':
                                 s['regex'][area]['workload']['type'] == 'deployment'
@@ -541,7 +618,7 @@ def parse_yaml():
                                 status['service-metrics']['hpa'][area]['min-replicas'][s['id']] = int(partial_yaml['spec']['minReplicas'])
                                 status['service-metrics']['hpa'][area]['max-replicas'][s['id']] = int(partial_yaml['spec']['maxReplicas'])
                             else:
-                                logger.error(f"Multiple HPA for the service {sc['name']} in the cloud-area not supported")
+                                logger.critical(f"Multiple HPA for the service {sc['name']} in the cloud-area not supported")
                                 exit(1)
                             if status['global-regex'][area]['hpa'] == '':
                                 status['global-regex'][area]['hpa'] = f'{partial_yaml['metadata']['name']}'
@@ -744,6 +821,12 @@ def init():
     status['service-metrics']['cost']['cloud-area']['memory']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
     status['service-metrics']['cost']['cloud-area']['memory']['info'] = 'Cost of memory in the edge area'
 
+    status['service-metrics']['resource-scaling'] = dict()
+    status['service-metrics']['resource-scaling']['info'] = 'Cloud-to-edge resource scaling factor'
+    status['service-metrics']['resource-scaling']['value'] = np.ones(M, dtype=float) * gma_config['spec']['edge-area']['default-resource-scaling']
+    status['service-metrics']['resource-scaling']['last-update'] = 0 # last update time
+
+
     # Get the pod/deployment regex for each service
     parse_yaml()
     check_inits()
@@ -752,23 +835,23 @@ def check_inits():
     # check workload exists for any service
     for service_name in status['service-info']:
         if status['service-info'][service_name]['regex']['cloud-area']['workload']['regex'] == '':
-            logger.error(f"Workload not found for service {service_name} in the cloud-area")
+            logger.critical(f"Workload not found for service {service_name} in the cloud-area")
             exit(1)
         if status['service-info'][service_name]['regex']['edge-area']['workload']['regex'] == '':
-            logger.error(f"Workload not found for service {service_name} in the edge-area")
+            logger.critical(f"Workload not found for service {service_name} in the edge-area")
             exit(1)
     # check workloads for cloud area and edge have the same type
     for service_name in status['service-info']:
         if status['service-info'][service_name]['regex']['cloud-area']['workload']['type'] != status['service-info'][service_name]['regex']['edge-area']['workload']['type']:
-            logger.error(f"Workload type for service {service_name} in the cloud-area and edge-area are different")
+            logger.critical(f"Workload type for service {service_name} in the cloud-area and edge-area are different")
             exit(1)
     # check hpa exists for any service
     for service_name in status['service-info']:
         if status['service-info'][service_name]['regex']['cloud-area']['hpa'] == '':
-            logger.error(f"HPA not found for service {service_name} in the cloud-area")
+            logger.critical(f"HPA not found for service {service_name} in the cloud-area")
             exit(1)
         if status['service-info'][service_name]['regex']['edge-area']['hpa'] == '':
-            logger.error(f"HPA not found for service {service_name} in the edge-area")
+            logger.critical(f"HPA not found for service {service_name} in the edge-area")
             exit(1)
     #TODO check the node of the cluster have different topology labels
 
@@ -970,8 +1053,8 @@ class GMAStataMachine():
             logger.info('Avg-driven offloading')
         
         offload_parameters = status['service-metrics'].copy()
-        offload_parameters['acpu']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * offload_parameters['acpu']['cloud-area']['value'] # scaling the cloud cpu resources used by requests from the edge area
-        offload_parameters['amem']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * offload_parameters['amem']['cloud-area']['value'] # scaling the cloud memory resources used by requests from the edge area
+        offload_parameters['acpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['acpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
+        offload_parameters['amem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['amem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
         
         if offload_type == 'avg-driven':
             offload_parameters['edge-user-target-delay']['value'] = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
@@ -987,8 +1070,8 @@ class GMAStataMachine():
             offload_parameters['epamp']['locked'] = gma_config['spec']['epamp']['locked']
         if 'no-caching' in gma_config['spec']['epamp']:
             offload_parameters['epamp']['no-caching'] = gma_config['spec']['epamp']['no-caching']
-        if 'safe-mode' in gma_config['spec']['epamp']:
-            offload_parameters['epamp']['max-added-dp'] = 1 if gma_config['spec']['epamp']['safe-mode'] else 0
+        if 'offload-speed' in gma_config['spec']['epamp']:
+            offload_parameters['epamp']['max-added-dp'] = gma_config['spec']['epamp']['offload-speed']
 
         logger.info(f"Offloading with target delay reduction {offload_parameters['edge-user-delay']['value']-offload_parameters['edge-user-target-delay']['value']}ms ")
         # offloading logic
@@ -1033,8 +1116,8 @@ class GMAStataMachine():
             unoffload_parameters['epamp']['locked'] = gma_config['spec']['epamp']['locked']
         if 'no-caching' in gma_config['spec']['epamp']:
             unoffload_parameters['epamp']['no_caching'] = gma_config['spec']['epamp']['no-caching']
-        if 'safe-mode' in gma_config['spec']['epamp']:
-            unoffload_parameters['epamp']['min-added-dp'] = -1 if gma_config['spec']['epamp']['safe-mode'] else 0
+        if 'unoffload-speed' in gma_config['spec']['epamp']:
+            unoffload_parameters['epamp']['min-added-dp'] = -gma_config['spec']['epamp']['unoffload-speed']
         
         logger.info(f"Unoffloading with target delay increase {unoffload_parameters['edge-user-target-delay']['value']-unoffload_parameters['edge-user-delay']['value']}ms ")
         # unoffloading logic
@@ -1050,8 +1133,7 @@ class GMAStataMachine():
     
     def run(self):
         self.next = self.camping
-        self.next = self.unoffloading
-        
+        self.next = self.offloading
         while True:
             self.next()
 
@@ -1092,10 +1174,10 @@ if __name__ == "__main__":
         with open(args.configfile, 'r') as file:
             yaml_data = yaml.safe_load(file)
     except FileNotFoundError:
-        logger.error(f"Config file not found: {args.configfile}")
+        logger.critical(f"Config file not found: {args.configfile}")
         sys.exit(1)
     except yaml.YAMLError as exc:
-        logger.error(f"Error in configuration file: {exc}")
+        logger.critical(f"Error in configuration file: {exc}")
         sys.exit(1)
     
     # Initialize metrics dict and service to id mapping
@@ -1121,7 +1203,7 @@ if __name__ == "__main__":
     try:
         prom_client = PrometheusConnect(url=gma_config['spec']['prometheus-url'], disable_ssl=True)
     except PrometheusApiClientException:
-        logger.error(f"Error connecting to Prometheus server: {gma_config['spec']['prometheus-url']}")
+        logger.critical(f"Error connecting to Prometheus server: {gma_config['spec']['prometheus-url']}")
         sys.exit(1)
 
     # Initialize the microservice metrics dictionary
@@ -1138,15 +1220,18 @@ if __name__ == "__main__":
     offload_delay_bucket_threshold =  float(gma_config['spec']['offload-delay-bucket-threshold'])
     unoffload_delay_bucket_threshold =  float(gma_config['spec']['unoffload-delay-bucket-threshold'])
     reference_bucket = str(time_to_ms_converter(gma_config['spec']['reference-bucket']))
-
+    default_resource_scaling = gma_config['spec']['edge-area']['default-resource-scaling']
     M =  status['service-metrics']['n-services']  # number of microservices
-    edge_istio_ingress_app = gma_config['spec']['edge-area']['istio-ingress-source-app']
+    edge_istio_ingress_app = gma_config['spec']['edge-area']['istio']['istio-ingress-source-app']
+    edge_istio_ingress_namespace = gma_config['spec']['edge-area']['istio']['istio-ingress-namespace']
     namespace = gma_config['spec']['namespace']
     cluster=dict()
     for area in areas:
         cluster[area] = gma_config['spec'][area]['cluster']
     
     # Run the state machine
-    update_metrics()
+    # update_metrics()
     update_and_check_HPA()
+    update_ingress_lambda()
+    update_resource_scaling()
     sm = GMAStataMachine()

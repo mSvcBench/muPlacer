@@ -21,15 +21,23 @@ spec:
     cost:
       cpu: 0  # cost of cpu unit in  the cloud area
       memory: 0 # cost of mem unit (GB) in  the cloud area
+    istio:
+      istio-ingress-source-app: istio-ingress # source app label of the istio-ingress in the edge area
+      istio-ingress-namespace: istio-ingress  # namespace of the istio-ingress in the edge area
+      istio-eastwest-source-app: istio-eastwestgateway # source app label of the istio eastwestgateway in the edge area
+      istio-eastwest-namespace: istio-system  # namespace of the istio eastwestgateway in the edge area
   edge-area:
     cluster: "" # cluster name used for prometheus query edge area
     context: liqo-admin@kubernetes # kubernetec context used to control edge area
     cost:
       cpu: 1 # cost of cpu unit in  the edge area
       memory: 0 # cost of mem unit (GB) in  the edge area
-    istio-ingress-source-app: istio-ingress # source app label of the istio-ingress in the edge area
-    istio-ingress-namespace: istio-ingress  # namespace of the istio-ingress in the edge area
-    resource-scaling: 1 # resource scaling factor from the cloud to the edge. CPU and MEM used by a microservice in the cloud will be scaled of this factor when deployed in the edge
+    istio:
+      istio-ingress-source-app: istio-ingress # source app label of the istio-ingress in the edge area
+      istio-ingress-namespace: istio-ingress  # namespace of the istio-ingress in the edge area
+      istio-eastwest-source-app: istio-eastwestgateway # source app label of the istio eastwestgateway in the edge area
+      istio-eastwest-namespace: istio-system  # namespace of the istio eastwestgateway in the edge area
+    default-resource-scaling: 1 # default resource scaling factor from the cloud to the edge. CPU and MEM used by a microservice in the cloud will be scaled of this factor when deployed in the edge and there is no available measurement
   network:
     #netprober-server-edge: "" # netprober server in the edge area
     #netprober-server-cloud: "" # netprober server in the cloud area
@@ -40,7 +48,8 @@ spec:
     edge-cloud-rtt: 100ms # static RTT between edge and cloud
   epamp:
     u-limit: 2  # upgrade limit optimization paramenter of EPAMP
-    safe-mode : true  # safe mode optimization provides that EPAMP will add or remove only a single dependency path at a time
+    offload-speed : 2  # max number of added microservices in the edge area per optimization step equal to offload-speed * u-limit
+    unoffload-speed : 1 # max number of removed microservices from the edge area per optimization step equal to unoffload-speed * u-limit 
     # locked: # locked services are not moved by EPAMP
 
   explicit-service-id : true  # if true, the service id is explicitly defined in the yaml files and can help log understanding, otherwise the service id is computed automatically
