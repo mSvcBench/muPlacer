@@ -127,6 +127,8 @@ def offload(params):
     Acpu_temp = np.zeros(2*M)   # Acpu_temp is the temporary CPU request vector used in a greedy round
     Amem_temp = np.zeros(2*M)   # Amem_temp is the temporary Memory request vector used in a greedy round
     delay_opt = delay_old   # delay_opt is the best delay computed by a greedy round. It includes only network delays
+    Nci_new = Nci_old.copy()
+    Nci_opt = Nci_old.copy()
 
     skip_delay_increase = False    # Skip delay increase states to accelerate computation wheter possible
     locking = False if locked is None else True # avoid locking control if no microservice is locked
@@ -147,6 +149,7 @@ def offload(params):
         np.copyto(S_b_new,S_b_opt)  
         np.copyto(Acpu_new,Acpu_opt)    # Acpu_new is the new CPU request vector, Acpu_opt is the best CPU request vector computed by the previos greedy round
         np.copyto(Amem_new,Amem_opt)    # Amem_new is the new Memory request vector, Amem_opt is the best Memory request vector computed by the previos greedy round
+        np.copyto(Nci_new,Nci_opt)
         delay_new = delay_opt   # delay_new is the new delay. It includes only network delays
         Cost_edge_new  = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the new configuration
         logger.info(f'new state {np.argwhere(S_b_new[M:]==1).squeeze()}, delay decrease {1000*(delay_old-delay_new)}, cost {Cost_edge_new}, cost increase / delay decrease {cost_increase_opt/(1000*delay_decrease_opt)}')
@@ -203,9 +206,11 @@ def offload(params):
             
             # weighting
             r_delay_decrease = delay_decrease_target - (delay_old-delay_new) # residul delay to decrease wrt previous conf
-            if delay_decrease_temp < 0:
+            if delay_decrease_temp <= 0:
                 # addition provides delay increase,  weighting penalize both cost and delay increase
-                w = 1e6 - cost_increase_temp * 1000 * delay_decrease_temp   # 1000 usedto move delay in the ms scale
+                edge_freq_increase = np.sum(Nci_temp[M:])-np.sum(Nci_new[M:])
+                w = 1e6 + cost_increase_temp/edge_freq_increase
+                #w = 1e6 - cost_increase_temp * 1000 * delay_decrease_temp   # 1000 usedto move delay in the ms scale
             else:
                 w = cost_increase_temp /  max(min(1000*delay_decrease_temp, 1000*r_delay_decrease),1e-3) # 1e-3 used to avoid division by zero
                 skip_delay_increase = True
@@ -217,6 +222,7 @@ def offload(params):
                 np.copyto(S_b_opt,S_b_temp)
                 np.copyto(Acpu_opt,Acpu_temp)
                 np.copyto(Amem_opt,Amem_temp)
+                np.copyto(Nci_opt,Nci_temp)
                 cost_increase_opt = cost_increase_temp
                 delay_decrease_opt = delay_decrease_temp
                 delay_opt = delay_temp
