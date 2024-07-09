@@ -42,8 +42,6 @@ def offload(params):
     # locked(M,) vector of binary values indicating  microservices that can not change state
     # u_limit maximum number of microservices upgrade to consider in the greedy iteraction (lower reduce optimality but increase computaiton speed)
     # no_evolutionary if True, disable the removal of microservices from the edge to reduce cost
-    # max_added_dp maximum number of dependency path added to the current configuration before stopping the greedy iteration
-    # min_added_dp minimum number of dependency path added to the current configuration before stopping the greedy iteration
     # Qmem (M,) memory quantum in bytes, Kubernetes memory request
     # Qcpu (M,) CPU quantum in cpu sec, Kubernetes CPU request
     
@@ -66,8 +64,6 @@ def offload(params):
     Di = params['Di'] if 'Di' in params else np.zeros(2*M)
     Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*M)
     Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*M)
-    max_added_dp = params['max_added_dp'] if 'max_added_dp' in params else 1000000
-    min_added_dp = params['min_added_dp'] if 'min_added_dp' in params else 0
     dependency_paths_b = params['dependency_paths_b'] if 'dependency_paths_b' in params else None
     locked = params['locked'] if 'locked' in params else None
     u_limit = params['u_limit'] if 'u_limit' in params else M
@@ -132,13 +128,6 @@ def offload(params):
 
     skip_delay_increase = False    # Skip delay increase states to accelerate computation wheter possible
     locking = False if locked is None else True # avoid locking control if no microservice is locked
-    cost_increase_opt=0    # cost_increase_opt is the best cost increase computed by a greedy round
-    delay_decrease_opt=1   # delay_decrease_opt is the best delay reduction computed by a greedy round
-    
-    if min_added_dp < 0:
-        # min_added_dp is the minimum number of dependency path to add before stopping the greedy iteration
-        # negative value means that the minimum is equal to the whole set of dependency path minus the input value
-        min_added_dp = len(dependency_paths_b_residual) + min_added_dp
     
     logger.info(f"ADDING PHASE")
    
@@ -155,16 +144,10 @@ def offload(params):
         logger.info(f'new state {np.argwhere(S_b_new[M:]==1).squeeze()}, cost {Cost_edge_new}, delay decrease {1000*(delay_old-delay_new)}, cost increase {Cost_edge_new-Cost_edge_old}')
         
         # Check if the delay reduction and other constraints are reached
-        added_dp = len(dependency_paths_b)-len(dependency_paths_b_residual) # number of dependency path added so far
-
-        if delay_old-delay_new >= delay_decrease_target and added_dp >= min_added_dp:
-            #delay reduction reached with minimum number of dependency paths added
-            logger.info(f'delay reduction reached with minimum number of dependency paths added')
-            break
-
-        if added_dp >= max_added_dp:
-            # max number of dependency paths to add reached
-            logger.info(f'max number of dependency paths to add reached')
+        
+        if delay_old-delay_new >= delay_decrease_target:
+            #delay reduction reached
+            logger.info(f'delay reduction reached')
             break
 
         if len(dependency_paths_b_residual) == 0:
@@ -227,8 +210,6 @@ def offload(params):
                 np.copyto(Acpu_opt,Acpu_temp)
                 np.copyto(Amem_opt,Amem_temp)
                 np.copyto(Nci_opt,Nci_temp)
-                cost_increase_opt = cost_increase_temp
-                delay_decrease_opt = delay_decrease_temp
                 delay_opt = delay_temp
                 w_min = w
         
@@ -250,7 +231,7 @@ def offload(params):
     logger.info(f"PRUNING PHASE")
     # Remove microservice from leaves to reduce cost
     S_b_old_a = np.array(S_b_old[M:]).reshape(M,1)
-    while added_dp > min_added_dp:
+    while True:
         w_opt = -1 # weight of the best removal
         leaf_best = -1 # index of the leaf microservice to remove
         S_b_temp = np.zeros(2*M)
@@ -290,7 +271,6 @@ def offload(params):
         if leaf_best>-1:
             logger.info(f'pruned microservice {leaf_best-M}, delay reduction: {delay_reduction}')
             S_b_new[leaf_best] = 0
-            added_dp = added_dp - 1
         else:
             break
             

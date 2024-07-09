@@ -159,7 +159,7 @@ def update_Rs():
     return
 
 def update_resource_scaling():
-    global gma_config, prom_client, metrics
+    global gma_config, prom_client, metrics, default_resource_scaling
     
     logger.info(f"Update cloud to edge resource scaling")
 
@@ -172,7 +172,7 @@ def update_resource_scaling():
         logger.info(f"Lambda value for the istio-ingress is 0, skipping resource scaling update")
         return
 
-    # update lambda and Fcm values
+    # update resource scaling factor
     resource_scaling_query = f'sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}",source_workload=~"{edge_workload_regex}",reporter="destination"}}[{query_period_str}])) / sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}", reporter="destination"}}[{query_period_str}]))'
     try:
         r = prom_client.custom_query(query=resource_scaling_query)
@@ -315,13 +315,45 @@ def update_ingress_delay():
             status['service-metrics']['edge-user-delay']['value'] = value
             status['service-metrics']['edge-user-delay']['last-update'] = now
 
+def update_ingress_delay_quantile():
+    global gma_config, prom_client, metrics
+
+    logger.info(f"Update delay quantile values from istio ingress in the edge area")
+
+    now = time.time()
+
+    # update the delay quantile value
+    destination_app_regex = "|".join(status['service-info'].keys())
+    
+    # weigthed average of the delay quantiles from istio-ingress to contacted microservices
+    query_quantile_delay = f'sum(histogram_quantile({delay_quantile}, sum by (destination_app,le) (rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200"}}[{query_period_str}])))*(sum by (destination_app) (rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200",le="+Inf"}}[{query_period_str}])))) / scalar(sum(rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200",le="+Inf"}}[{query_period_str}])))'
+    try:
+        result_query = prom_client.custom_query(query=query_quantile_delay)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {query_quantile_delay}: {str(e)}")
+        return
+    
+    # clean the delay value
+    status['service-metrics']['edge-user-delay-quantile']['value'] = 0
+    status['service-metrics']['edge-user-delay-quantile']['last-update'] = now
+
+    if result_query:
+        for result in result_query:
+            if result["value"][1]=="NaN":
+                value=0
+            else:
+                value=float(result["value"][1])
+            if status['service-metrics']['edge-user-delay-quantile']['value'] != 0:
+                logger.critical(f"Multiple results for the delay quantile query {query_quantile_delay}")
+                exit(1)
+            status['service-metrics']['edge-user-delay-quantile']['value'] = value
+
 def update_ingress_delay_buckets():
     global gma_config, prom_client, metrics
 
     logger.info(f"Update delay bucket values from istio ingress in the edge area")
 
     now = time.time()
-
 
     # update the delay bucket value
     destination_app_regex = "|".join(status['service-info'].keys())
@@ -365,9 +397,6 @@ def update_and_check_HPA():
     services=status['service-info']
     hpa_running = False
     
-
-
-        
     # update the hpa values
     for area in areas:
         with k8s_apiclient[area] as api_client:
@@ -411,12 +440,13 @@ def update_metrics():
     update_Rs()
     update_Fcm_and_lambda()
     update_ingress_delay()
-    update_ingress_delay_buckets()
+    update_ingress_delay_quantile()
+    update_resource_scaling()
     net_probing()
     return
 
 def apply_configuration(result_list):
-    global gma_config, status, service_id_to_name
+    global gma_config, status, service_id_to_name, gma_config
     result_cloud_area = result_list[0] # result_list[0] contains cloud-area information
     result_edge_area = result_list[1] # result_list[1] contains edge-area information
     
@@ -432,7 +462,7 @@ def apply_configuration(result_list):
         workload_name = service['regex']['cloud-area']['workload']['regex']
         workload_type = service['regex']['cloud-area']['workload']['type']
         if workload_type != 'daemonset':
-            cloud_replicas_increase = np.ceil(status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]/gma_config['spec']['edge-area']['resource-scaling']-status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
+            cloud_replicas_increase = np.ceil(status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]/status['service-metrics']['resource-scaling']['value'][service_id]-status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
             cloud_replicas = status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id]+cloud_replicas_increase
             cloud_replicas = min(status['service-metrics']['hpa']['cloud-area']['max-replicas'][service_id],cloud_replicas)
             cloud_replicas = max(status['service-metrics']['hpa']['cloud-area']['min-replicas'][service_id],cloud_replicas)
@@ -476,7 +506,7 @@ def apply_configuration(result_list):
         workload_name = service['regex']['edge-area']['workload']['regex']
         workload_type = service['regex']['edge-area']['workload']['type']
         if workload_type != 'daemonset':
-            edge_replicas = np.ceil(gma_config['spec']['edge-area']['resource-scaling'] * status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
+            edge_replicas = np.ceil(status['service-metrics']['resource-scaling']['value'][service_id] * status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
             edge_replicas = min(status['service-metrics']['hpa']['edge-area']['max-replicas'][service_id],edge_replicas)
             edge_replicas = max(status['service-metrics']['hpa']['edge-area']['min-replicas'][service_id],edge_replicas)
             command = f'kubectl --context {gma_config['spec']['edge-area']['context']} -n {namespace} scale {workload_type} {workload_name} --replicas {int(edge_replicas)}'
@@ -772,6 +802,11 @@ def init():
     status['service-metrics']['edge-user-delay']['info'] = 'Average edge user delay in ms' # last update time
     status['service-metrics']['edge-user-delay']['last-update'] = 0 # last update time
 
+    status['service-metrics']['edge-user-delay-quantile']=dict()
+    status['service-metrics']['edge-user-delay-quantile']['value'] = 0.0
+    status['service-metrics']['edge-user-delay-quantile']['info'] = 'Edge user delay quantile in ms'
+    status['service-metrics']['edge-user-delay-quantile']['last-update'] = 0 # last update time
+
     status['service-metrics']['edge-user-delay-bucket']=dict()
     status['service-metrics']['edge-user-delay-bucket']['value'] = dict() 
     status['service-metrics']['edge-user-delay-bucket']['value']['10'] = 0.0
@@ -932,10 +967,12 @@ class GMAStataMachine():
             return
 
         update_ingress_delay()
-        update_ingress_delay_buckets()
+        update_ingress_delay_quantile()
 
         # check average delay violation for offloading
-        logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']}')
+        logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']} ms')
+        logger.info(f'user delay quantile {delay_quantile}: {status['service-metrics']['edge-user-delay-quantile']['value']} ms')
+        
         if status['service-metrics']['edge-user-delay']['value'] > offload_delay_threshold_ms:
             if np.all(status['service-metrics']['hpa']['edge-area']['current-replicas'][:-1] > 0):
                 logger.warning('All microservice in the edge area, can not offload more')
@@ -947,10 +984,9 @@ class GMAStataMachine():
                 self.next = self.offload_alarm
                 return
         
-        # check bucket delay violation for offloading
-        logger.info(f'user delay bucket {reference_bucket}ms: {status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket]}')
-        if status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket] < offload_delay_bucket_threshold:
-            logger.info('Delay below offload bucket threshold')
+        # check quantile delay violation for offloading
+        if status['service-metrics']['edge-user-delay-quantile']['value'] > offload_delay_quantile_threshold_ms:
+            logger.info('Delay below offload quantile threshold')
             if np.all(status['service-metrics']['hpa']['edge-area']['current-replicas'][:-1] > 0):
                 logger.warning('All microservice in the edge area, can not offload more')
                 self.next = self.camping
@@ -961,7 +997,7 @@ class GMAStataMachine():
                 self.next = self.offload_alarm
                 return
         
-        unoffload_cond1 = False  # for unoffloading both avg and bucket condition must be satisfied
+        unoffload_cond1 = False  # for unoffloading both avg and quantile condition must be satisfied
         unoffload_cond2 = False 
         # check average delay violation for unoffloading
         if status['service-metrics']['edge-user-delay']['value'] < unoffload_delay_threshold_ms:
@@ -975,9 +1011,9 @@ class GMAStataMachine():
             else:
                 unoffload_cond1 = True
 
-        # check bucket delay violation for unoffloading
-        if status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket] > unoffload_delay_bucket_threshold:
-            logger.info('Delay above unoffload bucket threshold')
+        # check delay quantile violation for unoffloading
+        if status['service-metrics']['edge-user-delay-quantile']['value'] < unoffload_delay_quantile_threshold_ms:
+            logger.info('Delay above unoffload quantile threshold')
             if np.all(status['service-metrics']['hpa']['edge-area']['current-replicas'][:-1] == 0):
                 logger.warning('No microservice in the edge area, can not unoffload more')
                 self.next = self.camping
@@ -1006,9 +1042,9 @@ class GMAStataMachine():
                 self.next = self.hpa_running
                 return
             update_ingress_delay()
-            logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']}')
-            logger.info(f'user delay bucket {reference_bucket}ms: {status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket]}')
-            if status['service-metrics']['edge-user-delay']['value'] > offload_delay_threshold_ms or status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket] < offload_delay_bucket_threshold:
+            logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']} ms')
+            logger.info(f'user delay quantile {delay_quantile}: {status['service-metrics']['edge-user-delay-quantile']['value']} ms')
+            if status['service-metrics']['edge-user-delay']['value'] > offload_delay_threshold_ms or status['service-metrics']['edge-user-delay-quantile']['value'][delay_quantile] > offload_delay_quantile_threshold_ms:
                 logger.info(f'sleeping for {stabilizaiton_window_sec-i*stabilization_cycle_sec} stabilization sec')
                 time.sleep(stabilization_cycle_sec)
             else:
@@ -1027,9 +1063,9 @@ class GMAStataMachine():
                 self.next = self.hpa_running
                 return
             update_ingress_delay()
-            logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']}')
-            logger.info(f'user delay bucket {reference_bucket}ms: {status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket]}')
-            if status['service-metrics']['edge-user-delay']['value'] < unoffload_delay_threshold_ms and status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket] > unoffload_delay_bucket_threshold:
+            logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']} ms')
+            logger.info(f'user delay quantile {delay_quantile}: {status['service-metrics']['edge-user-delay-quantile']['value']} ms')
+            if status['service-metrics']['edge-user-delay']['value'] < unoffload_delay_threshold_ms and status['service-metrics']['edge-user-delay-quantile']['value'] < unoffload_delay_quantile_threshold_ms:
                 logger.info(f'sleeping for {stabilizaiton_window_sec-i*stabilization_cycle_sec} stabilization sec')
                 time.sleep(stabilization_cycle_sec)
             else:
@@ -1043,37 +1079,32 @@ class GMAStataMachine():
         logger.info('Entering Offloading')
         update_metrics()
 
-        offload_type = '' # bucket-driven or avg-driven
+        offload_type = '' # quantile-driven or avg-driven
 
-        if status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket] < offload_delay_bucket_threshold:
-            offload_type = 'bucket-driven'
-            logger.info('Bucket-driven offloading')
+        if status['service-metrics']['edge-user-delay-quantile']['value'] < offload_delay_quantile_threshold_ms:
+            offload_type = 'quantile-driven'
+            logger.info('quantile-driven offloading')
         else:
             offload_type = 'avg-driven'
-            logger.info('Avg-driven offloading')
+            logger.info('avg-driven offloading')
         
         offload_parameters = status['service-metrics'].copy()
         offload_parameters['acpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['acpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
         offload_parameters['amem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['amem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
         
         if offload_type == 'avg-driven':
-            offload_parameters['edge-user-target-delay']['value'] = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
+            target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
         else:
-            offload_parameters['edge-user-target-delay']['value'] = min(offload_parameters['edge-user-delay']['value'] * 0.5,unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0) # reduce the delay by half
+            target_delay_ms = offload_parameters['edge-user-delay']['value'] * delay_quantile_multiplier
+        
+        target_delay_ms = max(target_delay_ms, status['service-metrics']['edge-user-delay']['value']-max_delay_reduction_ms)
+        offload_parameters['edge-user-target-delay']['value'] = target_delay_ms
         
         offload_parameters['edge-user-target-delay']['last-update'] = time.time()
         
-        offload_parameters['epamp'] = dict()
-        if 'u-limit' in gma_config['spec']['epamp']:
-            offload_parameters['epamp']['u-limit'] = int(gma_config['spec']['epamp']['u-limit'])
-        if 'locked' in gma_config['spec']['epamp']:
-            offload_parameters['epamp']['locked'] = gma_config['spec']['epamp']['locked']
-        if 'no-caching' in gma_config['spec']['epamp']:
-            offload_parameters['epamp']['no-caching'] = gma_config['spec']['epamp']['no-caching']
-        if 'offload-speed' in gma_config['spec']['epamp']:
-            offload_parameters['epamp']['max-added-dp'] = gma_config['spec']['epamp']['offload-speed']
+        offload_parameters['optimizer'] = gma_config['spec']['optimizer'].copy()
 
-        logger.info(f"Offloading with target delay reduction {offload_parameters['edge-user-delay']['value']-offload_parameters['edge-user-target-delay']['value']}ms ")
+        logger.info(f"Offloading with target delay reduction {offload_parameters['edge-user-delay']['value']-offload_parameters['edge-user-target-delay']['value']} ms ")
         # offloading logic
         params = EPAMP_GMA_Connector.Connector(offload_parameters)
         result_list = EPAMP_offload.offload(params)
@@ -1090,34 +1121,29 @@ class GMAStataMachine():
         logger.info('Entering Unoffloading')
         update_metrics()
 
-        unoffload_type = '' # bucket-driven or avg-driven
+        unoffload_type = '' # quantile-driven or avg-driven
 
-        if status['service-metrics']['edge-user-delay-bucket']['value'][reference_bucket] > unoffload_delay_bucket_threshold:
-            unoffload_type = 'bucket-driven'
-            logger.info('Bucket-driven unoffloading')
+        if status['service-metrics']['edge-user-delay-quantile']['value'] > unoffload_delay_quantile_threshold_ms:
+            unoffload_type = 'quantile-driven'
+            logger.info('quantile-driven unoffloading')
         else:
             unoffload_type = 'avg-driven'
-            logger.info('Avg-driven unoffloading')
+            logger.info('avg-driven unoffloading')
 
         unoffload_parameters = status['service-metrics'].copy()
         unoffload_parameters['acpu']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * unoffload_parameters['acpu']['cloud-area']['value'] # scaling the cloud cpu resources used by requests from the edge area
         unoffload_parameters['amem']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * unoffload_parameters['amem']['cloud-area']['value'] # scaling the cloud memory resources used by requests from the edge area
         if unoffload_type == 'avg-driven':
-            unoffload_parameters['edge-user-target-delay']['value'] = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
+            target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
         else:
-            unoffload_parameters['edge-user-target-delay']['value'] = max(unoffload_parameters['edge-user-delay']['value'] * 2, unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0)
+            target_delay_ms = unoffload_parameters['edge-user-delay']['value'] / delay_quantile_multiplier
+        
+        target_delay_ms = min(target_delay_ms, status['service-metrics']['edge-user-delay']['value']+max_delay_increase_ms)
+        unoffload_parameters['edge-user-target-delay']['value'] = target_delay_ms
 
         unoffload_parameters['edge-user-target-delay']['last-update'] = time.time()
         
-        unoffload_parameters['epamp'] = dict()
-        if 'u-limit' in gma_config['spec']['epamp']:
-            unoffload_parameters['epamp']['u_limit'] = int(gma_config['spec']['epamp']['u-limit'])
-        if 'locked' in gma_config['spec']['epamp']:
-            unoffload_parameters['epamp']['locked'] = gma_config['spec']['epamp']['locked']
-        if 'no-caching' in gma_config['spec']['epamp']:
-            unoffload_parameters['epamp']['no_caching'] = gma_config['spec']['epamp']['no-caching']
-        if 'unoffload-speed' in gma_config['spec']['epamp']:
-            unoffload_parameters['epamp']['min-added-dp'] = -gma_config['spec']['epamp']['unoffload-speed']
+        unoffload_parameters['optimizer'] = gma_config['spec']['optimizer'].copy()
         
         logger.info(f"Unoffloading with target delay increase {unoffload_parameters['edge-user-target-delay']['value']-unoffload_parameters['edge-user-delay']['value']}ms ")
         # unoffloading logic
@@ -1133,7 +1159,6 @@ class GMAStataMachine():
     
     def run(self):
         self.next = self.camping
-        self.next = self.offloading
         while True:
             self.next()
 
@@ -1201,7 +1226,7 @@ if __name__ == "__main__":
     
     # Create a Prometheus client
     try:
-        prom_client = PrometheusConnect(url=gma_config['spec']['prometheus-url'], disable_ssl=True)
+        prom_client = PrometheusConnect(url=gma_config['spec']['telemetry']['prometheus-url'], disable_ssl=True)
     except PrometheusApiClientException:
         logger.critical(f"Error connecting to Prometheus server: {gma_config['spec']['prometheus-url']}")
         sys.exit(1)
@@ -1211,27 +1236,41 @@ if __name__ == "__main__":
     init()
 
     # global variables short-names
-    sync_period_sec = time_to_ms_converter(gma_config['spec']['sync-period'])/1000
-    query_period_str = gma_config['spec']['query-period']
+    # telemetry
+    sync_period_sec = time_to_ms_converter(gma_config['spec']['telemetry']['sync-period'])/1000
+    query_period_str = gma_config['spec']['telemetry']['query-period']
     query_period_sec = time_to_ms_converter(query_period_str)/1000
-    stabilizaiton_window_sec = time_to_ms_converter(gma_config['spec']['stabilization-window'])/1000
-    offload_delay_threshold_ms = time_to_ms_converter(gma_config['spec']['offload-delay-threshold'])
-    unoffload_delay_threshold_ms = time_to_ms_converter(gma_config['spec']['unoffload-delay-threshold'])
-    offload_delay_bucket_threshold =  float(gma_config['spec']['offload-delay-bucket-threshold'])
-    unoffload_delay_bucket_threshold =  float(gma_config['spec']['unoffload-delay-bucket-threshold'])
-    reference_bucket = str(time_to_ms_converter(gma_config['spec']['reference-bucket']))
-    default_resource_scaling = gma_config['spec']['edge-area']['default-resource-scaling']
+    stabilizaiton_window_sec = time_to_ms_converter(gma_config['spec']['telemetry']['stabilization-window'])/1000
+    
+    #slo
+    offload_delay_threshold_ms = time_to_ms_converter(gma_config['spec']['slo']['offload-delay-threshold'])
+    unoffload_delay_threshold_ms = time_to_ms_converter(gma_config['spec']['slo']['unoffload-delay-threshold'])
+    offload_delay_quantile_threshold_ms =  time_to_ms_converter(gma_config['spec']['slo']['offload-delay-quantile-threshold'])
+    unoffload_delay_quantile_threshold_ms =  time_to_ms_converter(gma_config['spec']['slo']['unoffload-delay-quantile-threshold'])
+    delay_quantile = float(gma_config['spec']['slo']['delay-quantile'])
+    default_resource_scaling = float(gma_config['spec']['edge-area']['default-resource-scaling'])
+    
+    #app
+    namespace = gma_config['spec']['app']['namespace']
     M =  status['service-metrics']['n-services']  # number of microservices
+    
+    # edge area
     edge_istio_ingress_app = gma_config['spec']['edge-area']['istio']['istio-ingress-source-app']
     edge_istio_ingress_namespace = gma_config['spec']['edge-area']['istio']['istio-ingress-namespace']
-    namespace = gma_config['spec']['namespace']
+
+    # optimizer
+    max_delay_reduction_ms = time_to_ms_converter(gma_config['spec']['optimizer']['max-delay-reduction'])
+    max_delay_increase_ms = time_to_ms_converter(gma_config['spec']['optimizer']['max-delay-increase'])
+    delay_quantile_multiplier = float(gma_config['spec']['optimizer']['delay-quantile-multiplier'])
+    
     cluster=dict()
     for area in areas:
         cluster[area] = gma_config['spec'][area]['cluster']
     
     # Run the state machine
     # update_metrics()
-    update_and_check_HPA()
+    # update_ingress_delay_quantile()
+    # update_and_check_HPA()
     update_ingress_lambda()
     update_resource_scaling()
     sm = GMAStataMachine()

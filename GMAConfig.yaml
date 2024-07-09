@@ -4,17 +4,19 @@ metadata:
   name: test-config
   namespace: edge
 spec:
-  namespace: edge # namespace of the application
-  sync-period: 30s # camping period
-  stabilization-window: 2m # stabilization window
-  query-period: 2m  # Prometheus query period, no less than 1 minute since Istio refresh every 30s
-  prometheus-url: http://160.80.223.232:30000 # Prometheus URL
-  offload-delay-threshold: 130ms # average delay threshold for avg-driven offloading
-  unoffload-delay-threshold: 100ms  # average delay threshold for avg-driven unoffloading
-  offload-delay-bucket-threshold: 0.95 # bucket probability threshold for bucket-driven offloading
-  unoffload-delay-bucket-threshold: 0.99 # bucket probability threshold for bucket-driven unoffloading
-  reference-bucket: 250ms # reference bucket for bucket-driven offloading
-  bucket-delay-multiplier: 0.5  # target delay reduction ration for buket-driven offloading. The inverse is used for bucket-driven unoffloading
+  app:
+    namespace: edge # namespace of the application
+  telemetry:
+    sync-period: 30s # camping period
+    stabilization-window: 2m # stabilization window
+    query-period: 2m  # Prometheus query period, no less than 1 minute since Istio refresh every 30s
+    prometheus-url: http://160.80.223.232:30000 # Prometheus URL
+  slo:
+    offload-delay-threshold: 150ms # average delay threshold for avg-driven offloading
+    unoffload-delay-threshold: 100ms  # average delay threshold for avg-driven unoffloading
+    offload-delay-quantile-threshold: 1000s # delay quantile threshold for quantile-driven offloading
+    unoffload-delay-quantile-threshold: 0s # delay quantile threshold threshold for quantile-driven unoffloading
+    delay-quantile: 0.90 # delay quantile used for quantile-driven offloading, e.g., 0.9 means 90% of the requests
   cloud-area:
     cluster: "" # cluster name used for prometheus query cloud area
     context: liqo-admin@kubernetes  # kubernetec context used to control cloud area
@@ -46,11 +48,13 @@ spec:
     cloud-edge-bps: 1000Mbps  # static bandwidth between cloud and edge
     edge-cloud-bps: 1000Mbps  # static bandwidth between edge and cloud   
     edge-cloud-rtt: 100ms # static RTT between edge and cloud
-  epamp:
-    u-limit: 2  # upgrade limit optimization paramenter of EPAMP
-    offload-speed : 2  # max number of added microservices in the edge area per optimization step equal to offload-speed * u-limit
-    unoffload-speed : 1 # max number of removed microservices from the edge area per optimization step equal to unoffload-speed * u-limit 
-    # locked: # locked services are not moved by EPAMP
+  optimizer:
+    epamp:
+      u-limit: 2  # upgrade limit optimization paramenter of EPAMP
+    max-delay-reduction : 50ms  # max requested delay reduction per placement action 
+    max-delay-increase : 20ms # max requested delay increase per placement action
+    delay-quantile-multiplier: 0.5  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading
+    # locked: #  services that should not be offloaded by the optimizer 
 
   explicit-service-id : true  # if true, the service id is explicitly defined in the yaml files and can help log understanding, otherwise the service id is computed automatically
   services:
@@ -58,90 +62,90 @@ spec:
       id: 0 # service id internally used
       instances:  # list of kubernetes resources running or to run in the edge and cloud area. Those in the cloud should be runned manually. Those in the edge are automatically deployed by the GMAPlacer
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s0.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s0.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s0.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s0.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s0.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s0.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s0.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s0.yaml
     - name: s1
       id: 1
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s1.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s1.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s1.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s1.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s1.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s1.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s1.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s1.yaml
     - name: s2
       id: 2
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s2.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s2.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s2.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s2.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s2.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s2.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s2.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s2.yaml
     - name: s3
       id: 3
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s3.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s3.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s3.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s3.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s3.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s3.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s3.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s3.yaml
     - name: s4
       id: 4
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s4.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s4.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s4.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s4.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s4.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s4.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s4.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s4.yaml
     - name: s5
       id: 5
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s5.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s5.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s5.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s5.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s5.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s5.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s5.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s5.yaml
     - name: s6
       id: 6
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s6.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s6.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s6.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s6.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s6.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s6.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s6.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s6.yaml
     - name: s7
       id: 7
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s7.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s7.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s7.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s7.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s7.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s7.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s7.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s7.yaml
     - name: s8 
       id: 8
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s8.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s8.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s8.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s8.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s8.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s8.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s8.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s8.yaml
     - name: s9
       id: 9
       instances: 
         cloud-yamls: 
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s9.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/cloud/hpa-mubench-01000-Deployment-s9.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s9.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s9.yaml
         edge-yamls:
-          - /Users/detti/muBench/SimulationWorkspace/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s9.yaml
-          - /Users/detti/muBench/SimulationWorkspace/hpa/edge1/hpa-mubench-01000-Deployment-s9.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s9.yaml
+          - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s9.yaml
         
