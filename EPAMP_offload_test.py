@@ -6,8 +6,10 @@ import sys
 import numpy as np
 import networkx as nx
 import utils
+import random
 from computeNc import computeNc
 from buildFci import buildFci
+
 
 
 # MAIN
@@ -16,8 +18,9 @@ def main():
 
     # Define the input variables
     np.random.seed(150271)
+
     RTT = 0.106    # RTT edge-cloud
-    M = 30 # n. microservices
+    M = 100 # n. microservices
     delay_decrease_target = 0.08    # requested delay reduction
     lambda_val = 50     # request per second
     Ne = 1e9    # bitrate cloud-edge
@@ -126,13 +129,13 @@ def main():
     result_list = offload(params)
     result=result_list[1]
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
-    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}, rounds = {result['n_rounds']}")
+    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument( '-log',
                      '--loglevel',
-                     default='warning',
+                     default='info',
                      help='Provide logging level. Example --loglevel debug, default=warning' )
 
     args = parser.parse_args()

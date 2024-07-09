@@ -43,15 +43,28 @@ def computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old):
     M = int(len(Nci_new)/2)
     np.copyto(Acpu_new,Acpu_old)
     np.copyto(Amem_new,Amem_old)
+    
     cloud_cpu_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Acpu_old[:M]
     cloud_mem_reduction = (1-Nci_new[:M]/Nci_old[:M]) * Amem_old[:M]
+    #cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
+    #cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
+    
+    edge_cpu_reduction = (1-Nci_old[:M]/Nci_new[:M]) * Acpu_old[M:]
+    edge_mem_reduction = (1-Nci_old[:M]/Nci_new[:M]) * Amem_old[M:]
+    #edge_cpu_reduction[np.isnan(edge_cpu_reduction)] = 0
+    #edge_mem_reduction[np.isnan(edge_mem_reduction)] = 0
+    
+    no_cloud_cost1 = np.argwhere(cloud_cpu_reduction==-np.inf)
+    no_cloud_cost2 = np.argwhere(np.isnan(cloud_cpu_reduction))
+    no_cloud_cost = np.concatenate((no_cloud_cost1,no_cloud_cost2))
+    cloud_cpu_reduction[no_cloud_cost] = -edge_cpu_reduction[no_cloud_cost]
+    cloud_mem_reduction[no_cloud_cost] = -edge_mem_reduction[no_cloud_cost]
     cloud_cpu_reduction[np.isnan(cloud_cpu_reduction)] = 0
     cloud_mem_reduction[np.isnan(cloud_mem_reduction)] = 0
-    cloud_cpu_reduction[cloud_cpu_reduction==-np.inf] = 0
-    cloud_mem_reduction[cloud_mem_reduction==-np.inf] = 0
-    Acpu_new[M:] = Acpu_new[M:] + cloud_cpu_reduction # edge cpu increase
-    Amem_new[M:] = Amem_new[M:] + cloud_mem_reduction # edge mem increase
-    Acpu_new[:M] = Acpu_new[:M] - cloud_cpu_reduction # cloud cpu decrease
-    Amem_new[:M] = Amem_new[:M] - cloud_mem_reduction # cloud mem decrease
+    
+    Acpu_new[M:] = np.round(Acpu_new[M:] + cloud_cpu_reduction,3) # edge cpu increase
+    Amem_new[M:] = np.round(Amem_new[M:] + cloud_mem_reduction,3) # edge mem increase
+    Acpu_new[:M] = np.round(Acpu_new[:M] - cloud_cpu_reduction,3) # cloud cpu decrease
+    Amem_new[:M] = np.round(Amem_new[:M] - cloud_mem_reduction,3) # cloud mem decrease
 
     return Acpu_new, Amem_new
