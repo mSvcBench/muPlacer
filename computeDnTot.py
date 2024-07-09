@@ -14,7 +14,7 @@ def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
     # M : number of microservices
     # Rsd : duration of cloud edge data transfer for Rs
 
-    max_delay = 1e6 # max delay used to avoid inf problem during optimization
+    max_delay = 1e5 # max delay used to avoid inf problem during optimization
     MN = 2*M  # edge+cloud microservice instance-sets
     Tnce = 0  # Inizialization of array for volume of cloud-edge traffic
     S_edge_id = np.argwhere(S[M:]==1).flatten()
@@ -24,14 +24,21 @@ def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
             Tnce = Tnce + lambd * Nci[M+i] * Fci[M+i, j] * Rs[j] * 8 # Compute Tnce
     
     rhonce = min(Tnce / Ne, 1)  # Utilization factor of the cloud-edge connection
-
+    #load_spread = 1/(1 - rhonce)  # Load spread factor
+    load_spread = 0
+    rhonce_max = 0.9
+    if rhonce < rhonce_max:
+        load_spread = 1/(1 - rhonce)  # Load spread factor
+    else:
+        load_spread = (rhonce * 1/((1-rhonce_max)**2)) + ((1-2*rhonce_max)/((1-rhonce_max)**2))  # Load spread factor
+    
     # Compute Dn
     Dn = np.zeros((MN, MN)) # Inizialization of matrix of network delays
     for i in S_edge_id:
         for j in S_not_edge_id:
             if Fci[M+i,j]>0:
                 if Rsd.size==0 or Rsd[j]==0:
-                    Dn[M+i,j] = RTT + min((Rs[j] * 8 / Ne)/(1 - rhonce),max_delay) # M/M/1 with processor sharing. 
+                    Dn[M+i,j] = RTT + min((Rs[j] * 8 / Ne)*(load_spread),max_delay) # M/M/1 with processor sharing. 
                 else:
                     Dn[M+i,j] = Rsd[j]  # Use the provided delay
     

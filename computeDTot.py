@@ -18,7 +18,7 @@ def computeDTot(S, Nci, Fci, Di, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
     # M : number of microservices
     # Rsd : duration of cloud edge data transfer for Rs
     
-    max_delay = 1e6 # max delay used to avoid inf problem during optimization
+    max_delay = 1e5 # max delay used to avoid inf problem during optimization
     Dn_tot, rhonce = computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd)
     Di_tot = computeDiTot(Nci, Di)
     if rhonce == 1:
