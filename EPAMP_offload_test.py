@@ -1,5 +1,5 @@
 # pylint: disable=C0103, C0301
-from EPAMP_offload import offload
+from EPAMP_offload_caching import offload
 import argparse
 import logging
 import sys
@@ -20,7 +20,7 @@ def main():
     np.random.seed(150271)
 
     RTT = 0.106    # RTT edge-cloud
-    M = 100 # n. microservices
+    M = 200 # n. microservices
     delay_decrease_target = 0.08    # requested delay reduction
     lambda_val = 50     # request per second
     Ne = 1e9    # bitrate cloud-edge
