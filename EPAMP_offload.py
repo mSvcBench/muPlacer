@@ -12,6 +12,8 @@ from computeDTot import computeDTot
 import logging
 import sys
 import utils
+from S2id import S2id
+import time
 
 
 np.seterr(divide='ignore', invalid='ignore')
@@ -126,19 +128,28 @@ def offload(params):
     Nci_new = Nci_old.copy()
     Nci_opt = Nci_old.copy()
 
+    # result caching to accelerate computation
+    delay_cache=dict()  # cache for delay computation
+    rhoce_cache=dict()   # cache for rhoce computation
+    expire_cache=dict() # cache for expiration round
+    Acpu_cache=dict()   # cache for CPU request vector
+    Amem_cache=dict()   # cache for Memory request vector
+
     skip_delay_increase = False    # Skip delay increase states to accelerate computation wheter possible
     locking = False if locked is None else True # avoid locking control if no microservice is locked
     
     logger.info(f"ADDING PHASE")
+    round = -1
    
     while True:
+        round += 1
         logger.info(f'-----------------------')
         w_min = float("inf") # Initialize the weight
         skip_delay_increase = False    # Skip negative weight to accelerate computation
         np.copyto(S_b_new,S_b_opt)  
         np.copyto(Acpu_new,Acpu_opt)    # Acpu_new is the new CPU request vector, Acpu_opt is the best CPU request vector computed by the previos greedy round
         np.copyto(Amem_new,Amem_opt)    # Amem_new is the new Memory request vector, Amem_opt is the best Memory request vector computed by the previos greedy round
-        np.copyto(Nci_new,Nci_opt)
+        #np.copyto(Nci_new,Nci_opt)
         delay_new = delay_opt   # delay_new is the new delay. It includes only network delays
         Cost_edge_new  = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the new configuration
         logger.info(f'new state {np.argwhere(S_b_new[M:]==1).squeeze()}, cost {Cost_edge_new}, delay decrease {1000*(delay_old-delay_new)}, cost increase {Cost_edge_new-Cost_edge_old}')
@@ -162,35 +173,66 @@ def offload(params):
         logger.debug(f"number of depencency paths without upgrade limit: {len(dependency_paths_b_residual)}")
         rl = np.argwhere(np.sum(np.maximum(dependency_paths_b_residual-S_b_new[M:],0),axis=1)<=u_limit)   # index of dependency paths with microservices upgrade less than u_limit
         logger.debug(f"number of depencency paths with upgrade limit: {len(rl)}")
-            
+
+        cache_hit = 0    
         for path_b in dependency_paths_b_residual[rl] :
             # merging path_b and S_b_new into S_b_temp
             path_n = np.argwhere(path_b.flatten()==1).squeeze() # numerical id of the microservices of the dependency path
             np.copyto(S_b_temp, S_b_new)
             S_b_temp[M+path_n] = 1
+            S_id_edge_temp=str(S2id(S_b_temp[M:])) # id for the cache entry
             
             #check looked microservices
             if locking:
                 if not np.equal(S_b_temp[M:]*locked, S_b_old[M:]*locked).all(): # if a locked microservice is moved, skip
                     continue
             
-            Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
-            Nci_temp = computeNc(Fci_temp, M, 2)    # number of instance call per user request of the temp state
-            delay_temp,_,_,rhoce = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0)) # Total delay of the temp state. It includes only network delays
-            delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
-            if skip_delay_increase and delay_decrease_temp<0:
-                logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()} skipped for negative delay decrease')
-                continue
-            
-            # compute the cost increase adding this dependency path 
-            # assumption is that cloud resource are reduce proportionally with respect to the reduction of the number of times instances are called
-            utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_old,Amem_old,Nci_old)
-            Cost_edge_temp = utils.computeCost(Acpu_temp[M:], Amem_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
-            cost_increase_temp = Cost_edge_temp - Cost_edge_new # cost increase wrt the new state
-            
+            if S_id_edge_temp in delay_cache:
+                logger.debug(f'cache_hit for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
+                cache_hit += 1
+                if expire_cache[S_id_edge_temp] == round:
+                    # state already considered in the round
+                    continue
+                delay_temp = delay_cache[S_id_edge_temp]
+                Acpu_temp = np.copy(Acpu_cache[S_id_edge_temp])
+                Amem_temp = np.copy(Amem_cache[S_id_edge_temp])
+                rhoce = rhoce_cache[S_id_edge_temp]
+                delay_decrease_temp = delay_new - delay_temp
+                expire_cache[S_id_edge_temp] = round
+                if skip_delay_increase and delay_decrease_temp<0:
+                    logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()} skipped for negative delay decrease')
+                    continue
+            else:
+                #tic = time.time()
+                Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
+                #logger.info(f'Fci_temp processing time {time.time()-tic}')
+                #tic = time.time()
+                Nci_temp = computeNc(Fci_temp, M, 2)    # number of instance call per user request of the temp state
+                #logger.info(f'Nci_temp processing time {time.time()-tic}')
+                #tic = time.time()
+                delay_temp,_,_,rhoce = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0)) # Total delay of the temp state. It includes only network delays
+                #logger.info(f'delay_temp processing time {time.time()-tic}')
+                delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
+                if skip_delay_increase and delay_decrease_temp<0:
+                    logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()} skipped for negative delay decrease')
+                    continue
+                
+                # compute the cost increase adding this dependency path 
+                # assumption is that cloud resource are reduce proportionally with respect to the reduction of the number of times instances are called
+                utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_old,Amem_old,Nci_old)
+                Cost_edge_temp = utils.computeCost(Acpu_temp[M:], Amem_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
+                cost_increase_temp = Cost_edge_temp - Cost_edge_new # cost increase wrt the new state
+                
+                # caching
+                delay_cache[S_id_edge_temp] = delay_temp
+                rhoce_cache[S_id_edge_temp] = rhoce
+                Acpu_cache[S_id_edge_temp]=np.copy(Acpu_temp)
+                Amem_cache[S_id_edge_temp]=np.copy(Amem_temp)
+                expire_cache[S_id_edge_temp] = round
+                logger.debug(f'cache insert for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
+
             # weighting
             r_delay_decrease = delay_decrease_target - (delay_old-delay_new) # residul delay to decrease wrt previous conf
-            added_ms = np.argwhere(S_b_temp-S_b_old).flatten()-M
             if rhoce == 1 or delay_decrease_temp <= 0:
                 # addition provides delay increase,  weighting penalize both cost and delay increase
                 # dp_centrality = np.sum(np.sum(dependency_paths_b,axis=1)[added_ms]) # centrality of the added microservices in the dependency graph
@@ -207,12 +249,12 @@ def offload(params):
             if w < w_min:
                 # update best state of the greedy round
                 np.copyto(S_b_opt,S_b_temp)
-                np.copyto(Acpu_opt,Acpu_temp)
-                np.copyto(Amem_opt,Amem_temp)
-                np.copyto(Nci_opt,Nci_temp)
+                Acpu_opt = np.copy(Acpu_temp)
+                Amem_opt = np.copy(Amem_temp)
+                #np.copyto(Nci_opt,Nci_temp)
                 delay_opt = delay_temp
                 w_min = w
-        
+        logger.info(f'chache hit probability {cache_hit/len(rl)}')
         if w_min == inf:
             # no improvement possible in the greedy round
             logger.info(f'no improvement possible in the greedy round')
@@ -220,14 +262,30 @@ def offload(params):
 
         # Prune not considered dependency paths whose microservices are going to be contained in the edge to accelerate computation
         PR = []
+        duplicateID = list()
         for pr,path_b in enumerate(dependency_paths_b_residual):
             if np.sum(path_b) == np.sum(path_b * S_b_opt[M:]):
                 # dependency path already fully included at edge
                 logger.debug(f'pruning dependency path {np.argwhere(path_b>0).flatten()} already fully included at edge')
                 PR.append(pr)
+            else:
+                path_n = np.argwhere(path_b.flatten()==1).squeeze()
+                S_b_temp = S_b_opt.copy() 
+                S_b_temp[path_n+M]=1
+                S_id_edge_temp=str(S2id(S_b_temp[M:]))
+                if S_id_edge_temp in duplicateID:
+                    PR.append(pr)
+                else:
+                    duplicateID.append(S_id_edge_temp)
         dependency_paths_b_residual = np.delete(dependency_paths_b_residual, PR, axis=0)
-
-
+        # cache cleaning
+        for key in list(delay_cache.keys()):
+            if expire_cache[key] + 10 < round:
+                del delay_cache[key]
+                del rhoce_cache[key]
+                del Acpu_cache[key]
+                del Amem_cache[key]
+                del expire_cache[key]
     logger.info(f"PRUNING PHASE")
     # Remove microservice from leaves to reduce cost
     S_b_old_a = np.array(S_b_old[M:]).reshape(M,1)
@@ -263,6 +321,7 @@ def offload(params):
             cost_decrease = Cost_edge_new - Cost_edge_temp
             w = cost_decrease/delay_increase_temp
             utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_new,Amem_new,Nci_new)
+            
             if w>w_opt and delay_old - delay_temp > delay_decrease_target:
                 # possible removal
                 w_opt = w
