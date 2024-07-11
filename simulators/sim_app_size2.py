@@ -42,7 +42,7 @@ Ne =1e9    # bitrate cloud-edge
 
 graph_algorithm = 'barabasi' # 'random' or 'barabasi
 barabasi=dict()
-barabasi['m'] = 1
+barabasi['m'] = 2
 barabasi['power'] = 0.9
 barabasi['zero_appeal'] = 3.125
 random=dict()
@@ -297,4 +297,4 @@ for M in range(11,M_max,10):
 
     # Matlab save
     mdic = {"best_cost_v": best_cost_v, "best_delta_v": best_delta_v, "p_time_v": p_time_v}
-    savemat("res.mat", mdic)
+    savemat("res2.mat", mdic)
