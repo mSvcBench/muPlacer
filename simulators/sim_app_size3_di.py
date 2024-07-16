@@ -5,7 +5,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from EPAMP_offload import offload
+from old.EPAMP_offload_caching import offload
 from mfu_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
 import numpy as np
@@ -43,8 +43,8 @@ Ne =1e9    # bitrate cloud-edge
 graph_algorithm = 'barabasi' # 'random' or 'barabasi
 barabasi=dict()
 barabasi['m'] = 1
-barabasi['power'] = 0.9
-barabasi['zero_appeal'] = 3.125
+barabasi['power'] = 0.05
+barabasi['zero_appeal'] = 0.01
 random=dict()
 random['n_parents'] = 3
 
@@ -54,6 +54,11 @@ Acpu_range_min = 0.5  # min value of actual CPU consumption per instance-set
 Acpu_range_max = 8 # max value of actual CPU consumption per instance-set
 Rs_range_min = 200000 # min value of response size in bytes
 Rs_range_max = 2000000   # max of response size in bytes
+Di_range_min = 0.01 # min value of internal delay (sec)
+Di_range_max = 0.08 # max value of internal delay (Sec)
+
+Cost_cpu_edge = 1 # cost of CPU at the edge
+Cost_mem_edge = 1 # cost of memory at the edge
 
 show_graph = False
 show_plot = False
@@ -69,11 +74,11 @@ for M in range(11,M_max,10):
     S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
     S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
     S_b[M-1] = 0  # User is not in the cloud
-    Cost_cpu_edge = 1 # cost of CPU at the edge
-    Cost_mem_edge = 1 # cost of memory at the edge
-    Qcpu = np.ones(2*M) # CPU quota
-    Qmem = np.ones(2*M) # memory quota
-    Di = np.zeros(2*M) # internal delay of microservices, equal cloud/edge computing performance    
+    Qcpu = np.ones(2*M) # CPU quota per ms
+    Qmem = np.ones(2*M) # memory quota per ms
+    Di = np.random.uniform(Di_range_min,Di_range_max,M)
+    Di[M-1] = 0 # user has no internal delay
+    Di = np.tile(Di, 2) # double the size of Di for the cloud and edge instances
     barabasi['n'] = M-1
     
     for k in range(trials):
@@ -297,4 +302,4 @@ for M in range(11,M_max,10):
 
     # Matlab save
     mdic = {"best_cost_v": best_cost_v, "best_delta_v": best_delta_v, "p_time_v": p_time_v}
-    savemat("res.mat", mdic)
+    savemat("res3.mat", mdic)

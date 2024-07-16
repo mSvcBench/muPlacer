@@ -1,5 +1,5 @@
 # pylint: disable=C0103, C0301
-from EPAMP_offload_caching import offload
+from EPAMP_offload5 import offload
 import argparse
 import logging
 import sys
@@ -9,6 +9,7 @@ import utils
 import random
 from computeNc import computeNc
 from buildFci import buildFci
+import random
 
 
 
@@ -17,8 +18,9 @@ def main():
     # small simulation to test the offload function
 
     # Define the input variables
-    np.random.seed(150271)
-
+    seed = 150271
+    np.random.seed(seed)
+    random.seed(seed)
     RTT = 0.106    # RTT edge-cloud
     M = 200 # n. microservices
     delay_decrease_target = 0.08    # requested delay reduction
@@ -32,7 +34,7 @@ def main():
     Cost_mem_edge = 1 # cost of memory at the edge
 
     random=dict()
-    random['n_parents'] = 3
+    random['n_parents'] = 1
 
     Fcm_range_min = 0.1 # min value of microservice call frequency 
     Fcm_range_max = 0.5 # max value of microservice call frequency 
@@ -49,7 +51,10 @@ def main():
     # build dependency graph
     Fcm = np.zeros([M,M])   # microservice call frequency matrix
     for i in range(1,M-1):
-        n_parent=np.random.randint(1,random['n_parents'])
+        if random['n_parents']>1:
+            n_parent=np.random.randint(1,random['n_parents'])
+        else:
+            n_parent=1
         for j in range(n_parent):
             a = np.random.randint(i)
             Fcm[a,i]=1
@@ -61,20 +66,22 @@ def main():
     Fcm[M-1,0] = 1  # istio proxy / user call microservice 0 (the ingress microservice)
     
     # add x dependency path at random
-    G = nx.DiGraph(Fcm) # Create microservice dependency graph 
-    dependency_paths_b = np.empty((0,M), int) # Storage of binary-based (b) encoded dependency paths
-    for ms in range(M-1):
-        paths_n = list(nx.all_simple_paths(G, source=M-1, target=ms)) 
-        for path_n in paths_n:
-            path_b = np.zeros((1,M),int)
-            path_b[0,path_n] = 1 # Binary-based (b) encoding of the dependency path
-            dependency_paths_b = np.append(dependency_paths_b,path_b,axis=0)
-    l = len(dependency_paths_b)
-    x = 10
-    random_values = np.random.choice(range(l), size=x, replace=False)
-    for j in random_values:
-        S_edge_b = np.minimum(S_edge_b + dependency_paths_b[j],1)
-    S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
+    # G = nx.DiGraph(Fcm) # Create microservice dependency graph 
+    # dependency_paths_b = np.empty((0,M), int) # Storage of binary-based (b) encoded dependency paths
+    # for ms in range(M-1):
+    #     paths_n = list(nx.all_simple_paths(G, source=M-1, target=ms)) 
+    #     for path_n in paths_n:
+    #         path_b = np.zeros((1,M),int)
+    #         path_b[0,path_n] = 1 # Binary-based (b) encoding of the dependency path
+    #         dependency_paths_b = np.append(dependency_paths_b,path_b,axis=0)
+    # l = len(dependency_paths_b)
+    # x = 10
+    # random_values = np.random.choice(range(l), size=x, replace=False)
+    # for j in random_values:
+    #     S_edge_b = np.minimum(S_edge_b + dependency_paths_b[j],1)
+    # S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
+    S_b = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) full state
+    S_b[2*M-1] = 1  # User is  at the edge cloud
     S_b[M-1] = 0  # User is not in the cloud
     # set random values for CPU and memory requests
     Acpu_void = (np.random.randint(32,size=M)+1) * Acpu_quota
@@ -136,7 +143,7 @@ if __name__ == "__main__":
     parser.add_argument( '-log',
                      '--loglevel',
                      default='info',
-                     help='Provide logging level. Example --loglevel debug, default=warning' )
+                     help='Provide logging level. Example --loglevel debug, default=info' )
 
     args = parser.parse_args()
     logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')

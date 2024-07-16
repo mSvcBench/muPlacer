@@ -12,8 +12,8 @@ import yaml
 from os import environ
 from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
 
-import EPAMP_offload
-import EPAMP_unoffload
+import old.EPAMP_offload_caching as EPAMP_offload_caching
+import old.EPAMP_unoffload_from_void as EPAMP_unoffload_from_void
 import EPAMP_GMA_Connector
 
 def update_acpu():
@@ -962,7 +962,7 @@ class GMAStataMachine():
         metric_to_pass['target-delay']['edge-area']['value'][-1] = offload_delay_threshold_ms
         params = EPAMP_GMA_Connector.Connector(metric_to_pass)
         # offloading logic
-        result_list = EPAMP_offload.offload(params)
+        result_list = EPAMP_offload_caching.offload(params)
         logger.info(f"Offload result: {result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} sec')
@@ -979,7 +979,7 @@ class GMAStataMachine():
         metric_to_pass['target-delay']['edge-area']['value'][-1] = offload_delay_threshold_ms
         params = EPAMP_GMA_Connector.Connector(metric_to_pass)
         # unoffloading logic
-        result_list = EPAMP_unoffload.unoffload(params)
+        result_list = EPAMP_unoffload_from_void.unoffload(params)
         logger.info(f"Unoffload result: {result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} sec')

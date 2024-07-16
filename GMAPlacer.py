@@ -12,8 +12,8 @@ import yaml
 from os import environ
 from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
 
-import EPAMP_offload
-import EPAMP_unoffload
+import old.EPAMP_offload_caching as EPAMP_offload_caching
+import old.EPAMP_unoffload_from_void as EPAMP_unoffload_from_void
 import EPAMP_GMA_Connector
 import requests
 
@@ -1107,7 +1107,7 @@ class GMAStataMachine():
         logger.info(f"Offloading with target delay reduction {offload_parameters['edge-user-delay']['value']-offload_parameters['edge-user-target-delay']['value']} ms ")
         # offloading logic
         params = EPAMP_GMA_Connector.Connector(offload_parameters)
-        result_list = EPAMP_offload.offload(params)
+        result_list = EPAMP_offload_caching.offload(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')
@@ -1148,7 +1148,7 @@ class GMAStataMachine():
         logger.info(f"Unoffloading with target delay increase {unoffload_parameters['edge-user-target-delay']['value']-unoffload_parameters['edge-user-delay']['value']}ms ")
         # unoffloading logic
         params = EPAMP_GMA_Connector.Connector(unoffload_parameters)
-        result_list = EPAMP_unoffload.unoffload(params)
+        result_list = EPAMP_unoffload_from_void.unoffload(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')

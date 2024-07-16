@@ -10,14 +10,15 @@ from numpy import inf
 from computeNc import computeNc
 from buildFci import buildFci
 from EPAMP_unoffload import unoffload
+import random
 
 def main():
     # small simulation to test the unoffload function
 
-    # Define the input variables
-    np.random.seed(150273)
-    RTT = 0.0869    # RTT edge-cloud
-    M = 30 # n. microservices
+
+
+    RTT = 0.106    # RTT edge-cloud
+    M = 200 # n. microservices
     delay_increase_target = 0.03    # requested delay reduction
     lambda_val = 20     # request per second
     Ne = 1e9    # bitrate cloud-edge
@@ -125,7 +126,7 @@ def main():
     result_list = unoffload(params)
     result=result_list[1]
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
-    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}, rounds = {result['n_rounds']}")
+    print(f"Result for unoffload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -137,4 +138,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
     logging.info( 'Logging now setup.' )
+
+    seed = 150271
+    np.random.seed(seed)
+    random.seed(seed)
+
     main()

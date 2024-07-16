@@ -22,7 +22,7 @@ def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
         Tnce = np.sum(np.multiply(np.multiply(Fci[M:,:M],np.repeat(Nci[M:].reshape(M,1),M,axis=1)),np.repeat(Rs[:M].reshape(1,M),M,axis=0)))*lambd*8
         rhonce = min(Tnce / Ne, 1)  # Utilization factor of the cloud-edge connection
         load_spread = 0
-        rhonce_max = 0.9
+        rhonce_max = 0.999
         if rhonce < rhonce_max:
             load_spread = 1/(1 - rhonce)  # Load spread factor
         else:
