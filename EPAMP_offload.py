@@ -207,15 +207,10 @@ def offload(params):
                     logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()} skipped for negative delay decrease')
                     continue
             else:
-                #tic = time.time()
                 Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
-                #logger.info(f'Fci_temp processing time {time.time()-tic}')
-                #tic = time.time()
                 Nci_temp = computeNc(Fci_temp, M, 2)    # number of instance call per user request of the temp state
-                #logger.info(f'Nci_temp processing time {time.time()-tic}')
-                #tic = time.time()
                 delay_temp,_,_,rhoce = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0)) # Total delay of the temp state. It includes only network delays
-                #logger.info(f'delay_temp processing time {time.time()-tic}')
+
                 delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
                 if skip_delay_increase and delay_decrease_temp<0:
                     logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()} skipped for negative delay decrease')
