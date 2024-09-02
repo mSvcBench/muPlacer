@@ -118,7 +118,7 @@ def unoffload(params):
         dp_with_edges = np.argwhere(dependency_paths_b[:,edge_leaves].sum(axis=1)>0)[:,0]
         
         #logger.info(f'pruning for leaves {edge_leaves}')
-        delay_increase_v = np.zeros((len(dp_with_edges),2))   # delay reduction and weigth for each possible removal
+        delay_increase_tot_v = np.zeros((len(dp_with_edges),2))   # delay reduction and weigth for each possible removal
         np.copyto(S_b_temp,S_b_new)
         for dpi,path_b in enumerate(dependency_paths_b[dp_with_edges]):
             dependency_paths_b_temp = np.delete(dependency_paths_b,dp_with_edges[dpi],axis=0)
@@ -131,31 +131,31 @@ def unoffload(params):
             Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))
             Nci_temp = computeNc(Fci_temp, M, 2)
             delay_temp = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
-            delay_increase_temp = max(1e-6,delay_temp - delay_new)
+            delay_increase_temp = max(1e-6,delay_temp - delay_new)  # delay increase wrt previous state
             utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_new,Amem_new,Nci_new)
             Cost_edge_temp = utils.computeCost(Acpu_temp[M:], Amem_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
             cost_decrease = Cost_edge_new - Cost_edge_temp
             w = cost_decrease/delay_increase_temp
-            delay_increase_v[dpi] = [delay_increase_temp,w]
+            delay_increase_tot_v[dpi] = [max(1e-6,delay_temp - delay_old),w] # delay increase wrt initial state and weight for each possible removal
         
-        feasible_dpi = np.argwhere(delay_increase_v[:,0]<=delay_increase_target).flatten()
+        feasible_dpi = np.argwhere(delay_increase_tot_v[:,0]<=delay_increase_target).flatten()
         if len(feasible_dpi)>0:
-            dpi_best = np.argmax(delay_increase_v[feasible_dpi][:,1])
+            dpi_best = np.argmax(delay_increase_tot_v[feasible_dpi][:,1])
             dpi_best = feasible_dpi[dpi_best]
         else:
-            feasible_dpi = np.argwhere(delay_increase_v[:,0]<delay_increase_target * look_ahead).flatten()
+            feasible_dpi = np.argwhere(delay_increase_tot_v[:,0]<delay_increase_target * look_ahead).flatten()
             if len(feasible_dpi)>0:
-                dpi_best = np.argmax(delay_increase_v[feasible_dpi][:,1])
+                dpi_best = np.argmax(delay_increase_tot_v[feasible_dpi][:,1])
                 dpi_best = feasible_dpi[dpi_best]
         
         if dpi_best>-1:
-            delay_increase_best = delay_increase_v[dpi_best,0]
-            logger.info(f'cleaning dependency path {np.argwhere(dependency_paths_b[dp_with_edges[dpi_best]]).squeeze()}, delay increase: {delay_increase_best}')
+            delay_increase_tot_best = delay_increase_tot_v[dpi_best,0]
+            logger.info(f'cleaning dependency path {np.argwhere(dependency_paths_b[dp_with_edges[dpi_best]]).squeeze()}, delay increase: {delay_increase_tot_best}')
             dependency_paths_b = np.delete(dependency_paths_b,dp_with_edges[dpi_best],axis=0)
             S_b_new[M:] = np.minimum(np.sum(dependency_paths_b,axis=0),1)
             S_b_new[M:] = S_b_new[M:]+S_edge_base_b
             S_b_new[S_b_new>0] = 1
-            if delay_increase_best <= delay_increase_target:
+            if delay_increase_tot_best <= delay_increase_target:
                 np.copyto(S_b_opt,S_b_new)
         else:
             break

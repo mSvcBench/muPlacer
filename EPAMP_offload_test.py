@@ -1,5 +1,5 @@
 # pylint: disable=C0103, C0301
-from EPAMP_offload5 import offload
+from EPAMP_offload_sweeping import offload
 import argparse
 import logging
 import sys
@@ -9,21 +9,15 @@ import utils
 import random
 from computeNc import computeNc
 from buildFci import buildFci
-import random
 
 
 
 # MAIN
 def main():
     # small simulation to test the offload function
-
-    # Define the input variables
-    seed = 150271
-    np.random.seed(seed)
-    random.seed(seed)
     RTT = 0.106    # RTT edge-cloud
     M = 200 # n. microservices
-    delay_decrease_target = 0.08    # requested delay reduction
+    delay_decrease_target = 0.05    # requested delay reduction
     lambda_val = 50     # request per second
     Ne = 1e9    # bitrate cloud-edge
     
@@ -124,12 +118,11 @@ def main():
         'Cost_mem_edge': Cost_mem_edge,
         'locked': None,
         'dependency_paths_b': None,
-        'u_limit': 2,
+        'u_limit': 2000,
         'no_caching': False,
         'Qcpu': Qcpu,
         'Qmem': Qmem,
-        'no_evolutionary': False,
-        'max_added_dp': 1000000
+        'no_sweeping': False,
     }
 
         
@@ -149,5 +142,9 @@ if __name__ == "__main__":
     logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
 
     logging.info( 'Logging now setup.' )
+    # Define the input variables
+    seed = 150271
+    np.random.seed(seed)
+    random.seed(seed)
     main()
 

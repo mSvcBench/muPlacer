@@ -9,7 +9,7 @@ sys.path.append(current_dir)
 sys.path.append(parent_dir)
 
 from old.EPAMP_offload_caching import offload
-from mfu_heuristic import mfu_heuristic
+from mfu_heuristic_new import mfu_heuristic
 from IA_heuristic import IA_heuristic
 from mubenchFcmBuilder import createFcm
 import numpy as np

@@ -7,9 +7,9 @@ from os import environ
 N_THREADS = '1'
 environ['OMP_NUM_THREADS'] = N_THREADS
 
-from EPAMP_offload import offload
-from EPAMP_unoffload import unoffload
-from mfu_heuristic import mfu_heuristic
+from EPAMP_offload_sweeping import offload
+from EPAMP_unoffload_from_void import unoffload
+from mfu_heuristic_new import mfu_heuristic
 from IA_heuristic import IA_heuristic
 import numpy as np
 import networkx as nx
@@ -37,13 +37,13 @@ np.random.seed(seed)
 random.seed(seed)
 
 res=np.array([])
-trials = 50
+trials = 10
 RTT = 0.06    # RTT edge-cloud
 M = 100 # n. microservices
 Ne = 1e9    # bitrate cloud-edge
 
 offload_threshold = 0.200 # threshold to offload in sec
-unoffload_threshold = 0.150 # threshold to unoffload in sec
+unoffload_threshold = 0.190 # threshold to unoffload in sec
 target_delay = unoffload_threshold + (offload_threshold-unoffload_threshold)/2.0 # target user delay (sec)
 
 S_edge_b = np.zeros(M)  # initial state. 
@@ -61,11 +61,11 @@ Rs_range_max = 2000000   # max of response size in bytes
 Cost_cpu_edge = 1 # cost of CPU at the edge
 Cost_mem_edge = 1 # cost of memory at the edge
 
-lambda_min = 50   # min user request rate (req/s)
+lambda_min = 10   # min user request rate (req/s)
 lambda_max = 500   # max user request rate (req/s)
-lambda_step = 5   # user request rate step (req/s)
+lambda_step = 10   # user request rate step (req/s)
 lambda_range = list(range(lambda_min, lambda_max+lambda_step, lambda_step))  # user request rates (req/s)
-lambda_range = lambda_range + list(range(lambda_max-lambda_step, lambda_min-lambda_step, -lambda_step))  # user request rates (req/s)
+lambda_range = lambda_range + list(range(lambda_max, lambda_min-lambda_step, -lambda_step))  # user request rates (req/s)
 
 graph_algorithm = 'barabasi'
 
@@ -214,8 +214,8 @@ for t in range(trials):
                 'Cost_mem_edge': Cost_mem_edge,
                 'locked': None,
                 'dependency_paths_b': None,
-                'u_limit': 2,
-                'look_ahead': 1.3
+                'look_ahead': 1.3,
+                'no_sweeping': False
             }
             tic = time.time()
             result = offload(params)[1] if mode == 'offload' else unoffload(params)[1]
@@ -249,6 +249,7 @@ for t in range(trials):
         delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, np.tile(Rs,2), RTT, Ne, lambda_val, M, np.empty(0))[0] # Total delay of the temp state. It includes only network delays
         if delay_new > offload_threshold:
             delay_decrease_target = delay_new - target_delay
+            delay_increase_target = 0
             mode = 'offload'
             opt=True
         elif delay_new < unoffload_threshold and np.sum(S_b_new[M:2*M-1])>0:

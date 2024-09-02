@@ -9,7 +9,7 @@ import utils
 from numpy import inf
 from computeNc import computeNc
 from buildFci import buildFci
-from EPAMP_unoffload import unoffload
+from EPAMP_unoffload_from_void import unoffload
 import random
 
 def main():
@@ -18,7 +18,7 @@ def main():
 
 
     RTT = 0.106    # RTT edge-cloud
-    M = 200 # n. microservices
+    M = 100 # n. microservices
     delay_increase_target = 0.03    # requested delay reduction
     lambda_val = 20     # request per second
     Ne = 1e9    # bitrate cloud-edge

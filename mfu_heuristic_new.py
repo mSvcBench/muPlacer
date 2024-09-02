@@ -30,6 +30,7 @@ def mfu_heuristic(params):
     Cost_mem_edge = params['Cost_mem_edge']
     Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*M)
     Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*M)
+    locked_b = params['locked_b'] if 'locked_b' in params else np.zeros(M)
 
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to to include edge and cloud
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old))
@@ -53,7 +54,7 @@ def mfu_heuristic(params):
             Nc_max=-1
             argmax = -1
             for i in range(M-1):
-                 if Nc[i]>Nc_max and S_b_new[i+M]==0:
+                 if Nc[i]>Nc_max and S_b_new[i+M]==0 and locked_b[i]==0:
                     argmax = i
                     Nc_max = Nc[i]
             S_b_new[argmax+M] = 1
@@ -66,33 +67,58 @@ def mfu_heuristic(params):
         
     ## UNOFFLOAD  ##
     else:
-        while delay_increase_target > delay_increase_new:
-            Nc_min=inf
-            argmin = -1
-            for i in range(M-1):
-                if Nc[i]<Nc_min and S_b_new[i+M]==1:
-                    argmin = i
-                    Nc_min = Nc[i]
-            S_b_new[argmin+M] = 0
-            Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-            Nci_new = computeNc(Fci_new, M, 2)
-            delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)[0] 
-            delay_increase_new = delay_new - delay_old  
-            if delay_increase_new > delay_increase_target:
-                    # excessive delay increase, revert and exit
-                    S_b_new[argmin+M] = 1
-                    break
-            if np.all(S_b_new[M:2*M-1] == 0):
-                # no other instance at the edge
-                break
- 
+        delay_target = delay_old + delay_increase_target
+        
+        S_edge_void = np.zeros(int(M))  # (M,) edge state with no instance-set in the edge
+        S_edge_void[M-1] = 1  # edge istio proxy
+        S_cloud_void = np.ones(int(M))
+        S_cloud_void[M-1] = 0
+        S_b_void = np.concatenate((S_edge_void, S_edge_void)) # (2*M,) state with no instance-set in the edge
+
+        Acpu_void = np.zeros(2*M)
+        Amem_void = np.zeros(2*M)
+        Acpu_void[:M] = Acpu_old[:M]+Acpu_old[M:]
+        Acpu_void[M:] = np.zeros(M)
+        Amem_void[:M] = Amem_old[:M]+Amem_old[M:]
+        Amem_void[M:] = np.zeros(M)
+
+        Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
+        Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
+        delay_void = computeDTot(S_b_void, Nci_void, Fci_void, Di, Rs, RTT, Ne, lambd, M)[0]
+        delay_decrease_target = max(delay_void - delay_target,0)
+        locked_b = np.zeros(M)  # locked microservices binary encoding. 1 if the microservice is locked, 0 otherwise
+        locked_b[np.argwhere(S_edge_old==0)] = 1 # microservices that originally where not in the edge are locked
+        params = {
+            'S_edge_b': S_edge_void.copy(),
+            'Acpu': Acpu_void.copy(),
+            'Amem': Amem_void.copy(),
+            'Qcpu': Qcpu,
+            'Qmem': Qmem,
+            'Fcm': Fcm.copy(),
+            'M': M,
+            'lambd': lambd,
+            'Rs': Rs[:M],
+            'Di': Di,
+            'delay_decrease_target': delay_decrease_target,
+            'RTT': RTT,
+            'Ne': Ne,
+            'Cost_cpu_edge': Cost_cpu_edge,
+            'Cost_mem_edge': Cost_mem_edge,
+            'locked_b': locked_b,
+            'mode': 'offload'
+        }
+        result = mfu_heuristic(params)
+        S_b_new = np.ones(2*M)
+        S_b_new[M:] = result['S_edge_b']
+        
+
     Acpu_new = np.zeros(2*M)
-    Amem_new = np.zeros(2*M)            
+    Amem_new = np.zeros(2*M)
+    Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
+    Nci_new = computeNc(Fci_new, M, 2)
+    delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)            
     if params['mode'] == 'offload':
         # compute final values
-        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-        Nci_new = computeNc(Fci_new, M, 2)
-        delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
         delay_decrease_new = delay_old - delay_new
         np.copyto(Acpu_new,Acpu_old) 
         np.copyto(Amem_new,Amem_old)
@@ -115,9 +141,6 @@ def mfu_heuristic(params):
         result['rhoce'] = rhoce_new
     else:
         # compute final values
-        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-        Nci_new = computeNc(Fci_new, M, 2)
-        delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
         delay_increase_new = delay_new - delay_old
         np.copyto(Acpu_new,Acpu_old) 
         np.copyto(Amem_new,Amem_old) 

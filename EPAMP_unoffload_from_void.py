@@ -31,13 +31,14 @@ def unoffload(params):
     #lambd user request rate
     #Rs (M,) vector of response size of microservices
     #S_edge_old (M,) vector of binary values indicating if the microservice is at the edge or not
-    #delay_decrease_target delay reduction target
+    #delay_increase_target delay increase target
     #RTT fixed delay to add to microservice interaction in addition to the time depending on the response size
     #Ne cloud-edge network bitrate
     #Cost_cpu_edge cost of CPU at the edge
     #Cost_mem_edge cost of Memory at the edge
-    #u_limit maximum number of microservices upgrade to consider in the greedy iteraction (lower reduce optimality but increase computaiton speed)
-
+    #Di (2*M,) vector of internal delay of an instance at the cloud (:M) and at the edge (M:)
+    # Qmem (M,) memory quantum in bytes, Kubernetes memory request
+    # Qcpu (M,) CPU quantum in cpu sec, Kubernetes CPU request
 
     # mandatory paramenters
     S_edge_old = params['S_edge_b']
@@ -58,11 +59,6 @@ def unoffload(params):
     Di = params['Di'] if 'Di' in params else np.zeros(2*M)
     Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*M)
     Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*M)
-    dependency_paths_b = params['dependency_paths_b'] if 'dependency_paths_b' in params else None
-    locked = params['locked'] if 'locked' in params else None
-    u_limit = params['u_limit'] if 'u_limit' in params else M
-    no_evolutionary = params['no_evolutionary'] if 'no_evolutionary' in params else False
-
     
     S_cloud_old = np.ones(int(M)) # EPAMP assumes all microservice instance run in the cloud
     S_cloud_old[M-1] = 0  # # M-1 and 2M-1 are associated to the edge ingress gateway, therefore M-1 must be set to 0 and 2M-1 to 1
@@ -92,24 +88,8 @@ def unoffload(params):
     Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
     delay_void = computeDTot(S_b_void, Nci_void, Fci_void, Di, Rs, RTT, Ne, lambd, M)[0]
     delay_decrease_target = max(delay_void - delay_target,0)
-
-    ## BUILDING OF DEPENDENCY PATHS ##
-    if dependency_paths_b is None:
-        G = nx.DiGraph(Fcm) # Create microservice dependency graph 
-        dependency_paths_b = np.empty((0,M), int) # Storage of binary-based (b) encoded dependency paths
-
-        ## COMPUTE DEPENDENCY PATHS WITH ALL MICROSERIVES AT THE EDGE##
-        for ms in range(M-1):
-            paths_n = list(nx.all_simple_paths(G, source=M-1, target=ms))
-            for path_n in paths_n:
-                # path_n numerical id (n) of the microservices of the dependency path
-                # If not all microservices in the path are in the edge this path is not a edge-only
-                if not all(S_b_old[M+np.array([path_n])].squeeze()==1):
-                    continue
-                else:
-                    path_b = np.zeros((1,M),int)
-                    path_b[0,path_n] = 1 # Binary-based (b) encoding of the dependency path
-                    dependency_paths_b = np.append(dependency_paths_b,path_b,axis=0)
+    locked_b = np.zeros(M)  # locked microservices binary encoding. 1 if the microservice is locked, 0 otherwise
+    locked_b[np.argwhere(S_edge_old==0)] = 1 # microservices that originally where not in the edge are locked
     params = {
         'S_edge_b': S_edge_void.copy(),
         'Acpu': Acpu_void.copy(),
@@ -126,10 +106,7 @@ def unoffload(params):
         'Ne': Ne,
         'Cost_cpu_edge': Cost_cpu_edge,
         'Cost_mem_edge': Cost_mem_edge,
-        'locked': locked,
-        'dependency_paths_b': dependency_paths_b,
-        'u_limit': u_limit,
-        'no_evolutionary': no_evolutionary,
+        'locked_b': locked_b
     }
     logger.info(f"unoffload calls offload with void edge and delay_decrease_target: {delay_decrease_target}")
     result_list = offload(params)
@@ -140,8 +117,6 @@ def unoffload(params):
     result['to-delete']= utils.numpy_array_to_list(np.argwhere(S_b_old[M:]-result['S_edge_b']>0))
     del result['delay_decrease']
     del result['cost_increase']
-    if result['delay_increase'] < delay_increase_target:
-        logger.warning(f"unoffload: delay increase target not reached")
     message = f"Result for unoffload - edge microservice ids: {result['placement']}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}"
     result['info'] = message
     return result_list

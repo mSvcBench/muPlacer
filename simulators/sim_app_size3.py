@@ -5,8 +5,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from old.EPAMP_offload_caching import offload
-from mfu_heuristic import mfu_heuristic
+from EPAMP_offload_sweeping import offload
+from mfu_heuristic_new import mfu_heuristic
 from IA_heuristic import IA_heuristic
 import numpy as np
 import networkx as nx
