@@ -7,7 +7,7 @@ from os import environ
 N_THREADS = '1'
 environ['OMP_NUM_THREADS'] = N_THREADS
 
-from EPAMP_offload_sweeping import offload
+from EPAMP_offload_sweeping_old import offload
 from EPAMP_unoffload_from_void import unoffload
 from mfu_heuristic_new import mfu_heuristic
 from IA_heuristic import IA_heuristic

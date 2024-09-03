@@ -5,7 +5,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from EPAMP_offload_sweeping import offload
+from EPAMP_offload_sweeping_old import offload
 from mfu_heuristic_new import mfu_heuristic
 from IA_heuristic import IA_heuristic
 import numpy as np

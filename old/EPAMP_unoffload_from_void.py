@@ -10,7 +10,7 @@ from numpy import inf
 from computeNc import computeNc
 from buildFci import buildFci
 from computeDTot import computeDTot
-from EPAMP_offload_sweeping import offload
+from EPAMP_offload_sweeping_old import offload
 
 
 np.seterr(divide='ignore', invalid='ignore')

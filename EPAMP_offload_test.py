@@ -1,5 +1,5 @@
 # pylint: disable=C0103, C0301
-from EPAMP_offload_sweeping import offload
+from EPAMP_offload_sweeping_old import offload
 import argparse
 import logging
 import sys

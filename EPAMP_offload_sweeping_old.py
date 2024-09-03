@@ -50,49 +50,6 @@ def offload(params):
     # locked_b (M,) binary encoding of microservice that can not be moved at the edge
     # no_sweeping disable sweeping
 
-    def cache_probe(S_b, round, cache):
-        result=dict()
-        result['delay'] = None
-        result['Acpu'] = None
-        result['Amem'] = None
-        result['Fci'] = None
-        result['rhoce'] = None
-        result['cost'] = None
-        hit = False
-        cache['cache_access'] += 1
-        S_id_edge=str(S2id(S_b[M:]))
-        if S_id_edge in cache['delay']:
-            logger.debug(f'cache_hit for {np.argwhere(S_b[M:]==1).squeeze()}')
-            cache['cache_hit'] += 1
-            result['delay'] = cache['delay'][S_id_edge]
-            result['Acpu'] = np.copy(cache['Acpu'][S_id_edge])
-            result['Amem'] = np.copy(cache['Amem'][S_id_edge])
-            result['Fci'] = cache['Fci'][S_id_edge].copy()
-            result['rhoce'] = cache['rhoce'][S_id_edge]
-            result['cost'] = cache['cost'][S_id_edge]
-            cache['expire'][S_id_edge] = round
-            hit = True
-        return hit, result
-    
-    def cache_insert(S_b, delay, Acpu, Amem, Fci, rhoce, cost, round, cache):
-        S_id_edge=str(S2id(S_b[M:]))
-        cache['delay'][S_id_edge] = delay
-        cache['rhoce'][S_id_edge] = rhoce
-        cache['Acpu'][S_id_edge]=np.copy(Acpu)
-        cache['Amem'][S_id_edge]=np.copy(Amem)
-        cache['expire'][S_id_edge] = round
-        cache['Fci'][S_id_edge]=Fci.copy()
-        cache['cost'][S_id_edge]=cost
-        logger.debug(f'cache insert for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
-    
-    def cache_cleaning(cache,cache_ttl,round):
-        for key in list(cache['delay'].keys()):
-            if cache['expire'][key] + cache_ttl < round:
-                del cache['delay'][key]
-                del cache['rhoce'][key]
-                del cache['Acpu'][key]
-                del cache['Amem'][key]
-                del cache['expire'][key]
     
     # mandatory paramenters
     S_edge_old = params['S_edge_b']
@@ -161,21 +118,15 @@ def offload(params):
     Fci_opt = Fci_old.copy()
 
     # result caches to accelerate computation
-    
-    cache = dict()    # cache dictionary for all caches
-    cache['delay']=dict()  # cache for delay computation
-    cache['rhoce']=dict()   # cache for rhoce computation
-    cache['expire']=dict() # cache for expiration round
-    cache['Acpu']=dict()   # cache for CPU request vector
-    cache['Amem']=dict()   # cache for Memory request vector
-    cache['Fci']=dict()    # cache for instance-set call frequency matrix
-    cache['cost']=dict()   # cache for cost computation
-    cache['cache_hit'] = 0  # cache hit counter
-    cache['cache_access'] = 0   # cache access counter
+    delay_cache=dict()  # cache for delay computation
+    rhoce_cache=dict()   # cache for rhoce computation
+    expire_cache=dict() # cache for expiration round
+    Acpu_cache=dict()   # cache for CPU request vector
+    Amem_cache=dict()   # cache for Memory request vector
+    Fci_cache=dict()    # cache for instance-set call frequency matrix
 
     skip_delay_increase = False    # skip delay increase states to accelerate computation wheter possible
-
-
+    
     ## Greedy addition of dependency paths ##
     logger.info(f"ADDING PHASE")
     round = -1
@@ -215,59 +166,31 @@ def offload(params):
             # cost of the dependency path with cloud gateway only
             S_b_sweeping_temp = S_b_new.copy()
             S_b_sweeping_temp[M+cgw] = 1
-            
-            # cache probing
-            hit, result = cache_probe(S_b_sweeping_temp, round, cache)
-            if hit:
-                delay_sweeping_temp = result['delay']
-                Acpu_sweeping_temp = result['Acpu']
-                Amem_sweeping_temp = result['Amem']
-                Fci_sweeping_temp = result['Fci']
-                rhoce_temp = result['rhoce']
-                cost_sweeping_temp = result['cost']
-            else:
-                Fci_sweeping_temp = np.matrix(buildFci(S_b_sweeping_temp, Fcm, M))
-                Nci_sweeping_temp = computeNc(Fci_sweeping_temp, M, 2)
-                delay_sweeping_temp,_,_,rhoce_sweeping_temp = computeDTot(S_b_sweeping_temp, Nci_sweeping_temp, Fci_sweeping_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
-                utils.computeResourceShift(Acpu_sweeping_temp, Amem_sweeping_temp,Nci_sweeping_temp,Acpu_old,Amem_old,Nci_old)
-                cost_sweeping_temp = utils.computeCost(Acpu_sweeping_temp[M:], Amem_sweeping_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
-                # cache insertion
-                cache_insert(S_b_sweeping_temp, delay_sweeping_temp, Acpu_sweeping_temp, Amem_sweeping_temp, Fci_sweeping_temp, rhoce_sweeping_temp, cost_sweeping_temp, round, cache)
-            
-                
+            Fci_sweeping_temp = np.matrix(buildFci(S_b_sweeping_temp, Fcm, M))
+            Nci_sweeping_temp = computeNc(Fci_sweeping_temp, M, 2)
+            delay_sweeping_temp,_,_,_ = computeDTot(S_b_sweeping_temp, Nci_sweeping_temp, Fci_sweeping_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
+            utils.computeResourceShift(Acpu_sweeping_temp, Amem_sweeping_temp,Nci_sweeping_temp,Acpu_old,Amem_old,Nci_old)
+            cost_sweeping_temp = utils.computeCost(Acpu_sweeping_temp[M:], Amem_sweeping_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
+
             # iterative children sweeping
             delay_sweeping_new = delay_sweeping_temp
             cost_sweeping_new = cost_sweeping_temp
             path_b_sweep_new = path_b_gw.copy()
             path_b_sweep_temp = path_b_gw.copy()
-            while len(cloud_gw_children)>0 and no_sweeping==False:
+            while len(cloud_gw_children)>0:
                 w_min_sweeping = float("inf") # Initialize the weight
                 np.copyto(path_b_sweep_temp,path_b_sweep_new)
                 for ch in cloud_gw_children:
                     S_b_sweeping_temp[M+ch] = 1
-                    
-                    # cache probing
-                    hit, result = cache_probe(S_b_sweeping_temp, round, cache) 
-                    if hit:
-                        delay_sweeping_temp = result['delay']
-                        Acpu_sweeping_temp = result['Acpu']
-                        Amem_sweeping_temp = result['Amem']
-                        Fci_sweeping_temp = result['Fci']
-                        rhoce_temp = result['rhoce']
-                        cost_sweeping_temp = result['cost']
-                    else:
-                        Fci_sweeping_temp = np.matrix(buildFci(S_b_sweeping_temp, Fcm, M))
-                        Nci_sweeping_temp = computeNc(Fci_sweeping_temp, M, 2)
-                        delay_sweeping_temp,_,_,rhoce_temp = computeDTot(S_b_sweeping_temp, Nci_sweeping_temp, Fci_sweeping_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
-                        utils.computeResourceShift(Acpu_sweeping_temp,Amem_sweeping_temp,Nci_sweeping_temp,Acpu_old,Amem_old,Nci_old)
-                        cost_sweeping_temp = utils.computeCost(Acpu_sweeping_temp[M:], Amem_sweeping_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
-                        # cache insertion
-                        cache_insert(S_b_sweeping_temp, delay_sweeping_temp, Acpu_sweeping_temp, Amem_sweeping_temp, Fci_sweeping_temp, rhoce_sweeping_temp, cost_sweeping_temp, round, cache)
-                    
+                    Fci_sweeping_temp = np.matrix(buildFci(S_b_sweeping_temp, Fcm, M))
+                    Nci_sweeping_temp = computeNc(Fci_sweeping_temp, M, 2)
+                    delay_sweeping_temp,_,_,rhoce = computeDTot(S_b_sweeping_temp, Nci_sweeping_temp, Fci_sweeping_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
+                    utils.computeResourceShift(Acpu_sweeping_temp,Amem_sweeping_temp,Nci_sweeping_temp,Acpu_old,Amem_old,Nci_old)
+                    cost_temp = utils.computeCost(Acpu_sweeping_temp[M:], Amem_sweeping_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
                     r_delay_decrease = delay_decrease_target * look_ahead - (delay_old-delay_sweeping_new) # residul delay to decrease wrt previous sweep
                     delay_decrease_temp = delay_sweeping_new - delay_sweeping_temp
-                    cost_increase_temp = cost_sweeping_temp - cost_sweeping_new
-                    if rhoce_temp == 1 or delay_decrease_temp <= 0:  
+                    cost_increase_temp = cost_temp - cost_sweeping_new
+                    if rhoce == 1 or delay_decrease_temp <= 0:  
                         wi = 1e6 - cost_increase_temp *  1000 * delay_decrease_temp
                     else:
                         wi = cost_increase_temp /  max(min(1000*delay_decrease_temp, 1000*r_delay_decrease),1e-3) # 1e-3 used to avoid division by zero                
@@ -276,8 +199,7 @@ def offload(params):
                         w_min_sweeping = wi
                         ch_best = ch
                         delay_sweeping_opt = delay_sweeping_temp
-                        cost_sweeping_opt = cost_sweeping_temp
-                    
+                        cost_sweeping_opt = cost_temp
                 path_b_sweep_temp[0,ch_best] = 1 
                 S_b_sweeping_temp[M+ch_best] = 1
                 dependency_paths_b = np.append(dependency_paths_b,path_b_sweep_temp,axis=0)
@@ -295,39 +217,59 @@ def offload(params):
             break
 
         ## GREEDY ROUND ##
+        cache_hit = 0    
         for dpi,path_b_gw in enumerate(dependency_paths_b) :
             # merging path_b and S_b_new into S_b_temp
             path_n = np.argwhere(path_b_gw.flatten()==1).squeeze() # numerical id of the microservices of the dependency path
             np.copyto(S_b_temp, S_b_new)
             S_b_temp[M+path_n] = 1
+            S_id_edge_temp=str(S2id(S_b_temp[M:])) # id for the cache entry
+
             
-            # cache probing
-            hit, result = cache_probe(S_b_temp, round, cache)
-            if hit:
-                delay_temp = result['delay']
-                Acpu_temp = result['Acpu']
-                Amem_temp = result['Amem']
-                Fci_temp = result['Fci']
-                rhoce_temp = result['rhoce']
-                Cost_edge_temp = result['cost']
+            if S_id_edge_temp in delay_cache:
+                logger.debug(f'cache_hit for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
+                cache_hit += 1
+                if expire_cache[S_id_edge_temp] == round:
+                    # state already considered in the round
+                    continue
+                delay_temp = delay_cache[S_id_edge_temp]
+                Acpu_temp = np.copy(Acpu_cache[S_id_edge_temp])
+                Amem_temp = np.copy(Amem_cache[S_id_edge_temp])
+                Fci_temp = Fci_cache[S_id_edge_temp].copy()
+                rhoce = rhoce_cache[S_id_edge_temp]
+                delay_decrease_temp = delay_new - delay_temp
+                expire_cache[S_id_edge_temp] = round
+                if skip_delay_increase and delay_decrease_temp<0:
+                    logger.debug(f'considered dependency path {np.argwhere(path_b_gw[0]==1).flatten()} skipped for negative delay decrease')
+                    continue
             else:
                 Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
                 Nci_temp = computeNc(Fci_temp, M, 2)    # number of instance call per user request of the temp state
-                delay_temp,_,_,rhoce_temp = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0)) # Total delay of the temp state. It includes only network delays
+                delay_temp,_,_,rhoce = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0)) # Total delay of the temp state. It includes only network delays
+
+                delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
+                if skip_delay_increase and delay_decrease_temp<0:
+                    logger.debug(f'considered dependency path {np.argwhere(path_b_gw[0]==1).flatten()} skipped for negative delay decrease')
+                    continue
+                
+                # compute the cost increase adding this dependency path 
+                # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
                 utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_old,Amem_old,Nci_old)
                 Cost_edge_temp = utils.computeCost(Acpu_temp[M:], Amem_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
-                # cache insertion
-                cache_insert(S_b_temp, delay_temp, Acpu_temp, Amem_temp, Fci_temp, rhoce_temp, Cost_edge_temp, round, cache)
-            
-            cost_increase_temp = Cost_edge_temp - Cost_edge_new # cost increase wrt the new state 
-            delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
-            if skip_delay_increase and delay_decrease_temp<0:
-                logger.debug(f'considered dependency path {np.argwhere(path_b_gw[0]==1).flatten()} skipped for negative delay decrease')
-                continue
+                cost_increase_temp = Cost_edge_temp - Cost_edge_new # cost increase wrt the new state
+                
+                # caching
+                delay_cache[S_id_edge_temp] = delay_temp
+                rhoce_cache[S_id_edge_temp] = rhoce
+                Acpu_cache[S_id_edge_temp]=np.copy(Acpu_temp)
+                Amem_cache[S_id_edge_temp]=np.copy(Amem_temp)
+                expire_cache[S_id_edge_temp] = round
+                Fci_cache[S_id_edge_temp]=Fci_temp.copy()
+                logger.debug(f'cache insert for {np.argwhere(S_b_temp[M:]==1).squeeze()}')
 
             # weighting
             r_delay_decrease = delay_decrease_target * look_ahead - (delay_old-delay_new) # residul delay to decrease wrt previous conf
-            if rhoce_temp == 1 or delay_decrease_temp <= 0:  
+            if rhoce == 1 or delay_decrease_temp <= 0:  
                 w = 1e6 - cost_increase_temp *  1000 * delay_decrease_temp
             else:
                 w = cost_increase_temp /  max(min(1000*delay_decrease_temp, 1000*r_delay_decrease),1e-3) # 1e-3 used to avoid division by zero
@@ -347,7 +289,7 @@ def offload(params):
                 dp_best = path_b_gw.copy().reshape(1,M)
        
         dependency_paths_b_added = np.append(dependency_paths_b_added,dp_best,axis=0)
-        logger.info(f"chache hit probability {cache['cache_hit']/(cache['cache_access'])}")
+        logger.info(f'chache hit probability {cache_hit/len(dependency_paths_b)}')
         
         if w_min == inf:
             # no improvement possible in the greedy round
@@ -357,8 +299,13 @@ def offload(params):
         logger.info(f'added dependency path {np.argwhere(dp_best==1)[:,1].flatten()}')  
  
         # cache cleaning
-        cache_cleaning(cache,cache_ttl,round)
-
+        for key in list(delay_cache.keys()):
+            if expire_cache[key] + cache_ttl < round:
+                del delay_cache[key]
+                del rhoce_cache[key]
+                del Acpu_cache[key]
+                del Amem_cache[key]
+                del expire_cache[key]
     
 
     # Remove leaves to reduce cost

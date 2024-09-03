@@ -133,100 +133,37 @@ for M in range(11,M_max,10):
         a=-1
         
         ## E_PAMP ##
-        # a+=1
-        # alg_type[a] = "E_PAMP no upgrade limit"
-        # params = {
-        #     'S_edge_b': S_edge_b.copy(),
-        #     'Acpu': Acpu.copy(),
-        #     'Amem': Amem.copy(),
-        #     'Qcpu': Qcpu.copy(),
-        #     'Qmem': Qmem.copy(),
-        #     'Fcm': Fcm.copy(),
-        #     'M': M,
-        #     'lambd': lambda_val,
-        #     'Rs': Rs,
-        #     'Di': Di,
-        #     'delay_decrease_target': delay_decrease_target,
-        #     'RTT': RTT,
-        #     'Ne': Ne,
-        #     'Cost_cpu_edge': Cost_cpu_edge,
-        #     'Cost_mem_edge': Cost_mem_edge,
-        #     'locked': None,
-        #     'dependency_paths_b': None,
-        #     'u_limit': M
-        # }
-        # tic = time.time()
-        # result = offload(params)[1]
-        # toc = time.time()
-        # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-        # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        # best_cost_v[k,Mi,a] = result['Cost']
-        # best_delta_v[k,Mi,a] = result['delay_decrease']
-        # p_time_v[k,Mi,a] = toc-tic
-        
-        # a+=1
-        # alg_type[a] = "E_PAMP with upgrade limit 2"
-        # params = {
-        #     'S_edge_b': S_edge_b.copy(),
-        #     'Acpu': Acpu.copy(),
-        #     'Amem': Amem.copy(),
-        #     'Qcpu': Qcpu.copy(),
-        #     'Qmem': Qmem.copy(),
-        #     'Fcm': Fcm.copy(),
-        #     'M': M,
-        #     'lambd': lambda_val,
-        #     'Rs': Rs,
-        #     'Di': Di,
-        #     'delay_decrease_target': delay_decrease_target,
-        #     'RTT': RTT,
-        #     'Ne': Ne,
-        #     'Cost_cpu_edge': Cost_cpu_edge,
-        #     'Cost_mem_edge': Cost_mem_edge,
-        #     'locked': None,
-        #     'dependency_paths_b': None
-        # }
-        # tic = time.time()
-        # result = offload(params)[1]
-        # toc = time.time()
-        # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-        # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        # cost_v[k,Mi,a] = result['Cost']
-        # delta_v[k,Mi,a] = result['delay_decrease']
-        # p_time_v[k,Mi,a] = toc-tic
-        # edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b']-1)
+        a+=1
+        alg_type[a] = "E_PAMP with sweeping"
+        params = {
+            'S_edge_b': S_edge_b.copy(),
+            'Acpu': Acpu.copy(),
+            'Amem': Amem.copy(),
+            'Qcpu': Qcpu.copy(),
+            'Qmem': Qmem.copy(),
+            'Fcm': Fcm.copy(),
+            'M': M,
+            'lambd': lambda_val,
+            'Rs': Rs,
+            'Di': Di,
+            'delay_decrease_target': delay_decrease_target,
+            'RTT': RTT,
+            'Ne': Ne,
+            'Cost_cpu_edge': Cost_cpu_edge,
+            'Cost_mem_edge': Cost_mem_edge,
+            'locked': None,
+            'dependency_paths_b': None
+        }
+        tic = time.time()
+        result = offload(params)[1]
+        toc = time.time()
+        print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+        print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+        cost_v[k,Mi,a] = result['Cost']
+        delta_v[k,Mi,a] = result['delay_decrease']
+        p_time_v[k,Mi,a] = toc-tic
+        edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b']-1)
 
-        # a+=1
-        # alg_type[a] = "E_PAMP with upgrade limit 1"
-        # params = {
-        #     'S_edge_b': S_edge_b.copy(),
-        #     'Acpu': Acpu.copy(),
-        #     'Amem': Amem.copy(),
-        #     'Qcpu': Qcpu.copy(),
-        #     'Qmem': Qmem.copy(),
-        #     'Fcm': Fcm.copy(),
-        #     'M': M,
-        #     'lambd': lambda_val,
-        #     'Rs': Rs,
-        #     'Di': Di,
-        #     'delay_decrease_target': delay_decrease_target,
-        #     'RTT': RTT,
-        #     'Ne': Ne,
-        #     'Cost_cpu_edge': Cost_cpu_edge,
-        #     'Cost_mem_edge': Cost_mem_edge,
-        #     'locked': None,
-        #     'dependency_paths_b': None,
-        #     'u_limit': 1
-        # }
-        # tic = time.time()
-        # result = offload(params)[1]
-        # toc = time.time()
-        # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-        # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        # best_cost_v[k,Mi,a] = result['Cost']
-        # best_delta_v[k,Mi,a] = result['delay_decrease']
-        # p_time_v[k,Mi,a] = toc-tic
-        
-        
         ## MFU ##
         a+=1
         alg_type[a] = "MFU"
@@ -288,6 +225,39 @@ for M in range(11,M_max,10):
         p_time_v[k,Mi,a] = toc-tic
         edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
             
+        ## E_PAMP no sweeping##
+        a+=1
+        alg_type[a] = "E_PAMP no sweeping"
+        params = {
+            'S_edge_b': S_edge_b.copy(),
+            'Acpu': Acpu.copy(),
+            'Amem': Amem.copy(),
+            'Qcpu': Qcpu.copy(),
+            'Qmem': Qmem.copy(),
+            'Fcm': Fcm.copy(),
+            'M': M,
+            'lambd': lambda_val,
+            'Rs': Rs,
+            'Di': Di,
+            'delay_decrease_target': delay_decrease_target,
+            'RTT': RTT,
+            'Ne': Ne,
+            'Cost_cpu_edge': Cost_cpu_edge,
+            'Cost_mem_edge': Cost_mem_edge,
+            'locked': None,
+            'dependency_paths_b': None,
+            'no_sweeping': True
+        }
+        tic = time.time()
+        result = offload(params)[1]
+        toc = time.time()
+        print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+        print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+        cost_v[k,Mi,a] = result['Cost']
+        delta_v[k,Mi,a] = result['delay_decrease']
+        p_time_v[k,Mi,a] = toc-tic
+        edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b']-1)
+    
     if show_plot:
         markers = ['o', 's', 'D', '^', 'v', 'p', '*', 'h', 'x', '+']
         for i in range(a+1):
