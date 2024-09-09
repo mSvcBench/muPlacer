@@ -7,7 +7,7 @@ from os import environ
 N_THREADS = '1'
 environ['OMP_NUM_THREADS'] = N_THREADS
 
-from EPAMP_offload_sweeping_old import offload
+from EPAMP_offload_sweeping import offload
 from EPAMP_unoffload_from_void import unoffload
 from mfu_heuristic_new import mfu_heuristic
 from IA_heuristic import IA_heuristic
@@ -39,7 +39,7 @@ random.seed(seed)
 res=np.array([])
 trials = 10
 RTT = 0.06    # RTT edge-cloud
-M = 100 # n. microservices
+M = 101 # n. microservices
 Ne = 1e9    # bitrate cloud-edge
 
 offload_threshold = 0.200 # threshold to offload in sec
@@ -91,10 +91,11 @@ max_algotithms = 10
 show_graph = False
 show_plot = False
 
-best_cost_v = np.empty((trials,len(lambda_range),max_algotithms)) # vector of costs obtained by different algorithms 
-best_delay_v = np.empty((trials,len(lambda_range),max_algotithms)) # vector of delta obtained by different algorithms  
+cost_v = np.empty((trials,len(lambda_range),max_algotithms)) # vector of costs obtained by different algorithms 
+delay_v = np.empty((trials,len(lambda_range),max_algotithms)) # vector of delta obtained by different algorithms  
 p_time_v = np.empty((trials,len(lambda_range),max_algotithms)) # vector of processing time obtained by different algorithms
 rhoce_v = np.empty((trials,len(lambda_range),max_algotithms)) # vector of rhoce obtained by different algorithms
+edge_ms_v = np.empty((trials,len(lambda_range),max_algotithms)) # vector of number of edge microservice obtained by different algorithms
 for t in range(trials):
     print(f"Trial {t}")
     
@@ -169,7 +170,7 @@ for t in range(trials):
 
         ## E_PAMP limit 2 ##
         a+=1
-        alg_type[a] = "E_PAMP with upgrade limit 2"
+        alg_type[a] = "E_PAMP with sweeping"
         S_b_new = S_b_old_dict[a].copy()
         Acpu_new = np.zeros(2*M)
         Amem_new = np.zeros(2*M)
@@ -189,8 +190,8 @@ for t in range(trials):
             opt=True
         else:
             print(f"Delay {delay_new} sec is between offload and unoffload thresholds or no dege service, continue with next lambda value")
-            best_cost_v[t,lambda_i,a] = best_cost_v[t,lambda_i-1,a]
-            best_delay_v[t,lambda_i,a] = best_delay_v[t,lambda_i-1,a]
+            cost_v[t,lambda_i,a] = cost_v[t,lambda_i-1,a]
+            delay_v[t,lambda_i,a] = delay_v[t,lambda_i-1,a]
             p_time_v[t,lambda_i,a] = 0
             rhoce_v[t,lambda_i,a] = rhoce_v[t,lambda_i-1,a]
             opt=False
@@ -213,9 +214,7 @@ for t in range(trials):
                 'Cost_cpu_edge': Cost_cpu_edge,
                 'Cost_mem_edge': Cost_mem_edge,
                 'locked': None,
-                'dependency_paths_b': None,
-                'look_ahead': 1.3,
-                'no_sweeping': False
+                'dependency_paths_b': None
             }
             tic = time.time()
             result = offload(params)[1] if mode == 'offload' else unoffload(params)[1]
@@ -231,10 +230,11 @@ for t in range(trials):
                 print(f"Result {alg_type[a]} for {mode} \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, rhoce: {result['rhoce']}")
             else:
                 print(f"Result {alg_type[a]} for {mode} \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay : {result['delay']}, rhoce: {result['rhoce']}")
-            best_cost_v[t,lambda_i,a] = result['Cost']
-            best_delay_v[t,lambda_i,a] = result['delay']
+            cost_v[t,lambda_i,a] = result['Cost']
+            delay_v[t,lambda_i,a] = result['delay']
             p_time_v[t,lambda_i,a] = toc-tic
             rhoce_v[t,lambda_i,a] = result['rhoce']
+            edge_ms_v[t,lambda_i,a] = np.sum(result['S_edge_b'])-1
             S_b_old_dict[a][M:]=result['S_edge_b']
         
         # MFU ##
@@ -259,8 +259,8 @@ for t in range(trials):
             opt=True
         else:
             print(f"Delay {delay_new} sec is between offload and unoffload thresholds or no edge service, continue with next lambda value")
-            best_cost_v[t,lambda_i,a] = best_cost_v[t,lambda_i-1,a]
-            best_delay_v[t,lambda_i,a] = best_delay_v[t,lambda_i-1,a]
+            cost_v[t,lambda_i,a] = cost_v[t,lambda_i-1,a]
+            delay_v[t,lambda_i,a] = delay_v[t,lambda_i-1,a]
             p_time_v[t,lambda_i,a] = 0
             rhoce_v[t,lambda_i,a] = rhoce_v[t,lambda_i-1,a]
             opt=False
@@ -292,14 +292,15 @@ for t in range(trials):
                 print(f"Result {alg_type[a]} for {mode} \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, rhoce: {result['rhoce']}")
             else:
                 print(f"Result {alg_type[a]} for {mode} \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay : {result['delay']}, rhoce: {result['rhoce']}")
-            best_cost_v[t,lambda_i,a] = result['Cost']
-            best_delay_v[t,lambda_i,a] = result['delay']
+            cost_v[t,lambda_i,a] = result['Cost']
+            delay_v[t,lambda_i,a] = result['delay']
             p_time_v[t,lambda_i,a] = toc-tic
             rhoce_v[t,lambda_i,a] = result['rhoce']
+            edge_ms_v[t,lambda_i,a] = np.sum(result['S_edge_b'])-1
             S_b_old_dict[a][M:]=result['S_edge_b']
         
-        # Matlab save
-    mdic = {"best_cost_v": best_cost_v, "best_delay_v": best_delay_v, "p_time_v": p_time_v, 'rhoce_v': rhoce_v, 'alg_type': alg_type, 'lambda_range': lambda_range}
+    # Matlab save
+    mdic = {"best_cost_v": cost_v, "best_delay_v": delay_v, "p_time_v": p_time_v, 'rhoce_v': rhoce_v, 'edge_ms_v': edge_ms_v, 'alg_type': alg_type, 'lambda_range': lambda_range}
     savemat("resd1.mat", mdic)
 
 

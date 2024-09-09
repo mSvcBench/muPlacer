@@ -48,7 +48,7 @@ def offload(params):
     # look_ahead look ahead factor to increase the delay decrease target
     # dependency_paths_b (N,M) binary-based (b) encoded dependency paths precomputed
     # locked_b (M,) binary encoding of microservice that can not be moved at the edge
-    # no_sweeping disable sweeping
+    # sweeping_limit maximum number of gateway childs added in the sweeping building phase
 
     def cache_probe(S_b, round, cache):
         result=dict()
@@ -116,7 +116,7 @@ def offload(params):
     look_ahead = params['look_ahead'] if 'look_ahead' in params else 1 # look ahead factor to increase the delay decrease target
     cache_ttl = params['cache_ttl'] if 'cache_size' in params else 10 # cache expiry in round
     locked_b = params['locked_b'] if 'locked_b' in params else np.zeros(M) # binary encoding of microservice that can not be moved at the edge
-    no_sweeping = params['no_sweeping'] if 'no_sweeping' in params else False # disable sweeping
+    sweeping_limit = float(params['sweeping_limit']) if 'sweeping_limit' in params else float(inf) # disable sweeping
 
     S_cloud_old = np.ones(int(M)) # EPAMP assumes all microservice instances run in the cloud
     S_cloud_old[M-1] = 0 # M-1 and 2M-1 are associated to the edge ingress gateway, therefore M-1 must be set to 0 and 2M-1 to 1 
@@ -146,6 +146,7 @@ def offload(params):
     ## variables initialization ##
     S_b_temp = np.zeros(2*M) # S_b_temp is the temporary placement state used in a greedy round
     S_b_new = np.zeros(2*M) # S_b_new is the new placement state 
+    S_b_sweeping_temp = np.zeros(2*M)  # S_b_sweeping_temp is the temporary placement state used in bulding dependency paths with sweeping
     Acpu_new = np.zeros(2*M)    # Acpu_new is the new CPU request vector
     Amem_new = np.zeros(2*M)    # Amem_new is the new Memory request vector
     Nci_new = Nci_old.copy()    # Nci_new is the new number of instance call per user request
@@ -207,13 +208,12 @@ def offload(params):
         for cgw in cloud_gws:
             cloud_gw_children = np.argwhere(np.ravel(Fci_new[cgw,0:M])>0).flatten() # list of microservices called by the cloud gateway
             cloud_gw_children=cloud_gw_children[np.argwhere(locked_b[cloud_gw_children]==0)] # remove children that can not be moved @ the edge
+            
             path_b_gw = np.zeros((1,M),int)
             path_b_gw[0,:] = S_b_new[M:].copy()
             path_b_gw[0,cgw] = 1 # dependency path with the cloud gateway only
             dependency_paths_b = np.append(dependency_paths_b,path_b_gw,axis=0)
-            
-            # cost of the dependency path with cloud gateway only
-            S_b_sweeping_temp = S_b_new.copy()
+            np.copyto(S_b_sweeping_temp,S_b_new)
             S_b_sweeping_temp[M+cgw] = 1
             
             # cache probing
@@ -240,8 +240,12 @@ def offload(params):
             cost_sweeping_new = cost_sweeping_temp
             path_b_sweep_new = path_b_gw.copy()
             path_b_sweep_temp = path_b_gw.copy()
-            while len(cloud_gw_children)>0 and no_sweeping==False:
-                w_min_sweeping = float("inf") # Initialize the weight
+            added_children = 0
+            while len(cloud_gw_children)>0:
+                if added_children >= sweeping_limit:
+                    logger.info(f"reached sweeping limit")
+                    break
+                w_min_sweeping = float("inf") # Initialize the minimum weight
                 np.copyto(path_b_sweep_temp,path_b_sweep_new)
                 for ch in cloud_gw_children:
                     S_b_sweeping_temp[M+ch] = 1
@@ -258,36 +262,39 @@ def offload(params):
                     else:
                         Fci_sweeping_temp = np.matrix(buildFci(S_b_sweeping_temp, Fcm, M))
                         Nci_sweeping_temp = computeNc(Fci_sweeping_temp, M, 2)
-                        delay_sweeping_temp,_,_,rhoce_temp = computeDTot(S_b_sweeping_temp, Nci_sweeping_temp, Fci_sweeping_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
+                        delay_sweeping_temp,_,_,rhoce_sweeping_temp = computeDTot(S_b_sweeping_temp, Nci_sweeping_temp, Fci_sweeping_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
                         utils.computeResourceShift(Acpu_sweeping_temp,Amem_sweeping_temp,Nci_sweeping_temp,Acpu_old,Amem_old,Nci_old)
                         cost_sweeping_temp = utils.computeCost(Acpu_sweeping_temp[M:], Amem_sweeping_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
                         # cache insertion
                         cache_insert(S_b_sweeping_temp, delay_sweeping_temp, Acpu_sweeping_temp, Amem_sweeping_temp, Fci_sweeping_temp, rhoce_sweeping_temp, cost_sweeping_temp, round, cache)
                     
-                    r_delay_decrease = delay_decrease_target * look_ahead - (delay_old-delay_sweeping_new) # residul delay to decrease wrt previous sweep
-                    delay_decrease_temp = delay_sweeping_new - delay_sweeping_temp
-                    cost_increase_temp = cost_sweeping_temp - cost_sweeping_new
-                    if rhoce_temp == 1 or delay_decrease_temp <= 0:  
-                        wi = 1e6 - cost_increase_temp *  1000 * delay_decrease_temp
+                    r_delay_sweeping_decrease = delay_decrease_target * look_ahead - (delay_old-delay_sweeping_new) # residul delay to decrease wrt previous sweep
+                    delay_sweeping_decrease_temp = delay_sweeping_new - delay_sweeping_temp
+                    cost_sweeping_increase_temp = cost_sweeping_temp - cost_sweeping_new
+                    if rhoce_sweeping_temp == 1 or delay_sweeping_decrease_temp <= 0:  
+                        wi = 1e6 - cost_sweeping_increase_temp *  1000 * delay_sweeping_decrease_temp
                     else:
-                        wi = cost_increase_temp /  max(min(1000*delay_decrease_temp, 1000*r_delay_decrease),1e-3) # 1e-3 used to avoid division by zero                
+                        wi = cost_sweeping_increase_temp /  max(min(1000*delay_sweeping_decrease_temp, 1000*r_delay_sweeping_decrease),1e-3) # 1e-3 used to avoid division by zero                
                     S_b_sweeping_temp[M+ch] = 0
                     if wi < w_min_sweeping:
                         w_min_sweeping = wi
-                        ch_best = ch
+                        ch_sweeping_best = ch
                         delay_sweeping_opt = delay_sweeping_temp
                         cost_sweeping_opt = cost_sweeping_temp
                     
-                path_b_sweep_temp[0,ch_best] = 1 
-                S_b_sweeping_temp[M+ch_best] = 1
+                path_b_sweep_temp[0,ch_sweeping_best] = 1 
+                S_b_sweeping_temp[M+ch_sweeping_best] = 1
                 dependency_paths_b = np.append(dependency_paths_b,path_b_sweep_temp,axis=0)
                 np.copyto(path_b_sweep_new,path_b_sweep_temp)
                 delay_sweeping_new = delay_sweeping_opt
                 cost_sweeping_new = cost_sweeping_opt
-                cloud_gw_children = np.delete(cloud_gw_children,np.argwhere(cloud_gw_children==ch_best)[0,0])
+                cloud_gw_children = np.delete(cloud_gw_children,np.argwhere(cloud_gw_children==ch_sweeping_best)[0,0])
+                added_children += 1
                 if delay_old-delay_sweeping_new >= delay_decrease_target * look_ahead:
                     # delay reduction reached no need to proceed sweeping with this gw
                     break
+
+ 
         
         if len(dependency_paths_b) == 0:
             # All dependency path considered no other way to reduce delay

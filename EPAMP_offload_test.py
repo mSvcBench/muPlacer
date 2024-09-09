@@ -1,5 +1,5 @@
 # pylint: disable=C0103, C0301
-from EPAMP_offload_sweeping_old import offload
+from EPAMP_offload_sweeping import offload
 import argparse
 import logging
 import sys
@@ -7,6 +7,7 @@ import numpy as np
 import networkx as nx
 import utils
 import random
+import time
 from computeNc import computeNc
 from buildFci import buildFci
 
@@ -28,7 +29,7 @@ def main():
     Cost_mem_edge = 1 # cost of memory at the edge
 
     random=dict()
-    random['n_parents'] = 1
+    random['n_parents'] = 2
 
     Fcm_range_min = 0.1 # min value of microservice call frequency 
     Fcm_range_max = 0.5 # max value of microservice call frequency 
@@ -122,14 +123,16 @@ def main():
         'no_caching': False,
         'Qcpu': Qcpu,
         'Qmem': Qmem,
-        'no_sweeping': False,
+        'sweeping_limit': 2000,
     }
 
-        
+    tic = time.time()    
     result_list = offload(params)
+    toc = time.time()
     result=result_list[1]
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
     print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+    print(f'processing time {(toc-tic)} sec')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
