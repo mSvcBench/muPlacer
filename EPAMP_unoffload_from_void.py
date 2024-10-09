@@ -10,7 +10,7 @@ from numpy import inf
 from computeNc import computeNc
 from buildFci import buildFci
 from computeDTot import computeDTot
-from EPAMP_offload_sweeping_old import offload
+from EPAMP_offload_sweeping import offload
 
 
 np.seterr(divide='ignore', invalid='ignore')
@@ -36,6 +36,8 @@ def unoffload(params):
     #Ne cloud-edge network bitrate
     #Cost_cpu_edge cost of CPU at the edge
     #Cost_mem_edge cost of Memory at the edge
+    #Cost_cpu_cloud cost of CPU at the edge
+    #Cost_mem_cloud cost of Memory at the edge
     #Di (2*M,) vector of internal delay of an instance at the cloud (:M) and at the edge (M:)
     # Qmem (M,) memory quantum in bytes, Kubernetes memory request
     # Qcpu (M,) CPU quantum in cpu sec, Kubernetes CPU request
@@ -53,7 +55,8 @@ def unoffload(params):
     Ne = params['Ne']
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
-
+    Cost_cpu_cloud = params['Cost_cpu_cloud']
+    Cost_mem_cloud = params['Cost_mem_cloud']
     
     # optional paramenters
     Di = params['Di'] if 'Di' in params else np.zeros(2*M)
@@ -69,7 +72,7 @@ def unoffload(params):
     Nci_old = computeNc(Fci_old, M, 2)  # (2*M,) number of instance call per user request
     delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)[0]  # Total delay of the current configuration. It includes only network delays
     delay_target = delay_old + delay_increase_target
-    Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the current state
+    Cost_old = utils.computeCost(Acpu_old, Amem_old, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]# Total cost of the current state
 
     S_edge_void = np.zeros(int(M))  # (M,) edge state with no instance-set in the edge
     S_edge_void[M-1] = 1  # edge istio proxy
@@ -106,13 +109,15 @@ def unoffload(params):
         'Ne': Ne,
         'Cost_cpu_edge': Cost_cpu_edge,
         'Cost_mem_edge': Cost_mem_edge,
+        'Cost_cpu_cloud': Cost_cpu_cloud,
+        'Cost_mem_cloud': Cost_mem_cloud,
         'locked_b': locked_b
     }
     logger.info(f"unoffload calls offload with void edge and delay_decrease_target: {delay_decrease_target}")
     result_list = offload(params)
     result=result_list[1]
     result['delay_increase'] = (delay_void-result['delay_decrease']) - delay_old
-    result['cost_decrease'] = Cost_edge_old-result['Cost']
+    result['cost_decrease'] = Cost_old-result['Cost']
     result['to-apply'] = utils.numpy_array_to_list(np.argwhere(result['S_edge_b']-S_b_old[M:]>0))
     result['to-delete']= utils.numpy_array_to_list(np.argwhere(S_b_old[M:]-result['S_edge_b']>0))
     del result['delay_decrease']

@@ -21,7 +21,6 @@ import time
 import utils
 import random
 import logging
-from trace_builder import dp_builder_trace
 
 def edges_reversal(graph):
     for edge in graph.get_edgelist():
@@ -30,7 +29,7 @@ def edges_reversal(graph):
 
 logging.basicConfig(stream=sys.stdout, level='ERROR',format='%(asctime)s GMA %(levelname)s %(message)s')
 
-M_max = 211
+M = 121 # number of microservices
 max_algotithms = 10
 
 trials = 50
@@ -38,11 +37,12 @@ seed = 150273
 np.random.seed(seed)
 random.seed(seed)
 RTT = 0.06    # RTT edge-cloud
-target_delay = 0.1   # target delay 
-app_delay_no_net = 0.05  # delay of the application without network
+max_target_delay = 0.181   # max target delay  
+min_target_delay = 0.05   # min target delay 
+app_delay_no_net = min_target_delay # delay of the application without network
 #delay_decrease_target = 0.03    # requested delay reduction
-lambda_val = 500    # request per second
-Ne =1e9    # bitrate cloud-edge
+lambda_val = 100    # request per second
+Ne =2e9    # bitrate cloud-edge
 
 graph_algorithm = 'barabasi' # 'random' or 'barabasi
 barabasi=dict()
@@ -70,18 +70,22 @@ Cost_network = 0.02 # cost of network traffic per GB
 show_graph = False
 show_plot = False
 
-cost_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of costs obtained by different algorithms 
-cost_v_edge = np.empty((trials,int(M_max/10),max_algotithms)) # vector of edge costs obtained by different algorithms 
-cost_v_cloud = np.empty((trials,int(M_max/10),max_algotithms)) # vector of cloud costs obtained by different algorithms
-cost_v_traffic = np.empty((trials,int(M_max/10),max_algotithms)) # vector of network costs obtained by different algorithms
-delay_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of delta obtained by different algorithms 
-delta_cost_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of delta obtained by different algorithms 
-p_time_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of processing time obtained by different algorithms
-edge_ms_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of number of edge microservice obtained by different algorithms
-rhoce_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of edge-cloud network utilization obtained by different algorithms
-Mi=-1
-for M in range(11,M_max,10):
-    Mi+=1   # index of the number of microservices
+x_samples = np.ceil((max_target_delay - min_target_delay)/0.01)
+cost_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of costs obtained by different algorithms 
+cost_v_edge = np.empty((trials,int(x_samples),max_algotithms)) # vector of edge costs obtained by different algorithms 
+cost_v_cloud = np.empty((trials,int(x_samples),max_algotithms)) # vector of cloud costs obtained by different algorithms
+cost_v_traffic = np.empty((trials,int(x_samples),max_algotithms)) # vector of network costs obtained by different algorithms
+delay_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of delta obtained by different algorithms 
+delta_cost_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of delta obtained by different algorithms 
+p_time_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of processing time obtained by different algorithms
+edge_ms_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of number of edge microservice obtained by different algorithms
+rhoce_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of edge-cloud network utilization obtained by different algorithms
+lambda_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of lambda used by different algorithms
+target_delay_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of target delay used by different algorithms
+n_microservices_v = np.empty((trials,int(x_samples),max_algotithms)) # vector of number of microservices used by different algorithms
+  
+for k in range(trials):
+    print(f'\n\ntrial {k}')
     S_edge_b = np.zeros(M)  # initial state. 
     S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
     S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
@@ -91,68 +95,70 @@ for M in range(11,M_max,10):
     Di = np.random.uniform(Di_range_min,Di_range_max,M)
     Di[M-1] = 0 # user has no internal delay
     Di = np.tile(Di, 2)    
-    barabasi['n'] = M-1
+    barabasi['n'] = M-1  
+    Rs = np.random.randint(Rs_range_min,Rs_range_max,M)  # random response size bytes
+    Rs[0] = 2e6 # ingress microservice has response size of 2MB
+    Rs[M-1]=0 # user has no response size
     
-    for k in range(trials):
-        print(f'\n\ntrial {k}')  
-        Rs = np.random.randint(Rs_range_min,Rs_range_max,M)  # random response size bytes
-        Rs[M-1]=0 # user has no response size
+    # build dependency graph
+    Fcm = np.zeros([M,M])   # microservice call frequency matrix
+    if graph_algorithm == 'barabasi':
+        g = Graph.Barabasi(n=barabasi['n'],m=barabasi['m'],power=barabasi['power'],zero_appeal=barabasi['zero_appeal'], directed=True)
+        edges_reversal(g)
+        Fcm[:M-1,:M-1] = np.matrix(g.get_adjacency()) 
+    elif graph_algorithm == 'random':
+        n_parents = 3
+        for i in range(1,M-1):
+            n_parent=np.random.randint(1,random['n_parents'])
+            for j in range(n_parent):
+                a = np.random.randint(i)
+                Fcm[a,i]=1
         
-        # build dependency graph
-        Fcm = np.zeros([M,M])   # microservice call frequency matrix
-        if graph_algorithm == 'barabasi':
-            g = Graph.Barabasi(n=barabasi['n'],m=barabasi['m'],power=barabasi['power'],zero_appeal=barabasi['zero_appeal'], directed=True)
-            edges_reversal(g)
-            Fcm[:M-1,:M-1] = np.matrix(g.get_adjacency()) 
-        elif graph_algorithm == 'random':
-            n_parents = 3
-            for i in range(1,M-1):
-                n_parent=np.random.randint(1,random['n_parents'])
-                for j in range(n_parent):
-                    a = np.random.randint(i)
-                    Fcm[a,i]=1
-            
-        # set random values for microservice call frequency matrix
-        for i in range(0,M-1):
-            for j in range(0,M-1):
-                Fcm[i,j]=np.random.uniform(Fcm_range_min,Fcm_range_max) if Fcm[i,j]>0 else 0
-        Fcm[M-1,0] = 1  # user call microservice 0 (the ingress microservice)
+    # set random values for microservice call frequency matrix
+    for i in range(0,M-1):
+        for j in range(0,M-1):
+            Fcm[i,j]=np.random.uniform(Fcm_range_min,Fcm_range_max) if Fcm[i,j]>0 else 0
+    Fcm[M-1,0] = 1  # user call microservice 0 (the ingress microservice)
 
-        # set random values for CPU and memory requests in case of cloud only deployment
-        Acpu_void = np.random.uniform(Acpu_range_min,Acpu_range_max,size=M) * lambda_val / 10
-        Acpu_void[M-1]=0   # user has no CPU request
-        Amem_void = Acpu_void * 2 # memory request is twice the CPU request (rule of thumb 1 CPU x 2GBs)
-        Acpu_void = np.append(Acpu_void, np.zeros(M))
-        Amem_void = np.append(Amem_void, np.zeros(M))
-        S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
-        S_b_void[M-1] = 0  # User is not in the cloud
-        S_b_void[2*M-1] = 1  # User is in the cloud
-        Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
-        Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
-        
-        # compute Acpu and Amem for the current state
-        # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
-        Fci = np.matrix(buildFci(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
-        Nci = computeNc(Fci, M, 2)    # number of instance call per user request of the current state
-        Acpu = Acpu_void.copy()
-        Amem = Amem_void.copy()
-        utils.computeResourceShift(Acpu, Amem, Nci, Acpu_void, Amem_void, Nci_void) # compute the resource shift from void state to the current S_b state
-        delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, Nci, Fci, Di, np.tile(Rs, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
-        # Di rescaling
-        scaling_factor = delay_no_network / app_delay_no_net
-        Di = Di / scaling_factor
-        delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, Nci, Fci, Di, np.tile(Rs, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
-        delay_void,_,_,rhoce_void = computeDTot(S_b_void, Nci_void, Fci_void, Di, np.tile(Rs, 2), RTT, Ne, lambda_val, M)
-        delay_decrease_target = max(delay_void - target_delay,0)
+    # set random values for CPU and memory requests in case of cloud only deployment
+    Acpu_void = np.random.uniform(Acpu_range_min,Acpu_range_max,size=M) * lambda_val / 10
+    Acpu_void[M-1]=0   # user has no CPU request
+    Amem_void = Acpu_void * 2 # memory request is twice the CPU request (rule of thumb 1 CPU x 2GBs)
+    Acpu_void = np.append(Acpu_void, np.zeros(M))
+    Amem_void = np.append(Amem_void, np.zeros(M))
+    S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
+    S_b_void[M-1] = 0  # User is not in the cloud
+    S_b_void[2*M-1] = 1  # User is in the cloud
+    Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
+    Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
     
-        if show_graph:
-            G = nx.DiGraph(Fcm)
-            nx.draw(G,with_labels=True)
-            plt.show()
-        
+    # compute Acpu and Amem for the current state
+    # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
+    Fci = np.matrix(buildFci(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
+    Nci = computeNc(Fci, M, 2)    # number of instance call per user request of the current state
+    Acpu = Acpu_void.copy()
+    Amem = Amem_void.copy()
+    utils.computeResourceShift(Acpu, Amem, Nci, Acpu_void, Amem_void, Nci_void) # compute the resource shift from void state to the current S_b state
+    delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, Nci, Fci, Di, np.tile(Rs, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
+    # Di rescaling
+    scaling_factor = delay_no_network / app_delay_no_net
+    Di = Di / scaling_factor
+    delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, Nci, Fci, Di, np.tile(Rs, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
+    delay_void,_,_,rhoce_void = computeDTot(S_b_void, Nci_void, Fci_void, Di, np.tile(Rs, 2), RTT, Ne, lambda_val, M)
+    
+    if show_graph:
+        G = nx.DiGraph(Fcm)
+        nx.draw(G,with_labels=True)
+        plt.show()
+    
+    Ti=-1  
+    for target_delay in np.arange(min_target_delay,max_target_delay,0.01):
+        print(f'\n target_delay {target_delay}')
+        delay_decrease_target = max(delay_void - target_delay,0)
+        Ti+=1   # index of the delay target   
         alg_type = [""] * max_algotithms # vector of strings describing algorithms used in a trial
-        a=-1
         
+        a=-1
         ## E_PAMP ##
         # a+=1
         # alg_type[a] = "E_PAMP - min SWP"
@@ -178,26 +184,29 @@ for M in range(11,M_max,10):
         #     'locked': None,
         #     'dependency_paths_b': None,
         #     'dp_builder': 'dp_builder_with_minimum_sweeping',
-        #     'u_limit': 2
+        #     'look_ahead': 1.0
         # }
         # tic = time.time()
         # result = offload(params)[1]
         # toc = time.time()
         # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        # cost_v[k,Mi,a] = result['Cost']
-        # cost_v_edge[k,Mi,a] = result['Cost_edge']
-        # cost_v_cloud[k,Mi,a] = result['Cost_cloud']
-        # delay_v[k,Mi,a] = result['delay']
-        # rhoce_v[k,Mi,a] = result['rhoce']
-        # cost_v_traffic[k,Mi,a] = result['Cost_traffic']
-        # delta_cost_v[k,Mi,a] = result['cost_increase']
-        # p_time_v[k,Mi,a] = toc-tic
-        # edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
-
+        # cost_v[k,Ti,a] = result['Cost']
+        # cost_v_edge[k,Ti,a] = result['Cost_edge']
+        # cost_v_cloud[k,Ti,a] = result['Cost_cloud']
+        # delay_v[k,Ti,a] = result['delay']
+        # rhoce_v[k,Ti,a] = result['rhoce']
+        # cost_v_traffic[k,Ti,a] = result['Cost_traffic']
+        # delta_cost_v[k,Ti,a] = result['cost_increase']
+        # p_time_v[k,Ti,a] = toc-tic
+        # edge_ms_v[k,Ti,a] = np.sum(result['S_edge_b'])-1
+        # lambda_v[k,Ti,a] = lambda_val
+        # target_delay_v[k,Ti,a] = target_delay
+        # n_microservices_v[k,Ti,a] = M
+        
         ## E_PAMP ##
         a+=1
-        alg_type[a] = "E_PAMP - Traces"
+        alg_type[a] = "E_PAMP - traces"
         params = {
             'S_edge_b': S_edge_b.copy(),
             'Acpu': Acpu.copy(),
@@ -227,15 +236,18 @@ for M in range(11,M_max,10):
         toc = time.time()
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        cost_v[k,Mi,a] = result['Cost']
-        cost_v_edge[k,Mi,a] = result['Cost_edge']
-        cost_v_cloud[k,Mi,a] = result['Cost_cloud']
-        delay_v[k,Mi,a] = result['delay']
-        rhoce_v[k,Mi,a] = result['rhoce']
-        cost_v_traffic[k,Mi,a] = result['Cost_traffic']
-        delta_cost_v[k,Mi,a] = result['cost_increase']
-        p_time_v[k,Mi,a] = toc-tic
-        edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
+        cost_v[k,Ti,a] = result['Cost']
+        cost_v_edge[k,Ti,a] = result['Cost_edge']
+        cost_v_cloud[k,Ti,a] = result['Cost_cloud']
+        delay_v[k,Ti,a] = result['delay']
+        rhoce_v[k,Ti,a] = result['rhoce']
+        cost_v_traffic[k,Ti,a] = result['Cost_traffic']
+        delta_cost_v[k,Ti,a] = result['cost_increase']
+        p_time_v[k,Ti,a] = toc-tic
+        edge_ms_v[k,Ti,a] = np.sum(result['S_edge_b'])-1
+        lambda_v[k,Ti,a] = lambda_val
+        target_delay_v[k,Ti,a] = target_delay
+        n_microservices_v[k,Ti,a] = M
 
         ## MFU ##
         a+=1
@@ -266,15 +278,18 @@ for M in range(11,M_max,10):
         toc = time.time()
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        cost_v[k,Mi,a] = result['Cost']
-        cost_v_edge[k,Mi,a] = result['Cost_edge']
-        cost_v_cloud[k,Mi,a] = result['Cost_cloud']
-        delay_v[k,Mi,a] = result['delay']
-        rhoce_v[k,Mi,a] = result['rhoce']
-        delta_cost_v[k,Mi,a] = result['cost_increase']
-        cost_v_traffic[k,Mi,a] = result['Cost_traffic']
-        p_time_v[k,Mi,a] = toc-tic
-        edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
+        cost_v[k,Ti,a] = result['Cost']
+        cost_v_edge[k,Ti,a] = result['Cost_edge']
+        cost_v_cloud[k,Ti,a] = result['Cost_cloud']
+        delay_v[k,Ti,a] = result['delay']
+        rhoce_v[k,Ti,a] = result['rhoce']
+        delta_cost_v[k,Ti,a] = result['cost_increase']
+        cost_v_traffic[k,Ti,a] = result['Cost_traffic']
+        p_time_v[k,Ti,a] = toc-tic
+        edge_ms_v[k,Ti,a] = np.sum(result['S_edge_b'])-1
+        lambda_v[k,Ti,a] = lambda_val
+        target_delay_v[k,Ti,a] = target_delay
+        n_microservices_v[k,Ti,a] = M
         
         ## E_PAMP ##
         a+=1
@@ -308,15 +323,20 @@ for M in range(11,M_max,10):
         toc = time.time()
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        cost_v[k,Mi,a] = result['Cost']
-        cost_v_edge[k,Mi,a] = result['Cost_edge']
-        cost_v_cloud[k,Mi,a] = result['Cost_cloud']
-        delay_v[k,Mi,a] = result['delay']
-        rhoce_v[k,Mi,a] = result['rhoce']
-        cost_v_traffic[k,Mi,a] = result['Cost_traffic']
-        delta_cost_v[k,Mi,a] = result['cost_increase']
-        p_time_v[k,Mi,a] = toc-tic
-        edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
+        cost_v[k,Ti,a] = result['Cost']
+        cost_v_edge[k,Ti,a] = result['Cost_edge']
+        cost_v_cloud[k,Ti,a] = result['Cost_cloud']
+        delay_v[k,Ti,a] = result['delay']
+        rhoce_v[k,Ti,a] = result['rhoce']
+        cost_v_traffic[k,Ti,a] = result['Cost_traffic']
+        delta_cost_v[k,Ti,a] = result['cost_increase']
+        p_time_v[k,Ti,a] = toc-tic
+        edge_ms_v[k,Ti,a] = np.sum(result['S_edge_b'])-1
+        lambda_v[k,Ti,a] = lambda_val
+        target_delay_v[k,Ti,a] = target_delay
+        n_microservices_v[k,Ti,a] = M
+
+        
 
 
         ## IA ##
@@ -356,12 +376,12 @@ for M in range(11,M_max,10):
     if show_plot:
         markers = ['o', 's', 'D', '^', 'v', 'p', '*', 'h', 'x', '+']
         for i in range(a+1):
-            line, = plt.plot(cost_v[:,Mi,0], cost_v[:,Mi,i], label=alg_type[i], linestyle='none', marker=markers[i])
+            line, = plt.plot(cost_v[:,Ti,0], cost_v[:,Ti,i], label=alg_type[i], linestyle='none', marker=markers[i])
         plt.ylabel('cost')
         plt.xlabel(f'cost of {alg_type[0]}')
         plt.legend()
         plt.show()
 
     # Matlab save
-mdic = {"cost_v": cost_v, "cost_v_edge": cost_v_edge, "cost_v_cloud": cost_v_cloud, "delay_v": delay_v, "delta_cost_v": delta_cost_v, "p_time_v": p_time_v, "edge_ms_v": edge_ms_v, "rhoce_v": rhoce_v, "cost_v_traffic": cost_v_traffic}
-savemat("res1_const_delay.mat", mdic)
+mdic = {"cost_v": cost_v, "cost_v_edge": cost_v_edge, "cost_v_cloud": cost_v_cloud, "delay_v": delay_v, "delta_cost_v": delta_cost_v, "p_time_v": p_time_v, "edge_ms_v": edge_ms_v, "rhoce_v": rhoce_v, "cost_v_traffic": cost_v_traffic, "lambda_v": lambda_v, "target_delay_v": target_delay_v, "n_microservices_v": n_microservices_v}
+savemat("res1_const_size.mat", mdic)

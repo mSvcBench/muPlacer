@@ -35,6 +35,8 @@ def unoffload(params):
     #Ne cloud-edge network bitrate
     #Cost_cpu_edge cost of CPU at the edge
     #Cost_mem_edge cost of Memory at the edge
+    #Cost_cpu_cloud cost of CPU at the edge
+    #Cost_mem_cloud cost of Memory at the edge
     #Di (2*M,) vector of delay of the instance-set at the cloud (:M) and at the edge (M:)
     #Qmem (2*M,) vector of memory quota of the instance at the cloud (:M) and at the edge (M:)
     #Qcpu (2*M,) vector of CPU quota of the instance at the cloud (:M) and at the edge (M:)
@@ -56,6 +58,8 @@ def unoffload(params):
     Ne = params['Ne']
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
+    Cost_cpu_cloud = params['Cost_cpu_cloud']
+    Cost_mem_cloud = params['Cost_mem_cloud']
 
     
     # optional paramenters
@@ -65,7 +69,7 @@ def unoffload(params):
     dependency_paths_b = params['dependency_paths_b'] if 'dependency_paths_b' in params else None
     S_edge_base_b = params['S_edge_base_b'] if 'S_edge_base_b' in params else np.zeros(M)
     S_edge_base_b[M-1] = 1 # user/ingress  at the edge
-    look_ahead = params['look_ahead'] if 'look_ahead' in params else 1.3
+    look_ahead = params['look_ahead'] if 'look_ahead' in params else 1
 
     
     S_cloud_old = np.ones(int(M)) # EPAMP assumes all microservice instance run in the cloud
@@ -76,7 +80,7 @@ def unoffload(params):
     Fci_old = np.matrix(buildFci(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
     Nci_old = computeNc(Fci_old, M, 2)  # (2*M,) number of instance call per user request
     delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)[0]  # Total delay of the current configuration. It includes only network delays
-    Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the current state
+    Cost_old = utils.computeCost(Acpu_old, Amem_old, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]# Total cost of the current state
 
     ## BUILDING OF DEPENDENCY PATHS ##
     if dependency_paths_b is None:
@@ -110,7 +114,7 @@ def unoffload(params):
         Nci_new = computeNc(Fci_new, M, 2)
         delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
         utils.computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old)
-        Cost_edge_new = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
+        Cost_new = utils.computeCost(Acpu_new, Amem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]
         edge_leaves = np.logical_and(np.sum(Fci_new[M:2*M-1,M:2*M-1], axis=1)==0, S_b_new[M:2*M-1].reshape((M-1,1))==1) # edge microservice with no outgoing calls
         edge_leaves = np.argwhere(edge_leaves)[:,0]
         
@@ -133,8 +137,8 @@ def unoffload(params):
             delay_temp = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
             delay_increase_temp = max(1e-6,delay_temp - delay_new)  # delay increase wrt previous state
             utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_new,Amem_new,Nci_new)
-            Cost_edge_temp = utils.computeCost(Acpu_temp[M:], Amem_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
-            cost_decrease = Cost_edge_new - Cost_edge_temp
+            Cost_temp = utils.computeCost(Acpu_temp, Amem_temp, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]
+            cost_decrease = Cost_new - Cost_temp
             w = cost_decrease/delay_increase_temp
             delay_increase_tot_v[dpi] = [max(1e-6,delay_temp - delay_old),w] # delay increase wrt initial state and weight for each possible removal
         
@@ -169,14 +173,14 @@ def unoffload(params):
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
     delay_increase_new = delay_new - delay_old
     utils.computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old)
-    Cost_edge_new = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
-    cost_decrease_new = Cost_edge_old - Cost_edge_new
+    Cost_new = utils.computeCost(Acpu_new, Amem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]
+    cost_decrease_new = Cost_old - Cost_new
 
     result_edge = dict()
     
     # extra information
     result_edge['S_edge_b'] = S_b_new[M:].astype(int)
-    result_edge['Cost'] = Cost_edge_new
+    result_edge['Cost'] = Cost_new
     result_edge['delay_increase'] = delay_increase_new
     result_edge['cost_decrease'] = cost_decrease_new
     result_edge['Acpu'] = Acpu_new

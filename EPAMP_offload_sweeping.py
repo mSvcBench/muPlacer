@@ -13,6 +13,7 @@ import logging
 import sys
 import utils
 from S2id import S2id
+from id2S import id2S
 import time
 #from EPAMP_unoffload5 import unoffload
 
@@ -78,7 +79,7 @@ def offload(params):
             hit = True
         return hit, result
     
-    def cache_probe_insert(S_b_new, Acpu_old, Amem_old, Nci_old, round):
+    def cache_probe_insert_old(S_b_new, Acpu_old, Amem_old, Nci_old, round):
         hit, result = cache_probe(S_b_new, round)
         if not hit:
             Acpu_new = np.zeros(2*global_M)
@@ -98,6 +99,27 @@ def offload(params):
             result['Nci'] = Nci_new.copy()
             result['rhoce'] = rhoce_new
             result['cost'] = cost_new
+        return hit, result
+    
+    def evaluate_perf(S_b_new, Acpu_old, Amem_old, Nci_old, round):
+        # fake caching test
+        Acpu_new_p = np.zeros(2*global_M)
+        Amem_new_p = np.zeros(2*global_M)
+        Fci_new_p = np.matrix(buildFci(S_b_new, global_Fcm, global_M))
+        Nci_new_p = computeNc(Fci_new_p, global_M, 2)
+        delay_new_p,_,_,rhoce_new_p = computeDTot(S_b_new, Nci_new_p, Fci_new_p, global_Di, global_Rs, global_RTT, global_Ne, global_lambd, global_M, np.empty(0))
+        utils.computeResourceShift(Acpu_new_p, Amem_new_p,Nci_new_p,Acpu_old,Amem_old,Nci_old)
+        cost_new_p = utils.computeCost(Acpu_new_p, Amem_new_p, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new_p*global_Ne, global_Cost_network)[0] # Total  cost of the temp state
+        result = dict()
+        result['delay'] = delay_new_p
+        result['Acpu'] = Acpu_new_p.copy()
+        result['Amem'] = Amem_new_p.copy()
+        result['Fci'] = Fci_new_p.copy()
+        result['Nci'] = Nci_new_p.copy()
+        result['rhoce'] = rhoce_new_p
+        result['cost'] = cost_new_p
+        cache['cache_access'] += 1
+        hit = False
         return hit, result
     
     def cache_insert(S_b, delay, Acpu, Amem, Fci, Nci, rhoce, cost, round):
@@ -142,21 +164,73 @@ def offload(params):
         rl = np.argwhere((residual > 0) & (residual <= global_u_limit)).flatten()
         return dependency_paths_b_full[rl]
     
+    def dp_builder_traces(S_b_init, Acpu_init, Amem_init, Nci_init, round):
+        ## BUILDING OF SIMULATION TRACES#
+        nonlocal dependency_paths_b_full_built, dependency_paths_b_full
+        hit, result = evaluate_perf(S_b_init, Acpu_init, Amem_init, Nci_init, round)
+        delay_init = result['delay']
+        Fci_init = result['Fci']
+        cost_init = result['cost']
+        if not dependency_paths_b_full_built:
+            n_traces = global_max_traces
+            dependency_paths_b_full = np.empty((0,global_M), int)
+            user = global_M-1
+            iteration = 0
+            while True:
+                iteration += 1
+                trace_sample_b = np.zeros(global_M)
+                trace_sample_b = dp_builder_trace(user,trace_sample_b,global_Fcm, S_b_init)
+                if not any(np.array_equal(trace_sample_b, row) for row in dependency_paths_b_full):
+                    dependency_paths_b_full = np.append(dependency_paths_b_full, trace_sample_b.reshape(1, -1), axis=0)
+                if len(dependency_paths_b_full) >= n_traces or (iteration > 100*n_traces and len(dependency_paths_b_full) > 20):
+                    break
+            trace_sample_b = np.ones(global_M)  # add full edge trace
+            dependency_paths_b_full = np.append(dependency_paths_b_full, trace_sample_b.reshape(1, -1), axis=0)
+            dependency_paths_b_full_built = True
+        
+        dependency_paths_b = np.empty((0,global_M), int)
+        # remove traces fully in the edge
+        residual = np.argwhere(np.sum(np.maximum(dependency_paths_b_full-S_b_init[global_M:],0),axis=1)>0).flatten()
+        dependency_paths_b = dependency_paths_b_full[residual]
+        
+        # clean from these traces the cloud microservices that are at a distance greather than u_limit from the edge gateways
+        edge_gws = np.unique(np.argwhere(Fci_init[global_M:2*global_M,0:global_M]>0)[:,0]) # list of edge gateways: microservices in the edge with at least one call from the cloud
+        allowed_cloud_ms = np.empty((0), int)
+        for edge_gw in edge_gws:
+            allowed_cloud_ms = np.append(allowed_cloud_ms, np.argwhere(global_ms_distances[edge_gw][:] <= global_u_limit).flatten())
+        allowed_cloud_ms = np.unique(allowed_cloud_ms)
+        not_allowed_ms = np.setdiff1d(np.arange(global_M), allowed_cloud_ms)
+        dependency_paths_b[:,not_allowed_ms]=0
+        
+        dependency_paths_b, paths_freq = np.unique(dependency_paths_b, axis=0,return_counts=True)
+        mfu_dependency_paths_id = np.flip(np.argsort(paths_freq))
+
+        return dependency_paths_b[mfu_dependency_paths_id[:min(global_max_dps,len(mfu_dependency_paths_id))]]
+
+    
+    def dp_builder_trace(node,trace,global_Fcm, S_b_init):
+        children = np.argwhere(global_Fcm[node,0:global_M]>0).flatten()
+        for child in children:
+            if np.random.random() < global_Fcm[node,child]:
+                trace[child] = 1
+                trace = dp_builder_trace(child,trace,global_Fcm,S_b_init)
+        return trace
+
     def dp_builder_with_minimum_sweeping(S_b_init, Acpu_init, Amem_init, Nci_init, round):
         ## BUILDING OF COMPOSITE DEPENDENCY PATHS WITH MINIMUM SWEEPING##
         
         dependency_paths_b = np.empty((0,global_M), int) # Storage of binary-based (b) encoded dependency paths
-        hit, result = cache_probe_insert(S_b_init, Acpu_init, Amem_init, Nci_init, round)
+        hit, result = evaluate_perf(S_b_init, Acpu_init, Amem_init, Nci_init, round)
         delay_init = result['delay']
         Fci_init = result['Fci']
         cost_init = result['cost']
 
         S_b_sweeping_temp = np.copy(S_b_init) # S_b_sweeping_temp is the temporary placement state used in bulding dependency paths with sweeping
 
-        cloud_gws = np.unique(np.argwhere(Fci_init[global_M:2*global_M,0:global_M]>0)[:,1]) # list of cloud gateways: microservices in the cloud with at least one call from the edge
+        cloud_gws = np.unique(np.argwhere(Fci_init[global_M:2*global_M,0:global_M]>0)[:,0]) # list of cloud gateways: microservices in the cloud with at least one call from the edge
         cloud_gws = cloud_gws[np.argwhere(global_locked_b[cloud_gws]==0)] # remove cloud gateways that can not be moved @ the edge
         for cgw in cloud_gws:
-            d = 0
+            d = 1
             delay_sweeping_opt = delay_init
             delay_sweeping_new = delay_init
             cost_sweeping_new = cost_init
@@ -174,13 +248,14 @@ def offload(params):
                     for ch in cloud_gw_children:
                         S_b_sweeping_temp[global_M+ch] = 1
                         # cache access
-                        _, result = cache_probe_insert(S_b_sweeping_temp, Acpu_init, Amem_init, Nci_init, round) 
+                        _, result = evaluate_perf(S_b_sweeping_temp, Acpu_init, Amem_init, Nci_init, round) 
                         delay_sweeping_temp = result['delay']
                         rhoce_sweeping_temp = result['rhoce']
                         cost_sweeping_temp = result['cost']
-                        r_delay_sweeping_decrease = global_delay_decrease_target * global_look_ahead - (global_delay_old-delay_sweeping_new) # residul delay to decrease wrt previous sweep
-                        delay_sweeping_decrease_temp = delay_init - delay_sweeping_temp
-                        cost_sweeping_increase_temp = cost_sweeping_temp - cost_init
+                        # r_delay_sweeping_decrease = global_delay_decrease_target * global_look_ahead - (global_delay_old-delay_sweeping_new) # residul delay to decrease wrt previous sweep
+                        r_delay_sweeping_decrease = 1e6
+                        delay_sweeping_decrease_temp = delay_sweeping_new - delay_sweeping_temp
+                        cost_sweeping_increase_temp = cost_sweeping_temp - cost_sweeping_new
                         if delay_sweeping_decrease_temp <= 0:  
                             wi = 1e6 + cost_sweeping_increase_temp *  1000 * abs(delay_sweeping_decrease_temp)
                         else:
@@ -377,11 +452,15 @@ def offload(params):
     global_look_ahead = params['look_ahead'] if 'look_ahead' in params else 1 # look ahead factor to increase the delay decrease target
     global_cache_ttl = params['cache_ttl'] if 'cache_size' in params else 10 # cache expiry in round
     global_locked_b = params['locked_b'] if 'locked_b' in params else np.zeros(global_M) # binary encoding of microservice that can not be moved at the edge
-    global_dp_builder = locals()[params['dp_builder']] if 'dp_builder' in params else dp_builder_with_sweeping # dependency path builder function
+    global_dp_builder = locals()[params['dp_builder']] if 'dp_builder' in params else dp_builder_with_traces # dependency path builder function
     global_S_cloud_old = np.ones(int(global_M)) # EPAMP assumes all microservice instances run in the cloud
     global_S_cloud_old[global_M-1] = 0 # M-1 and 2M-1 are associated to the edge ingress gateway, therefore M-1 must be set to 0 and 2M-1 to 1 
     global_S_b_old = np.concatenate((global_S_cloud_old, global_S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     global_u_limit = params['u_limit'] if 'u_limit' in params else global_M # maximum number of microservices upgrade to consider in the single path adding greedy iteraction (lower reduce optimality but increase computaiton speed)
+    global_traces = params['traces'] if 'traces' in params else None # flag to enable traces generation
+    global_max_dps = params['max_dps'] if 'max_dps' in params else 1e6 # maximum number of dependency paths to consider in an optimization iteration
+    global_max_traces = params['max_traces'] if 'max_traces' in params else 1024 # maximum number of traces to generate
+    
     # Check if the graph is acyclic
     Fcm_unitary = np.where(global_Fcm > 0, 1, 0)
     global_G = nx.DiGraph(Fcm_unitary) # Create microservice dependency graph
@@ -436,8 +515,12 @@ def offload(params):
     cache['cache_access'] = 0   # cache access counter
 
     skip_delay_increase = False    # skip delay increase states to accelerate computation wheter possible
-    dependency_paths_b_full_built = False # flag to check if the full dependency paths have been built
-    dependency_paths_b_full = np.empty((0,global_M), int) # Storage of full set of binary-based (b) encoded dependency paths
+    if global_traces is None:
+        dependency_paths_b_full_built = False # flag to check if the full dependency paths have been built
+        dependency_paths_b_full = np.empty((0,global_M), int) # Storage of full set of binary-based (b) encoded dependency paths
+    else:
+        dependency_paths_b_full_built = True
+        dependency_paths_b_full = global_traces
 
 
     ## Greedy addition of dependency paths ##
@@ -447,13 +530,14 @@ def offload(params):
     while True:
         round += 1
         logger.info(f'-----------------------')
-        w_min = float("inf") # Initialize the weight
+        w_opt = float("inf") # Initialize the weight
         skip_delay_increase = False     # Skip negative weight to accelerate computation
         np.copyto(S_b_new,S_b_opt)      # S_b_new is the new placement state
         np.copyto(Acpu_new,Acpu_opt)    # Acpu_new is the new CPU request vector, Acpu_opt is the best CPU request vector computed by the previos greedy round
         np.copyto(Amem_new,Amem_opt)    # Amem_new is the new Memory request vector, Amem_opt is the best Memory request vector computed by the previos greedy round
         np.copyto(Fci_new,Fci_opt)      # Fci_new is the new instance-set call frequency matrix, Fci_opt is the best instance-set call frequency matrix computed by the previos greedy round
         delay_new = delay_opt           # delay_new is the new delay. It includes only network delays
+        rhoce_new = rhoce_opt           # rhoce_new is the new cloud-edge network utilization
         cost_new  = utils.computeCost(Acpu_new, Amem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_Ne, global_Cost_network)[0] # Total  cost of the new configuration
         logger.info(f'new state {np.argwhere(S_b_new[global_M:]==1).squeeze()}, cost {cost_new}, delay decrease {1000*(global_delay_old-delay_new)} ms, cost increase {cost_new-global_Cost_old}')
         
@@ -465,6 +549,7 @@ def offload(params):
             break
 
         # BUILDING OF COMPOSITE DEPENDENCY PATHS WITH SWEEPING
+        Nci_new = computeNc(Fci_new, global_M, 2)
         dependency_paths_b = global_dp_builder(S_b_new, Acpu_new, Amem_new, Nci_new, round)
         
         if len(dependency_paths_b) == 0:
@@ -480,7 +565,7 @@ def offload(params):
             S_b_temp[global_M+path_n] = 1
             
             # cache probing
-            _, result = cache_probe_insert(S_b_temp, global_Acpu_old, global_Acpu_old, global_Nci_old, round)
+            _, result = evaluate_perf(S_b_temp, Acpu_new, Amem_new, Nci_new, round)
             delay_temp = result['delay']
             Acpu_temp = result['Acpu']
             Amem_temp = result['Amem']
@@ -495,7 +580,8 @@ def offload(params):
                 continue
 
             # weighting
-            r_delay_decrease = global_delay_decrease_target * global_look_ahead - (global_delay_old-delay_new) # residul delay to decrease wrt previous conf
+            # r_delay_decrease = global_delay_decrease_target * global_look_ahead - (global_delay_old-delay_new) # residul delay to decrease wrt previous conf
+            r_delay_decrease = 1e6  # test
             if delay_decrease_temp <= 0:  
                 w = 1e6 + cost_increase_temp *  1000 * abs(delay_decrease_temp)
             else:
@@ -505,25 +591,27 @@ def offload(params):
             
             logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()}, cost increase {cost_increase_temp}, delay decrease {1000*delay_decrease_temp} ms, delay {delay_temp} ms, weight {w}')
 
-            if w < w_min:
+            if w < w_opt:
                 # update best state of the greedy round
                 np.copyto(S_b_opt,S_b_temp)
                 Acpu_opt = np.copy(Acpu_temp)
                 Amem_opt = np.copy(Amem_temp)
                 Fci_opt = np.copy(Fci_temp)
                 delay_opt = delay_temp
-                w_min = w
-                dp_best = path_b.copy().reshape(1,global_M)
+                rhoce_opt = rhoce_temp
+                w_opt = w
+                dp_opt = path_b.copy().reshape(1,global_M)
+                cost_opt = Cost_temp
        
-        dependency_paths_b_added = np.append(dependency_paths_b_added,dp_best,axis=0)
+        dependency_paths_b_added = np.append(dependency_paths_b_added,dp_opt,axis=0)
         logger.info(f"chache hit probability {cache['cache_hit']/(cache['cache_access'])}")
         
-        if w_min == inf:
+        if w_opt == inf:
             # no improvement possible in the greedy round
             logger.info(f'no improvement possible in the greedy round')
             break
         
-        logger.info(f'added dependency path {np.argwhere(dp_best==1)[:,1].flatten()}')  
+        logger.info(f'added dependency path {np.argwhere(dp_opt==1)[:,1].flatten()}')  
  
         # cache cleaning
         cache_cleaning(round)

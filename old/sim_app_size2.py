@@ -6,7 +6,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from EPAMP_offload_sweeping import offload
-from mfu_heuristic_new import mfu_heuristic
+from MFU_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
 import numpy as np
 import networkx as nx
@@ -42,7 +42,7 @@ Ne =1e9    # bitrate cloud-edge
 
 graph_algorithm = 'barabasi' # 'random' or 'barabasi
 barabasi=dict()
-barabasi['m'] = 1
+barabasi['m'] = 2
 barabasi['power'] = 0.9
 barabasi['zero_appeal'] = 3.125
 random=dict()
@@ -50,8 +50,8 @@ random['n_parents'] = 3
 
 Fcm_range_min = 0.1 # min value of microservice call frequency 
 Fcm_range_max = 0.5 # max value of microservice call frequency 
-Acpu_range_min = 0.5  # min value of actual CPU consumption per instance-set
-Acpu_range_max = 8 # max value of actual CPU consumption per instance-set
+Acpu_range_min = 1  # min value of actual CPU consumption per instance-set
+Acpu_range_max = 128 # max value of actual CPU consumption per instance-set
 Rs_range_min = 200000 # min value of response size in bytes
 Rs_range_max = 2000000   # max of response size in bytes
 
@@ -59,7 +59,10 @@ show_graph = False
 show_plot = False
 
 cost_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of costs obtained by different algorithms 
-delta_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of delta obtained by different algorithms  
+cost_v_edge = np.empty((trials,int(M_max/10),max_algotithms)) # vector of costs obtained by different algorithms 
+cost_v_cloud = np.empty((trials,int(M_max/10),max_algotithms)) # vector of costs obtained by different algorithms 
+delta_delay_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of delta obtained by different algorithms 
+delta_cost_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of delta obtained by different algorithms 
 p_time_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of processing time obtained by different algorithms
 edge_ms_v = np.empty((trials,int(M_max/10),max_algotithms)) # vector of number of edge microservice obtained by different algorithms
 Mi=-1
@@ -69,8 +72,10 @@ for M in range(11,M_max,10):
     S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
     S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
     S_b[M-1] = 0  # User is not in the cloud
-    Cost_cpu_edge = 1 # cost of CPU at the edge
-    Cost_mem_edge = 1 # cost of memory at the edge
+    Cost_cpu_edge = 1.3 # cost of CPU at the edge
+    Cost_mem_edge = 1.3 # cost of memory at the edge
+    Cost_cpu_cloud = 1 # cost of CPU at the edge
+    Cost_mem_cloud = 1 # cost of memory at the edge
     Qcpu = np.ones(2*M) # CPU quota
     Qmem = np.ones(2*M) # memory quota
     Di = np.zeros(2*M) # internal delay of microservices, equal cloud/edge computing performance    
@@ -151,6 +156,8 @@ for M in range(11,M_max,10):
             'Ne': Ne,
             'Cost_cpu_edge': Cost_cpu_edge,
             'Cost_mem_edge': Cost_mem_edge,
+            'Cost_cpu_cloud': Cost_cpu_cloud,
+            'Cost_mem_cloud': Cost_mem_cloud,
             'locked': None,
             'dependency_paths_b': None
         }
@@ -160,7 +167,10 @@ for M in range(11,M_max,10):
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
         cost_v[k,Mi,a] = result['Cost']
-        delta_v[k,Mi,a] = result['delay_decrease']
+        cost_v_edge[k,Mi,a] = result['Cost_edge']
+        cost_v_cloud[k,Mi,a] = result['Cost_cloud']
+        delta_delay_v[k,Mi,a] = result['delay_decrease']
+        delta_cost_v[k,Mi,a] = result['cost_increase']
         p_time_v[k,Mi,a] = toc-tic
         edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
 
@@ -183,6 +193,8 @@ for M in range(11,M_max,10):
             'Ne': Ne,
             'Cost_cpu_edge': Cost_cpu_edge,
             'Cost_mem_edge': Cost_mem_edge,
+            'Cost_cpu_cloud': Cost_cpu_cloud,
+            'Cost_mem_cloud': Cost_mem_cloud,
             'mode': 'offload'
         }
         tic = time.time()
@@ -191,7 +203,10 @@ for M in range(11,M_max,10):
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
         cost_v[k,Mi,a] = result['Cost']
-        delta_v[k,Mi,a] = result['delay_decrease']
+        cost_v_edge[k,Mi,a] = result['Cost_edge']
+        cost_v_cloud[k,Mi,a] = result['Cost_cloud']
+        delta_delay_v[k,Mi,a] = result['delay_decrease']
+        delta_cost_v[k,Mi,a] = result['cost_increase']
         p_time_v[k,Mi,a] = toc-tic
         edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
         
@@ -213,7 +228,9 @@ for M in range(11,M_max,10):
             'RTT': RTT,
             'Ne': Ne,
             'Cost_cpu_edge': Cost_cpu_edge,
-            'Cost_mem_edge': Cost_mem_edge
+            'Cost_mem_edge': Cost_mem_edge,
+            'Cost_cpu_cloud': Cost_cpu_cloud,
+            'Cost_mem_cloud': Cost_mem_cloud
         }
         tic = time.time()
         result = IA_heuristic(params)
@@ -221,42 +238,12 @@ for M in range(11,M_max,10):
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
         cost_v[k,Mi,a] = result['Cost']
-        delta_v[k,Mi,a] = result['delay_decrease']
+        cost_v_edge[k,Mi,a] = result['Cost_edge']
+        cost_v_cloud[k,Mi,a] = result['Cost_cloud']
+        delta_delay_v[k,Mi,a] = result['delay_decrease']
+        delta_cost_v[k,Mi,a] = result['cost_increase']
         p_time_v[k,Mi,a] = toc-tic
         edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
-            
-        # ## E_PAMP no sweeping limit##
-        # a+=1
-        # alg_type[a] = "E_PAMP no sweepin limit"
-        # params = {
-        #     'S_edge_b': S_edge_b.copy(),
-        #     'Acpu': Acpu.copy(),
-        #     'Amem': Amem.copy(),
-        #     'Qcpu': Qcpu.copy(),
-        #     'Qmem': Qmem.copy(),
-        #     'Fcm': Fcm.copy(),
-        #     'M': M,
-        #     'lambd': lambda_val,
-        #     'Rs': Rs,
-        #     'Di': Di,
-        #     'delay_decrease_target': delay_decrease_target,
-        #     'RTT': RTT,
-        #     'Ne': Ne,
-        #     'Cost_cpu_edge': Cost_cpu_edge,
-        #     'Cost_mem_edge': Cost_mem_edge,
-        #     'locked': None,
-        #     'dependency_paths_b': None
-        # }
-        # tic = time.time()
-        # result = offload(params)[1]
-        # toc = time.time()
-        # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-        # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        # cost_v[k,Mi,a] = result['Cost']
-        # delta_v[k,Mi,a] = result['delay_decrease']
-        # p_time_v[k,Mi,a] = toc-tic
-        # edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
-    
     if show_plot:
         markers = ['o', 's', 'D', '^', 'v', 'p', '*', 'h', 'x', '+']
         for i in range(a+1):
@@ -267,5 +254,5 @@ for M in range(11,M_max,10):
         plt.show()
 
     # Matlab save
-    mdic = {"best_cost_v": cost_v, "best_delta_v": delta_v, "p_time_v": p_time_v, "edge_ms_v": edge_ms_v}
-    savemat("res1.mat", mdic)
+    mdic = {"best_cost_v": cost_v, "best_cost_v_edge": cost_v_edge, "best_cost_v_cloud": cost_v_cloud, "best_delta_v": delta_delay_v, "best_delta_cost_v": delta_cost_v, "p_time_v": p_time_v, "edge_ms_v": edge_ms_v}
+    savemat("res2.mat", mdic)

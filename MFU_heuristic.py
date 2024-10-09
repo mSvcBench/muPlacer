@@ -126,6 +126,7 @@ def mfu_heuristic(params):
         S_b_new[M:] = result['S_edge_b']
         
 
+    # compute final values
     Acpu_new = np.zeros(2*M)
     Amem_new = np.zeros(2*M)
     Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
@@ -139,15 +140,15 @@ def mfu_heuristic(params):
     cost_increase_new = Cost_new - Cost_old 
 
 
-    # compute final values
-    delay_decrease_new = delay_old - delay_new
-    delay_increase_new = delay_new - delay_old
-    np.copyto(Acpu_new,Acpu_old) 
-    np.copyto(Amem_new,Amem_old)
-    utils.computeResourceShift(Acpu_new, Amem_new, Nci_new, Acpu_old, Amem_old, Nci_old) 
-    Cost_new, Cost_new_edge,Cost_cpu_new_edge,Cost_mem_new_edge, Cost_new_cloud,Cost_cpu_new_cloud,Cost_mem_new_cloud,Cost_traffic_new = utils.computeCost(Acpu_new, Amem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_new * Ne, Cost_network) # Total cost of new state
-    cost_increase_new = Cost_new - Cost_old
-    cost_decrease_new = Cost_old - Cost_new 
+    # # compute final values
+    # delay_decrease_new = delay_old - delay_new
+    # delay_increase_new = delay_new - delay_old
+    # np.copyto(Acpu_new,Acpu_old) 
+    # np.copyto(Amem_new,Amem_old)
+    # utils.computeResourceShift(Acpu_new, Amem_new, Nci_new, Acpu_old, Amem_old, Nci_old) 
+    # Cost_new, Cost_new_edge,Cost_cpu_new_edge,Cost_mem_new_edge, Cost_new_cloud,Cost_cpu_new_cloud,Cost_mem_new_cloud,Cost_traffic_new = utils.computeCost(Acpu_new, Amem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_new * Ne, Cost_network) # Total cost of new state
+    # cost_increase_new = Cost_new - Cost_old
+    # cost_decrease_new = Cost_old - Cost_new 
 
     result_edge = dict()
     

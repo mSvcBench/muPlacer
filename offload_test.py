@@ -113,7 +113,10 @@ def main():
         'Qcpu': Qcpu,
         'Qmem': Qmem,
         'mode': 'offload',
-        'dp_builder': 'dp_builder_with_minimum_sweeping'
+        'u_limit':2,
+        'max_dps': 128,
+        'max_traces': 1024,
+        'dp_builder': 'dp_builder_traces'
     }
 
     tic = time.time()    

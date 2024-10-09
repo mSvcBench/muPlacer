@@ -26,8 +26,10 @@ def main():
     S_edge_b = np.zeros(M)  # initial state. 
     S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
 
-    Cost_cpu_edge = 1 # cost of CPU at the edge
-    Cost_mem_edge = 1 # cost of memory at the edge
+    Cost_cpu_edge = 1.3 # cost of CPU at the edge
+    Cost_mem_edge = 1.3 # cost of memory at the edge
+    Cost_cpu_cloud = 1 # cost of CPU at the cloud
+    Cost_mem_cloud = 1 # cost of memory at the cloud
 
     random=dict()
     random['n_parents'] = 3
@@ -93,7 +95,7 @@ def main():
     Acpu = Acpu_void.copy()
     Amem = Amem_void.copy()
     utils.computeResourceShift(Acpu,Amem,Nci,Acpu_void,Amem_void,Nci_void)
-    Cost_edge = utils.computeCost(Acpu[M:], Amem[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
+    Cost_edge = utils.computeCost(Acpu, Amem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]
 
     # set 0 random internal delay
     Di = np.zeros(2*M)
