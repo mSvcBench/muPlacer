@@ -159,50 +159,6 @@ for k in range(trials):
         alg_type = [""] * max_algotithms # vector of strings describing algorithms used in a trial
         
         a=-1
-        ## E_PAMP ##
-        # a+=1
-        # alg_type[a] = "E_PAMP - min SWP"
-        # params = {
-        #     'S_edge_b': S_edge_b.copy(),
-        #     'Acpu': Acpu.copy(),
-        #     'Amem': Amem.copy(),
-        #     'Qcpu': Qcpu.copy(),
-        #     'Qmem': Qmem.copy(),
-        #     'Fcm': Fcm.copy(),
-        #     'M': M,
-        #     'lambd': lambda_val,
-        #     'Rs': Rs,
-        #     'Di': Di,
-        #     'delay_decrease_target': delay_decrease_target,
-        #     'RTT': RTT,
-        #     'Ne': Ne,
-        #     'Cost_cpu_edge': Cost_cpu_edge,
-        #     'Cost_mem_edge': Cost_mem_edge,
-        #     'Cost_cpu_cloud': Cost_cpu_cloud,
-        #     'Cost_mem_cloud': Cost_mem_cloud,
-        #     'Cost_network': Cost_network,
-        #     'locked': None,
-        #     'dependency_paths_b': None,
-        #     'dp_builder': 'dp_builder_with_minimum_sweeping',
-        #     'look_ahead': 1.0
-        # }
-        # tic = time.time()
-        # result = offload(params)[1]
-        # toc = time.time()
-        # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-        # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        # cost_v[k,Ti,a] = result['Cost']
-        # cost_v_edge[k,Ti,a] = result['Cost_edge']
-        # cost_v_cloud[k,Ti,a] = result['Cost_cloud']
-        # delay_v[k,Ti,a] = result['delay']
-        # rhoce_v[k,Ti,a] = result['rhoce']
-        # cost_v_traffic[k,Ti,a] = result['Cost_traffic']
-        # delta_cost_v[k,Ti,a] = result['cost_increase']
-        # p_time_v[k,Ti,a] = toc-tic
-        # edge_ms_v[k,Ti,a] = np.sum(result['S_edge_b'])-1
-        # lambda_v[k,Ti,a] = lambda_val
-        # target_delay_v[k,Ti,a] = target_delay
-        # n_microservices_v[k,Ti,a] = M
         
         ## E_PAMP ##
         a+=1
@@ -229,7 +185,9 @@ for k in range(trials):
             'locked': None,
             'dependency_paths_b': None,
             'dp_builder': 'dp_builder_traces',
-            'u_limit': 2
+            'u_limit':2,
+            'max_dps': 128,
+            'max_traces': 2048,
         }
         tic = time.time()
         result = offload(params)[1]

@@ -63,23 +63,23 @@ def offload(params):
         result['rhoce'] = None
         result['cost'] = None
         hit = False
-        cache['cache_access'] += 1
-        S_id_edge=str(S2id(S_b[global_M:]))
-        if S_id_edge in cache['delay']:
+        global_cache['cache_access'] += 1
+        S_id_edge=np.array2string(S_b[global_M:])
+        if S_id_edge in global_cache['delay']:
             logger.debug(f'cache_hit for {np.argwhere(S_b[global_M:]==1).squeeze()}')
-            cache['cache_hit'] += 1
-            result['delay'] = cache['delay'][S_id_edge]
-            result['Acpu'] = np.copy(cache['Acpu'][S_id_edge])
-            result['Amem'] = np.copy(cache['Amem'][S_id_edge])
-            result['Fci'] = cache['Fci'][S_id_edge].copy()
-            result['Nci'] = cache['Nci'][S_id_edge].copy()
-            result['rhoce'] = cache['rhoce'][S_id_edge]
-            result['cost'] = cache['cost'][S_id_edge]
-            cache['expire'][S_id_edge] = round
+            global_cache['cache_hit'] += 1
+            result['delay'] = global_cache['delay'][S_id_edge]
+            result['Acpu'] = np.copy(global_cache['Acpu'][S_id_edge])
+            result['Amem'] = np.copy(global_cache['Amem'][S_id_edge])
+            result['Fci'] = global_cache['Fci'][S_id_edge].copy()
+            result['Nci'] = global_cache['Nci'][S_id_edge].copy()
+            result['rhoce'] = global_cache['rhoce'][S_id_edge]
+            result['cost'] = global_cache['cost'][S_id_edge]
+            global_cache['expire'][S_id_edge] = round
             hit = True
         return hit, result
     
-    def cache_probe_insert_old(S_b_new, Acpu_old, Amem_old, Nci_old, round):
+    def evaluate_perf(S_b_new, Acpu_old, Amem_old, Nci_old, round):
         hit, result = cache_probe(S_b_new, round)
         if not hit:
             Acpu_new = np.zeros(2*global_M)
@@ -101,47 +101,47 @@ def offload(params):
             result['cost'] = cost_new
         return hit, result
     
-    def evaluate_perf(S_b_new, Acpu_old, Amem_old, Nci_old, round):
-        # fake caching test
-        Acpu_new_p = np.zeros(2*global_M)
-        Amem_new_p = np.zeros(2*global_M)
-        Fci_new_p = np.matrix(buildFci(S_b_new, global_Fcm, global_M))
-        Nci_new_p = computeNc(Fci_new_p, global_M, 2)
-        delay_new_p,_,_,rhoce_new_p = computeDTot(S_b_new, Nci_new_p, Fci_new_p, global_Di, global_Rs, global_RTT, global_Ne, global_lambd, global_M, np.empty(0))
-        utils.computeResourceShift(Acpu_new_p, Amem_new_p,Nci_new_p,Acpu_old,Amem_old,Nci_old)
-        cost_new_p = utils.computeCost(Acpu_new_p, Amem_new_p, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new_p*global_Ne, global_Cost_network)[0] # Total  cost of the temp state
-        result = dict()
-        result['delay'] = delay_new_p
-        result['Acpu'] = Acpu_new_p.copy()
-        result['Amem'] = Amem_new_p.copy()
-        result['Fci'] = Fci_new_p.copy()
-        result['Nci'] = Nci_new_p.copy()
-        result['rhoce'] = rhoce_new_p
-        result['cost'] = cost_new_p
-        cache['cache_access'] += 1
-        hit = False
-        return hit, result
+    # def evaluate_perf_no_caching(S_b_new, Acpu_old, Amem_old, Nci_old, round):
+    #     # fake caching test
+    #     Acpu_new_p = np.zeros(2*global_M)
+    #     Amem_new_p = np.zeros(2*global_M)
+    #     Fci_new_p = np.matrix(buildFci(S_b_new, global_Fcm, global_M))
+    #     Nci_new_p = computeNc(Fci_new_p, global_M, 2)
+    #     delay_new_p,_,_,rhoce_new_p = computeDTot(S_b_new, Nci_new_p, Fci_new_p, global_Di, global_Rs, global_RTT, global_Ne, global_lambd, global_M, np.empty(0))
+    #     utils.computeResourceShift(Acpu_new_p, Amem_new_p,Nci_new_p,Acpu_old,Amem_old,Nci_old)
+    #     cost_new_p = utils.computeCost(Acpu_new_p, Amem_new_p, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new_p*global_Ne, global_Cost_network)[0] # Total  cost of the temp state
+    #     result = dict()
+    #     result['delay'] = delay_new_p
+    #     result['Acpu'] = Acpu_new_p.copy()
+    #     result['Amem'] = Amem_new_p.copy()
+    #     result['Fci'] = Fci_new_p.copy()
+    #     result['Nci'] = Nci_new_p.copy()
+    #     result['rhoce'] = rhoce_new_p
+    #     result['cost'] = cost_new_p
+    #     global_cache['cache_access'] += 1
+    #     hit = False
+    #     return hit, result
     
     def cache_insert(S_b, delay, Acpu, Amem, Fci, Nci, rhoce, cost, round):
-        S_id_edge=str(S2id(S_b[global_M:]))
-        cache['delay'][S_id_edge] = delay
-        cache['rhoce'][S_id_edge] = rhoce
-        cache['Acpu'][S_id_edge]=np.copy(Acpu)
-        cache['Amem'][S_id_edge]=np.copy(Amem)
-        cache['expire'][S_id_edge] = round
-        cache['Fci'][S_id_edge]=Fci.copy()
-        cache['Nci'][S_id_edge]=Nci.copy()
-        cache['cost'][S_id_edge]=cost
+        S_id_edge=np.array2string(S_b[global_M:])
+        global_cache['delay'][S_id_edge] = delay
+        global_cache['rhoce'][S_id_edge] = rhoce
+        global_cache['Acpu'][S_id_edge]=np.copy(Acpu)
+        global_cache['Amem'][S_id_edge]=np.copy(Amem)
+        global_cache['expire'][S_id_edge] = round
+        global_cache['Fci'][S_id_edge]=Fci.copy()
+        global_cache['Nci'][S_id_edge]=Nci.copy()
+        global_cache['cost'][S_id_edge]=cost
         logger.debug(f'cache insert for {np.argwhere(S_b_temp[global_M:]==1).squeeze()}')
     
     def cache_cleaning(round):
-        for key in list(cache['delay'].keys()):
-            if cache['expire'][key] + global_cache_ttl < round:
-                del cache['delay'][key]
-                del cache['rhoce'][key]
-                del cache['Acpu'][key]
-                del cache['Amem'][key]
-                del cache['expire'][key]
+        for key in list(global_cache['delay'].keys()):
+            if global_cache['expire'][key] + global_cache_ttl < round:
+                del global_cache['delay'][key]
+                del global_cache['rhoce'][key]
+                del global_cache['Acpu'][key]
+                del global_cache['Amem'][key]
+                del global_cache['expire'][key]
     
     def dp_builder_with_single_path_adding(S_b_init, Acpu_init, Amem_init, Nci_init, round):
         ## BUILDING OF COMPOSITE DEPENDENCY PATHS WITH SINGLE PATH ADDING##
@@ -180,8 +180,9 @@ def offload(params):
                 iteration += 1
                 trace_sample_b = np.zeros(global_M)
                 trace_sample_b = dp_builder_trace(user,trace_sample_b,global_Fcm, S_b_init)
-                if not any(np.array_equal(trace_sample_b, row) for row in dependency_paths_b_full):
-                    dependency_paths_b_full = np.append(dependency_paths_b_full, trace_sample_b.reshape(1, -1), axis=0)
+                dependency_paths_b_full = np.append(dependency_paths_b_full, trace_sample_b.reshape(1, -1), axis=0)
+                # if not any(np.array_equal(trace_sample_b, row) for row in dependency_paths_b_full):
+                #    dependency_paths_b_full = np.append(dependency_paths_b_full, trace_sample_b.reshape(1, -1), axis=0)
                 if len(dependency_paths_b_full) >= n_traces or (iteration > 100*n_traces and len(dependency_paths_b_full) > 20):
                     break
             trace_sample_b = np.ones(global_M)  # add full edge trace
@@ -202,6 +203,7 @@ def offload(params):
         not_allowed_ms = np.setdiff1d(np.arange(global_M), allowed_cloud_ms)
         dependency_paths_b[:,not_allowed_ms]=0
         
+        # compute the frequency of the dependency paths to return the most frequently used
         dependency_paths_b, paths_freq = np.unique(dependency_paths_b, axis=0,return_counts=True)
         mfu_dependency_paths_id = np.flip(np.argsort(paths_freq))
 
@@ -502,17 +504,17 @@ def offload(params):
 
     # result caches to accelerate computation
     
-    cache = dict()    # cache dictionary for all caches
-    cache['delay']=dict()  # cache for delay computation
-    cache['rhoce']=dict()   # cache for rhoce computation
-    cache['expire']=dict() # cache for expiration round
-    cache['Acpu']=dict()   # cache for CPU request vector
-    cache['Amem']=dict()   # cache for Memory request vector
-    cache['Fci']=dict()    # cache for instance-set call frequency matrix
-    cache['Nci']=dict()    # cache for number of instance call per user request
-    cache['cost']=dict()   # cache for cost computation
-    cache['cache_hit'] = 0  # cache hit counter
-    cache['cache_access'] = 0   # cache access counter
+    global_cache = dict()    # cache dictionary for all caches
+    global_cache['delay']=dict()  # cache for delay computation
+    global_cache['rhoce']=dict()   # cache for rhoce computation
+    global_cache['expire']=dict() # cache for expiration round
+    global_cache['Acpu']=dict()   # cache for CPU request vector
+    global_cache['Amem']=dict()   # cache for Memory request vector
+    global_cache['Fci']=dict()    # cache for instance-set call frequency matrix
+    global_cache['Nci']=dict()    # cache for number of instance call per user request
+    global_cache['cost']=dict()   # cache for cost computation
+    global_cache['cache_hit'] = 0  # cache hit counter
+    global_cache['cache_access'] = 0   # cache access counter
 
     skip_delay_increase = False    # skip delay increase states to accelerate computation wheter possible
     if global_traces is None:
@@ -604,7 +606,7 @@ def offload(params):
                 cost_opt = Cost_temp
        
         dependency_paths_b_added = np.append(dependency_paths_b_added,dp_opt,axis=0)
-        logger.info(f"chache hit probability {cache['cache_hit']/(cache['cache_access'])}")
+        logger.info(f"chache hit probability {global_cache['cache_hit']/(global_cache['cache_access'])}")
         
         if w_opt == inf:
             # no improvement possible in the greedy round

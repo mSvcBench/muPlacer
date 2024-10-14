@@ -115,7 +115,7 @@ def main():
         'mode': 'offload',
         'u_limit':2,
         'max_dps': 128,
-        'max_traces': 1024,
+        'max_traces': 2048,
         'dp_builder': 'dp_builder_traces'
     }
 

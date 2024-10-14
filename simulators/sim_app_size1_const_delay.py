@@ -220,7 +220,9 @@ for M in range(11,M_max,10):
             'locked': None,
             'dependency_paths_b': None,
             'dp_builder': 'dp_builder_traces',
-            'u_limit': 2
+            'u_limit': 2,
+            'max_dps': 128,
+            'max_traces': 2048,
         }
         tic = time.time()
         result = offload(params)[1]
