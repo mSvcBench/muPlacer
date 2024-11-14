@@ -31,26 +31,14 @@ def Connector(GMA_params):
     Cost_cpu_edge = GMA_params['cost']['edge-area']['cpu']['value']
     Cost_mem_edge = GMA_params['cost']['edge-area']['memory']['value']
 
-    if 'u-limit' in GMA_params['epamp']:
-        u_limit = GMA_params['epamp']['u-limit']
+    if 'u-limit' in GMA_params['optimizer']['epamp']:
+        u_limit = int(GMA_params['optimizer']['epamp']['u-limit'])
     else:
         u_limit = 2
-    if 'locked' in GMA_params['epamp']:
-        locked = GMA_params['epamp']['locked']
+    if 'locked' in GMA_params['optimizer']:
+        locked = GMA_params['optimizer']['locked']
     else:
         locked = None
-    if 'min-added-dp' in GMA_params['epamp']:
-        min_added_dp = GMA_params['epamp']['min-added-dp']
-    else:
-        min_added_dp = 0
-    if 'max-added-dp' in GMA_params['epamp']:
-        max_added_dp = GMA_params['epamp']['max-added-dp']
-    else:
-        max_added_dp = 1000000
-    if 'no-caching' in GMA_params['epamp']:
-        no_caching = GMA_params['epamp']['no-caching']
-    else:
-        no_caching = False
 
     params = {
         'S_edge_b': S_edge_b,
@@ -70,10 +58,7 @@ def Connector(GMA_params):
         'locked': locked,
         'dependency_paths_b': None,
         'u_limit': u_limit,
-        'no_caching': no_caching,
         'Qcpu': Qcpu,
-        'Qmem': Qmem,
-        'max_added_dp': max_added_dp,
-        'min_added_dp': min_added_dp
+        'Qmem': Qmem
     }
     return params

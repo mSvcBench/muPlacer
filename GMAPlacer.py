@@ -187,8 +187,8 @@ def update_resource_scaling():
         for service_name in services:
                     service=services[service_name]
                     if re.search(service['regex']['cloud-area']['workload']['regex'], result['metric']['destination_workload'], re.IGNORECASE):
-                        if result["value"][1]=="NaN":
-                            value = 0
+                        if result["value"][1]=="NaN" or float(result["value"][1]) == 0:
+                            value = default_resource_scaling
                         else:
                             value = float(result["value"][1])
                         if status['service-metrics']['resource-scaling']['value'][service['id']] != default_resource_scaling:
@@ -462,7 +462,7 @@ def apply_configuration(result_list):
         workload_name = service['regex']['cloud-area']['workload']['regex']
         workload_type = service['regex']['cloud-area']['workload']['type']
         if workload_type != 'daemonset':
-            cloud_replicas_increase = np.ceil(status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]/status['service-metrics']['resource-scaling']['value'][service_id]-status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
+            cloud_replicas_increase = status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]
             cloud_replicas = status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id]+cloud_replicas_increase
             cloud_replicas = min(status['service-metrics']['hpa']['cloud-area']['max-replicas'][service_id],cloud_replicas)
             cloud_replicas = max(status['service-metrics']['hpa']['cloud-area']['min-replicas'][service_id],cloud_replicas)
@@ -1081,7 +1081,7 @@ class GMAStataMachine():
 
         offload_type = '' # quantile-driven or avg-driven
 
-        if status['service-metrics']['edge-user-delay-quantile']['value'] < offload_delay_quantile_threshold_ms:
+        if status['service-metrics']['edge-user-delay-quantile']['value'] > offload_delay_quantile_threshold_ms:
             offload_type = 'quantile-driven'
             logger.info('quantile-driven offloading')
         else:
@@ -1123,7 +1123,7 @@ class GMAStataMachine():
 
         unoffload_type = '' # quantile-driven or avg-driven
 
-        if status['service-metrics']['edge-user-delay-quantile']['value'] > unoffload_delay_quantile_threshold_ms:
+        if status['service-metrics']['edge-user-delay-quantile']['value'] < unoffload_delay_quantile_threshold_ms:
             unoffload_type = 'quantile-driven'
             logger.info('quantile-driven unoffloading')
         else:
@@ -1131,8 +1131,8 @@ class GMAStataMachine():
             logger.info('avg-driven unoffloading')
 
         unoffload_parameters = status['service-metrics'].copy()
-        unoffload_parameters['acpu']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * unoffload_parameters['acpu']['cloud-area']['value'] # scaling the cloud cpu resources used by requests from the edge area
-        unoffload_parameters['amem']['cloud-area']['value'] = gma_config['spec']['edge-area']['resource-scaling'] * unoffload_parameters['amem']['cloud-area']['value'] # scaling the cloud memory resources used by requests from the edge area
+        unoffload_parameters['acpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['acpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
+        unoffload_parameters['amem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['amem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
         if unoffload_type == 'avg-driven':
             target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
         else:

@@ -52,8 +52,8 @@ spec:
     epamp:
       u-limit: 2  # upgrade limit optimization paramenter of EPAMP
     max-delay-reduction : 50ms  # max requested delay reduction per placement action 
-    max-delay-increase : 20ms # max requested delay increase per placement action
-    delay-quantile-multiplier: 0.5  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading
+    max-delay-increase : 50ms # max requested delay increase per placement action
+    delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading
     # locked: #  services that should not be offloaded by the optimizer 
 
   explicit-service-id : true  # if true, the service id is explicitly defined in the yaml files and can help log understanding, otherwise the service id is computed automatically
