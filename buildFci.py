@@ -2,7 +2,7 @@ import numpy as np
 
 #   Create instance-level call frequency matrix Fci assuming 
 
-#   S : vector id Sid, S[:M] (S[:M]) binary encoded presence vector for cloud (edge) microservices
+#   S : vector id Sid, S[:M] (S[M:]) binary encoded presence vector for cloud (edge) microservices
 #   M : number of microservices
 #   Fcm : microservice-level call frequency matrix
 #   Fci : instance-level call frequency matrix 

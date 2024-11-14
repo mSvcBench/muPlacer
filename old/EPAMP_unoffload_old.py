@@ -21,7 +21,7 @@ logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s EPAMP unoffloa
 logger.propagate = False
 
 def unoffload(params):
-    from EPAMP_offload import offload
+    from old.EPAMP_offload_caching import offload
     ## INITIALIZE VARIABLES ##
     #Acpu_old (2*M,) vector of CPU req by instance-set at the cloud (:M) and at the edge (M:)
     #Amem_old (2*M,) vector of Memory req by instance-set at the cloud (:M) and at the edge (M:)

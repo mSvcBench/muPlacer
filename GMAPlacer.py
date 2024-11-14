@@ -12,8 +12,8 @@ import yaml
 from os import environ
 from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
 
-import EPAMP_offload
-import EPAMP_unoffload
+import EPAMP_offload as EPAMP_offload
+import EPAMP_unoffload_from_void as EPAMP_unoffload_from_void
 import EPAMP_GMA_Connector
 import requests
 
@@ -462,7 +462,11 @@ def apply_configuration(result_list):
         workload_name = service['regex']['cloud-area']['workload']['regex']
         workload_type = service['regex']['cloud-area']['workload']['type']
         if workload_type != 'daemonset':
+<<<<<<< HEAD
             cloud_replicas_increase = status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]
+=======
+            cloud_replicas_increase = np.ceil(status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]/status['service-metrics']['resource-scaling']['value'][service_id]) #-status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
+>>>>>>> 5898d5f7f99851b0b716891280fede52c426632b
             cloud_replicas = status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id]+cloud_replicas_increase
             cloud_replicas = min(status['service-metrics']['hpa']['cloud-area']['max-replicas'][service_id],cloud_replicas)
             cloud_replicas = max(status['service-metrics']['hpa']['cloud-area']['min-replicas'][service_id],cloud_replicas)
@@ -1148,7 +1152,7 @@ class GMAStataMachine():
         logger.info(f"Unoffloading with target delay increase {unoffload_parameters['edge-user-target-delay']['value']-unoffload_parameters['edge-user-delay']['value']}ms ")
         # unoffloading logic
         params = EPAMP_GMA_Connector.Connector(unoffload_parameters)
-        result_list = EPAMP_unoffload.unoffload(params)
+        result_list = EPAMP_unoffload_from_void.unoffload(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')

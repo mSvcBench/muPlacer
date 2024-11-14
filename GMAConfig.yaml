@@ -2,10 +2,10 @@ apiVersion: gma/v0
 kind: GMAPlacerConfig
 metadata:
   name: test-config
-  namespace: edge
+  namespace: fluidosmesh
 spec:
   app:
-    namespace: edge # namespace of the application
+    namespace: fluidosmesh # namespace of the application
   telemetry:
     sync-period: 30s # camping period
     stabilization-window: 2m # stabilization window
@@ -41,10 +41,10 @@ spec:
       istio-eastwest-namespace: istio-system  # namespace of the istio eastwestgateway in the edge area
     default-resource-scaling: 1 # default resource scaling factor from the cloud to the edge. CPU and MEM used by a microservice in the cloud will be scaled of this factor when deployed in the edge and there is no available measurement
   network:
-    #netprober-server-edge: "" # netprober server in the edge area
-    #netprober-server-cloud: "" # netprober server in the cloud area
-    netprober-server-edge: http://160.80.223.212:31051/httpnetprober-edge
-    netprober-server-cloud: http://httpnetprober-cloud:8080
+    netprober-server-edge: "" # netprober server in the edge area
+    netprober-server-cloud: "" # netprober server in the cloud area
+    #netprober-server-edge: http://160.80.223.212:31051/httpnetprober-edge
+    #netprober-server-cloud: http://httpnetprober-cloud:8080
     cloud-edge-bps: 1000Mbps  # static bandwidth between cloud and edge
     edge-cloud-bps: 1000Mbps  # static bandwidth between edge and cloud   
     edge-cloud-rtt: 100ms # static RTT between edge and cloud

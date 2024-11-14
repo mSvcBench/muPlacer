@@ -9,15 +9,16 @@ import utils
 from numpy import inf
 from computeNc import computeNc
 from buildFci import buildFci
-from EPAMP_unoffload import unoffload
+from EPAMP_unoffload_from_void import unoffload
+import random
 
 def main():
     # small simulation to test the unoffload function
 
-    # Define the input variables
-    np.random.seed(150273)
-    RTT = 0.0869    # RTT edge-cloud
-    M = 30 # n. microservices
+
+
+    RTT = 0.106    # RTT edge-cloud
+    M = 100 # n. microservices
     delay_increase_target = 0.03    # requested delay reduction
     lambda_val = 20     # request per second
     Ne = 1e9    # bitrate cloud-edge
@@ -25,8 +26,10 @@ def main():
     S_edge_b = np.zeros(M)  # initial state. 
     S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
 
-    Cost_cpu_edge = 1 # cost of CPU at the edge
-    Cost_mem_edge = 1 # cost of memory at the edge
+    Cost_cpu_edge = 1.3 # cost of CPU at the edge
+    Cost_mem_edge = 1.3 # cost of memory at the edge
+    Cost_cpu_cloud = 1 # cost of CPU at the cloud
+    Cost_mem_cloud = 1 # cost of memory at the cloud
 
     random=dict()
     random['n_parents'] = 3
@@ -92,7 +95,7 @@ def main():
     Acpu = Acpu_void.copy()
     Amem = Amem_void.copy()
     utils.computeResourceShift(Acpu,Amem,Nci,Acpu_void,Amem_void,Nci_void)
-    Cost_edge = utils.computeCost(Acpu[M:], Amem[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
+    Cost_edge = utils.computeCost(Acpu, Amem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]
 
     # set 0 random internal delay
     Di = np.zeros(2*M)
@@ -125,7 +128,7 @@ def main():
     result_list = unoffload(params)
     result=result_list[1]
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
-    print(f"Result for offload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}, rounds = {result['n_rounds']}")
+    print(f"Result for unoffload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -137,4 +140,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
     logging.info( 'Logging now setup.' )
+
+    seed = 150271
+    np.random.seed(seed)
+    random.seed(seed)
+
     main()

@@ -17,6 +17,42 @@ def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
     max_delay = 1e5 # max delay used to avoid inf problem during optimization
     MN = 2*M  # edge+cloud microservice instance-sets
     Tnce = 0  # Inizialization of array for volume of cloud-edge traffic
+    Dn = np.zeros((MN, MN)) # Inizialization of matrix of network delays
+    if Rsd.size==0:
+        Tnce = np.sum(np.multiply(np.multiply(Fci[M:,:M],np.repeat(Nci[M:].reshape(M,1),M,axis=1)),np.repeat(Rs[:M].reshape(1,M),M,axis=0)))*lambd*8
+        rhonce = min(Tnce / Ne, 1)  # Utilization factor of the cloud-edge connection
+        load_spread = 0
+        rhonce_max = 1
+        if rhonce < rhonce_max:
+            load_spread = 1/(1 - rhonce)  # Load spread factor
+        else:
+            load_spread = 1e6*Tnce/Ne    # Load spread factor fostering solution with lower traffic
+            # load_spread = (rhonce * 1/((1-rhonce_max)**2)) + ((1-2*rhonce_max)/((1-rhonce_max)**2))  # Load spread factor
+        Dn = np.repeat(np.minimum(((Rs * 8 / Ne)*(load_spread)),max_delay).reshape(1,2*M),2*M,axis=0)+RTT
+    else:
+        Dn[M:,:M]=np.repeat(Rsd.reshape(1,M),M,axis=0)
+    Dn = np.repeat(np.minimum(((Rs * 8 / Ne)*(load_spread)),max_delay).reshape(1,2*M),2*M,axis=0)+RTT
+    Dn_tot = np.sum(np.multiply((Nci[M:].reshape(M,1)),(np.sum(np.multiply(Fci[M:,:M],Dn[M:,:M]),axis=1))))
+
+    return Dn_tot, rhonce 
+
+def computeDnTot_old(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
+
+    # compute cloud-edge traffic
+    
+    # S : binary presence vector
+    # Nci : average number of calls per user request per microservice
+    # Fci : call frequency matrix
+    # Rs : response size of microservices
+    # RTT : round trip time
+    # Ne : network bandwidth
+    # lambd : average number of requests per second
+    # M : number of microservices
+    # Rsd : duration of cloud edge data transfer for Rs
+
+    max_delay = 1e5 # max delay used to avoid inf problem during optimization
+    MN = 2*M  # edge+cloud microservice instance-sets
+    Tnce = 0  # Inizialization of array for volume of cloud-edge traffic
     S_edge_id = np.argwhere(S[M:]==1).flatten()
     S_not_edge_id = np.argwhere(S[M:]==0).flatten()
     for i in S_edge_id:
@@ -43,5 +79,6 @@ def computeDnTot(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd = np.empty(0)):
                     Dn[M+i,j] = Rsd[j]  # Use the provided delay
     
     Dn_tot = np.sum(np.multiply((Nci[M:].reshape(M,1)),(np.sum(np.multiply(Fci[M:,:M],Dn[M:,:M]),axis=1))))
+    Dn_tot_new, rhonce_new = computeDnTot_new(S, Nci, Fci, Rs, RTT, Ne, lambd, M, Rsd)
 
     return Dn_tot, rhonce

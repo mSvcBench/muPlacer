@@ -10,7 +10,7 @@ from E_PAMP_unoff import E_PAMP_unoff
 from E_PAMP_off import E_PAMP_off
 from IA_placement import IA_placement
 from old.random_placement import random_placement
-from mfu_placement import mfu_placement
+from old.mfu_placement import mfu_placement
 
 
 PERIOD = 3 # Rate of queries in minutes

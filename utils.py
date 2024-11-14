@@ -17,7 +17,7 @@ def qz(x,y):
         else:
             return np.ceil(x/y)*y
 
-def computeCost(Acpu,Amem,Qcpu,Qmem,Cost_cpu,Cost_mem):
+def computeCost_old(Acpu,Amem,Qcpu,Qmem,Cost_cpu,Cost_mem):
 
     # Compute the cost of a configuration 
     # Acpu : actual CPU request of microservices
@@ -33,6 +33,35 @@ def computeCost(Acpu,Amem,Qcpu,Qmem,Cost_cpu,Cost_mem):
     Cost_mem_sum = Cost_mem * Amem_sum
     Cost_sum = Cost_cpu_sum + Cost_mem_sum
     return Cost_sum,Cost_cpu_sum,Cost_mem_sum
+
+def computeCost(Acpu,Amem,Qcpu,Qmem,Cost_cpu_edge,Cost_mem_edge,Cost_cpu_cloud,Cost_mem_cloud,Tnce,Cost_network):
+
+    # Compute the cost of a configuration 
+    # Acpu : actual CPU request of microservices
+    # Amem : actual Memory request of microservices
+    # Qcpu : CPU quota of microservices
+    # Qmem : Memory quota of microservices
+    # Cost_cpu_edge : CPU cost edge per hour
+    # Cost_mem_edge : Memory cost edge per hour
+    # Cost_cpu_cloud : CPU cost cloud per hour
+    # Cost_mem_cloud : Memory cost cloud per hour
+    # Tnce : network traffic cloud-edge bit/s
+    # Cost_network : network cost per GB
+    M = int(len(Acpu)/2)
+    Acpu_sum_edge = np.sum(qz(Acpu[M:2*M-1], Qcpu[M:2*M-1]))
+    Amem_sum_edge = np.sum(qz(Amem[M:2*M-1], Qmem[M:2*M-1]))
+    Cost_cpu_sum_edge = Cost_cpu_edge * Acpu_sum_edge # edge cpu cost per hour
+    Cost_mem_sum_edge = Cost_mem_edge * Amem_sum_edge # edge mem cost per hour
+    Cost_sum_edge = Cost_cpu_sum_edge + Cost_mem_sum_edge # Total edge cost per hour
+    Acpu_sum_cloud = np.sum(qz(np.maximum(Acpu[:M-1],Qcpu[:M-1]), Qcpu[:M-1])) # maximum because at least a replica run in the cloud
+    Amem_sum_cloud = np.sum(qz(np.maximum(Amem[:M-1],Qmem[:M-1]), Qmem[:M-1])) # maximum because at least a replica run in the cloud
+    Cost_cpu_sum_cloud = Cost_cpu_cloud * Acpu_sum_cloud # cloud cpu cost per hour
+    Cost_mem_sum_cloud = Cost_mem_cloud * Amem_sum_cloud # cloud mem cost per hour
+    Cost_sum_cloud = Cost_cpu_sum_cloud + Cost_mem_sum_cloud # Total cloud cost per hour
+    Cost_traffic_ce = Cost_network * Tnce * 3600/8/1e9 # traffic cost per hour
+    Cost_sum = Cost_sum_edge + Cost_sum_cloud + Cost_traffic_ce    # Total cost per hour
+
+    return Cost_sum, Cost_sum_edge,Cost_cpu_sum_edge,Cost_mem_sum_edge, Cost_sum_cloud,Cost_cpu_sum_cloud,Cost_mem_sum_cloud, Cost_traffic_ce
 
 def computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old):
     # Compute the resource shift of a configuration

@@ -5,8 +5,8 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from EPAMP_offload import offload
-from mfu_heuristic import mfu_heuristic
+from old.EPAMP_offload_caching import offload
+from MFU_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
 import numpy as np
 import networkx as nx
@@ -28,7 +28,7 @@ np.random.seed(150273)
 res=np.array([])
 trials = 30
 RTT = 0.05    # RTT edge-cloud
-M = 50 # n. microservices
+M = 150 # n. microservices
 delay_decrease_target = 0.03    # requested delay reduction
 lambda_val = 50     # request per second
 Ne = 1e9    # bitrate cloud-edge
@@ -41,13 +41,13 @@ Cost_mem_edge = 1 # cost of memory at the edge
 Qcpu = np.ones(2*M) # CPU quota
 Qmem = np.ones(2*M) # memory quota
 
-graph_algorithm = 'random'
+graph_algorithm = 'barabasi' # 'random' or 'barabasi
 
 barabasi=dict()
 barabasi['n'] = M-1
-barabasi['m'] = 2
+barabasi['m'] = 1
 barabasi['power'] = 0.9
-barabasi['zero_appeal'] = 0.9
+barabasi['zero_appeal'] = 3.125
 
 random=dict()
 random['n_parents'] = 3
@@ -130,36 +130,36 @@ for k in range(trials):
     
     
     ## E_PAMP ##
-    a+=1
-    alg_type[a] = "E_PAMP no upgrade limit"
-    params = {
-        'S_edge_b': S_edge_b.copy(),
-        'Acpu': Acpu.copy(),
-        'Amem': Amem.copy(),
-        'Qcpu': Qcpu.copy(),
-        'Qmem': Qmem.copy(),
-        'Fcm': Fcm.copy(),
-        'M': M,
-        'lambd': lambda_val,
-        'Rs': Rs,
-        'Di': Di,
-        'delay_decrease_target': delay_decrease_target,
-        'RTT': RTT,
-        'Ne': Ne,
-        'Cost_cpu_edge': Cost_cpu_edge,
-        'Cost_mem_edge': Cost_mem_edge,
-        'locked': None,
-        'dependency_paths_b': None,
-        'u_limit': M
-    }
-    tic = time.time()
-    result = offload(params)[1]
-    toc = time.time()
-    print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-    print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-    best_cost_row[0,a] = result['Cost']
-    best_delta_row[0,a] = result['delay_decrease']
-    p_time_row[0,a] = toc-tic
+    # a+=1
+    # alg_type[a] = "E_PAMP no upgrade limit"
+    # params = {
+    #     'S_edge_b': S_edge_b.copy(),
+    #     'Acpu': Acpu.copy(),
+    #     'Amem': Amem.copy(),
+    #     'Qcpu': Qcpu.copy(),
+    #     'Qmem': Qmem.copy(),
+    #     'Fcm': Fcm.copy(),
+    #     'M': M,
+    #     'lambd': lambda_val,
+    #     'Rs': Rs,
+    #     'Di': Di,
+    #     'delay_decrease_target': delay_decrease_target,
+    #     'RTT': RTT,
+    #     'Ne': Ne,
+    #     'Cost_cpu_edge': Cost_cpu_edge,
+    #     'Cost_mem_edge': Cost_mem_edge,
+    #     'locked': None,
+    #     'dependency_paths_b': None,
+    #     'u_limit': M
+    # }
+    # tic = time.time()
+    # result = offload(params)[1]
+    # toc = time.time()
+    # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+    # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+    # best_cost_row[0,a] = result['Cost']
+    # best_delta_row[0,a] = result['delay_decrease']
+    # p_time_row[0,a] = toc-tic
     
     a+=1
     alg_type[a] = "E_PAMP with upgrade limit 2"
@@ -192,36 +192,36 @@ for k in range(trials):
     best_delta_row[0,a] = result['delay_decrease']
     p_time_row[0,a] = toc-tic
 
-    a+=1
-    alg_type[a] = "E_PAMP with upgrade limit 1"
-    params = {
-        'S_edge_b': S_edge_b.copy(),
-        'Acpu': Acpu.copy(),
-        'Amem': Amem.copy(),
-        'Qcpu': Qcpu.copy(),
-        'Qmem': Qmem.copy(),
-        'Fcm': Fcm.copy(),
-        'M': M,
-        'lambd': lambda_val,
-        'Rs': Rs,
-        'Di': Di,
-        'delay_decrease_target': delay_decrease_target,
-        'RTT': RTT,
-        'Ne': Ne,
-        'Cost_cpu_edge': Cost_cpu_edge,
-        'Cost_mem_edge': Cost_mem_edge,
-        'locked': None,
-        'dependency_paths_b': None,
-        'u_limit': 1
-    }
-    tic = time.time()
-    result = offload(params)[1]
-    toc = time.time()
-    print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-    print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-    best_cost_row[0,a] = result['Cost']
-    best_delta_row[0,a] = result['delay_decrease']
-    p_time_row[0,a] = toc-tic
+    # a+=1
+    # alg_type[a] = "E_PAMP with upgrade limit 1"
+    # params = {
+    #     'S_edge_b': S_edge_b.copy(),
+    #     'Acpu': Acpu.copy(),
+    #     'Amem': Amem.copy(),
+    #     'Qcpu': Qcpu.copy(),
+    #     'Qmem': Qmem.copy(),
+    #     'Fcm': Fcm.copy(),
+    #     'M': M,
+    #     'lambd': lambda_val,
+    #     'Rs': Rs,
+    #     'Di': Di,
+    #     'delay_decrease_target': delay_decrease_target,
+    #     'RTT': RTT,
+    #     'Ne': Ne,
+    #     'Cost_cpu_edge': Cost_cpu_edge,
+    #     'Cost_mem_edge': Cost_mem_edge,
+    #     'locked': None,
+    #     'dependency_paths_b': None,
+    #     'u_limit': 1
+    # }
+    # tic = time.time()
+    # result = offload(params)[1]
+    # toc = time.time()
+    # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+    # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+    # best_cost_row[0,a] = result['Cost']
+    # best_delta_row[0,a] = result['delay_decrease']
+    # p_time_row[0,a] = toc-tic
     
     
     ## MFU ##

@@ -10,7 +10,6 @@ from numpy import inf
 from computeNc import computeNc
 from buildFci import buildFci
 from computeDTot import computeDTot
-from EPAMP_offload import offload
 
 
 np.seterr(divide='ignore', invalid='ignore')
@@ -36,7 +35,14 @@ def unoffload(params):
     #Ne cloud-edge network bitrate
     #Cost_cpu_edge cost of CPU at the edge
     #Cost_mem_edge cost of Memory at the edge
-    #u_limit maximum number of microservices upgrade to consider in the greedy iteraction (lower reduce optimality but increase computaiton speed)
+    #Cost_cpu_cloud cost of CPU at the edge
+    #Cost_mem_cloud cost of Memory at the edge
+    #Di (2*M,) vector of delay of the instance-set at the cloud (:M) and at the edge (M:)
+    #Qmem (2*M,) vector of memory quota of the instance at the cloud (:M) and at the edge (M:)
+    #Qcpu (2*M,) vector of CPU quota of the instance at the cloud (:M) and at the edge (M:)
+    #dependency_paths_b (N,M) binary-based (b) pre computed dependency paths
+    #S_edge_base_b (M,) binary-based (b) vector indicating the base edge microservices that can not be removed
+    #look_ahead factor to increase the delay reduction target to allow more pruning
 
 
     # mandatory paramenters
@@ -52,6 +58,8 @@ def unoffload(params):
     Ne = params['Ne']
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
+    Cost_cpu_cloud = params['Cost_cpu_cloud']
+    Cost_mem_cloud = params['Cost_mem_cloud']
 
     
     # optional paramenters
@@ -59,9 +67,9 @@ def unoffload(params):
     Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*M)
     Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*M)
     dependency_paths_b = params['dependency_paths_b'] if 'dependency_paths_b' in params else None
-    locked = params['locked'] if 'locked' in params else None
-    u_limit = params['u_limit'] if 'u_limit' in params else M
-    no_evolutionary = params['no_evolutionary'] if 'no_evolutionary' in params else False
+    S_edge_base_b = params['S_edge_base_b'] if 'S_edge_base_b' in params else np.zeros(M)
+    S_edge_base_b[M-1] = 1 # user/ingress  at the edge
+    look_ahead = params['look_ahead'] if 'look_ahead' in params else 1
 
     
     S_cloud_old = np.ones(int(M)) # EPAMP assumes all microservice instance run in the cloud
@@ -72,26 +80,7 @@ def unoffload(params):
     Fci_old = np.matrix(buildFci(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
     Nci_old = computeNc(Fci_old, M, 2)  # (2*M,) number of instance call per user request
     delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)[0]  # Total delay of the current configuration. It includes only network delays
-    delay_target = delay_old + delay_increase_target
-    Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the current state
-
-    S_edge_void = np.zeros(int(M))  # (M,) edge state with no instance-set in the edge
-    S_edge_void[M-1] = 1  # edge istio proxy
-    S_cloud_void = np.ones(int(M))
-    S_cloud_void[M-1] = 0
-    S_b_void = np.concatenate((S_edge_void, S_edge_void)) # (2*M,) state with no instance-set in the edge
-
-    Acpu_void = np.zeros(2*M)
-    Amem_void = np.zeros(2*M)
-    Acpu_void[:M] = Acpu_old[:M]+Acpu_old[M:]
-    Acpu_void[M:] = np.zeros(M)
-    Amem_void[:M] = Amem_old[:M]+Amem_old[M:]
-    Amem_void[M:] = np.zeros(M)
-
-    Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
-    Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
-    delay_void = computeDTot(S_b_void, Nci_void, Fci_void, Di, Rs, RTT, Ne, lambd, M)[0]
-    delay_decrease_target = max(delay_void - delay_target,0)
+    Cost_old = utils.computeCost(Acpu_old, Amem_old, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]# Total cost of the current state
 
     ## BUILDING OF DEPENDENCY PATHS ##
     if dependency_paths_b is None:
@@ -110,38 +99,116 @@ def unoffload(params):
                     path_b = np.zeros((1,M),int)
                     path_b[0,path_n] = 1 # Binary-based (b) encoding of the dependency path
                     dependency_paths_b = np.append(dependency_paths_b,path_b,axis=0)
-    params = {
-        'S_edge_b': S_edge_void.copy(),
-        'Acpu': Acpu_void.copy(),
-        'Amem': Amem_void.copy(),
-        'Qcpu': Qcpu,
-        'Qmem': Qmem,
-        'Fcm': Fcm.copy(),
-        'M': M,
-        'lambd': lambd,
-        'Rs': Rs,
-        'Di': Di,
-        'delay_decrease_target': delay_decrease_target,
-        'RTT': RTT,
-        'Ne': Ne,
-        'Cost_cpu_edge': Cost_cpu_edge,
-        'Cost_mem_edge': Cost_mem_edge,
-        'locked': locked,
-        'dependency_paths_b': dependency_paths_b,
-        'u_limit': u_limit,
-        'no_evolutionary': no_evolutionary,
-    }
-    logger.info(f"unoffload calls offload with void edge and delay_decrease_target: {delay_decrease_target}")
-    result_list = offload(params)
-    result=result_list[1]
-    result['delay_increase'] = (delay_void-result['delay_decrease']) - delay_old
-    result['cost_decrease'] = Cost_edge_old-result['Cost']
-    result['to-apply'] = utils.numpy_array_to_list(np.argwhere(result['S_edge_b']-S_b_old[M:]>0))
-    result['to-delete']= utils.numpy_array_to_list(np.argwhere(S_b_old[M:]-result['S_edge_b']>0))
-    del result['delay_decrease']
-    del result['cost_increase']
-    if result['delay_increase'] < delay_increase_target:
-        logger.warning(f"unoffload: delay increase target not reached")
-    message = f"Result for unoffload - edge microservice ids: {result['placement']}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}"
-    result['info'] = message
-    return result_list
+    
+    logger.info(f"PRUNING PHASE")
+    # Remove microservice from leaves to reduce cost
+    S_b_new = S_b_old.copy()
+    S_b_opt = S_b_new.copy()
+    S_b_temp = np.zeros(2*M)
+    Acpu_new = Acpu_old.copy()
+    Amem_new = Amem_old.copy()
+    while True:
+        dpi_best = -1 # index of the leaf microservice to remove
+        # try to remove leaves microservices
+        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
+        Nci_new = computeNc(Fci_new, M, 2)
+        delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
+        utils.computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old)
+        Cost_new = utils.computeCost(Acpu_new, Amem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]
+        edge_leaves = np.logical_and(np.sum(Fci_new[M:2*M-1,M:2*M-1], axis=1)==0, S_b_new[M:2*M-1].reshape((M-1,1))==1) # edge microservice with no outgoing calls
+        edge_leaves = np.argwhere(edge_leaves)[:,0]
+        
+        # dependency paths that contain current leaves
+        dp_with_edges = np.argwhere(dependency_paths_b[:,edge_leaves].sum(axis=1)>0)[:,0]
+        
+        #logger.info(f'pruning for leaves {edge_leaves}')
+        delay_increase_tot_v = np.zeros((len(dp_with_edges),2))   # delay reduction and weigth for each possible removal
+        np.copyto(S_b_temp,S_b_new)
+        for dpi,path_b in enumerate(dependency_paths_b[dp_with_edges]):
+            dependency_paths_b_temp = np.delete(dependency_paths_b,dp_with_edges[dpi],axis=0)
+            
+            S_b_temp[M:] = np.minimum(np.sum(dependency_paths_b_temp,axis=0),1)
+            S_b_temp[M:] = S_b_temp[M:]+S_edge_base_b
+            S_b_temp[S_b_temp>0] = 1
+            Acpu_temp = np.zeros(2*M)
+            Amem_temp = np.zeros(2*M)
+            Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))
+            Nci_temp = computeNc(Fci_temp, M, 2)
+            delay_temp = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
+            delay_increase_temp = max(1e-6,delay_temp - delay_new)  # delay increase wrt previous state
+            utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_new,Amem_new,Nci_new)
+            Cost_temp = utils.computeCost(Acpu_temp, Amem_temp, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]
+            cost_decrease = Cost_new - Cost_temp
+            w = cost_decrease/delay_increase_temp
+            delay_increase_tot_v[dpi] = [max(1e-6,delay_temp - delay_old),w] # delay increase wrt initial state and weight for each possible removal
+        
+        feasible_dpi = np.argwhere(delay_increase_tot_v[:,0]<=delay_increase_target).flatten()
+        if len(feasible_dpi)>0:
+            dpi_best = np.argmax(delay_increase_tot_v[feasible_dpi][:,1])
+            dpi_best = feasible_dpi[dpi_best]
+        else:
+            feasible_dpi = np.argwhere(delay_increase_tot_v[:,0]<delay_increase_target * look_ahead).flatten()
+            if len(feasible_dpi)>0:
+                dpi_best = np.argmax(delay_increase_tot_v[feasible_dpi][:,1])
+                dpi_best = feasible_dpi[dpi_best]
+        
+        if dpi_best>-1:
+            delay_increase_tot_best = delay_increase_tot_v[dpi_best,0]
+            logger.info(f'cleaning dependency path {np.argwhere(dependency_paths_b[dp_with_edges[dpi_best]]).squeeze()}, delay increase: {delay_increase_tot_best}')
+            dependency_paths_b = np.delete(dependency_paths_b,dp_with_edges[dpi_best],axis=0)
+            S_b_new[M:] = np.minimum(np.sum(dependency_paths_b,axis=0),1)
+            S_b_new[M:] = S_b_new[M:]+S_edge_base_b
+            S_b_new[S_b_new>0] = 1
+            if delay_increase_tot_best <= delay_increase_target:
+                np.copyto(S_b_opt,S_b_new)
+        else:
+            break
+            
+    logger.info(f"++++++++++++++++++++++++++++++")
+    np.copyto(S_b_new,S_b_opt)
+    
+    # compute final values
+    Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
+    Nci_new = computeNc(Fci_new, M, 2)
+    delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
+    delay_increase_new = delay_new - delay_old
+    utils.computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old)
+    Cost_new = utils.computeCost(Acpu_new, Amem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]
+    cost_decrease_new = Cost_old - Cost_new
+
+    result_edge = dict()
+    
+    # extra information
+    result_edge['S_edge_b'] = S_b_new[M:].astype(int)
+    result_edge['Cost'] = Cost_new
+    result_edge['delay_increase'] = delay_increase_new
+    result_edge['cost_decrease'] = cost_decrease_new
+    result_edge['Acpu'] = Acpu_new
+    result_edge['Amem'] = Amem_new
+    result_edge['Fci'] = Fci_new
+    result_edge['Nci'] = Nci_new
+    result_edge['delay'] = delay_new
+    result_edge['di'] = di_new
+    result_edge['dn'] = dn_new
+    result_edge['rhoce'] = rhoce_new
+    
+    # required return information
+     
+    result_cloud = dict()
+    result_cloud['to-apply'] = list()
+    result_cloud['to-delete'] = list()
+    result_cloud['placement'] = utils.numpy_array_to_list(np.argwhere(S_b_new[:M]==1))
+    result_cloud['info'] = f"Result for unoffload - cloud microservice ids: {result_cloud['placement']}"
+
+
+    result_edge['to-apply'] = utils.numpy_array_to_list(np.argwhere(S_b_new[M:]-S_b_old[M:]>0))
+    result_edge['to-delete'] = utils.numpy_array_to_list(np.argwhere(S_b_old[M:]-S_b_new[M:]>0))
+    result_edge['placement'] = utils.numpy_array_to_list(np.argwhere(S_b_new[M:]==1))
+
+    result_edge['info'] = f"Result for unoffload - edge microservice ids: {result_edge['placement']}"
+    
+    result_return=list()
+    result_return.append(result_cloud)  
+    result_return.append(result_edge)
+    return result_return
+    

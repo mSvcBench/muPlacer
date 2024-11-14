@@ -7,10 +7,10 @@ from os import environ
 N_THREADS = '1'
 environ['OMP_NUM_THREADS'] = N_THREADS
 
-from EPAMP_offload import offload
+from old.EPAMP_offload_caching import offload
 from old.offload_fast import offload_fast
-from EPAMP_unoffload import unoffload
-from mfu_heuristic import mfu_heuristic
+from old.EPAMP_unoffload_from_void import unoffload
+from MFU_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
 import numpy as np
 import networkx as nx

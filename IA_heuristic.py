@@ -21,6 +21,8 @@ def IA_heuristic(params):
     Ne = params['Ne']
     Cost_cpu_edge = params['Cost_cpu_edge']
     Cost_mem_edge = params['Cost_mem_edge']
+    Cost_cpu_cloud = params['Cost_cpu_cloud']
+    Cost_mem_cloud = params['Cost_mem_cloud']
 
     Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*M)
     Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*M)
@@ -28,7 +30,7 @@ def IA_heuristic(params):
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to to include edge and cloud
     S_b_old = np.concatenate((np.ones(int(M)), S_edge_old))
     S_b_old[M-1] = 0  # User is not in the cloud
-    Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:] ,Cost_cpu_edge, Cost_mem_edge)[0] # Total cost of old state
+    Cost_old = utils.computeCost(Acpu_old, Amem_old, Qcpu, Qmem ,Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0] # Total cost of old state
     
     ## COMPUTE THE DELAY OF THE OLD STATE ##
     Fci_old = np.matrix(buildFci(S_b_old, Fcm, M))
@@ -88,12 +90,18 @@ def IA_heuristic(params):
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
     delay_decrease_new = delay_old - delay_new
     utils.computeResourceShift(Acpu_new, Amem_new, Nci_new, Acpu_old, Amem_old, Nci_old)
-    Cost_edge_new = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total cost of new state
-    cost_increase_new = Cost_edge_new - Cost_edge_old 
+    Cost_new, Cost_new_edge,Cost_cpu_new_edge,Cost_mem_new_edge, Cost_new_cloud,Cost_cpu_new_cloud,Cost_mem_new_cloud = utils.computeCost(Acpu_new, Amem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud) # Total cost of new state
+    cost_increase_new = Cost_new - Cost_old 
 
     result = dict()
     result['S_edge_b'] = S_b_new[M:].astype(int)
-    result['Cost'] = Cost_edge_new
+    result['Cost'] = Cost_new
+    result['Cost_edge'] = Cost_new_edge
+    result['Cost_cpu_edge'] = Cost_cpu_new_edge
+    result['Cost_mem_edge'] = Cost_mem_new_edge
+    result['Cost_cloud'] = Cost_new_cloud
+    result['Cost_cpu_cloud'] = Cost_cpu_new_cloud
+    result['Cost_mem_cloud'] = Cost_mem_new_cloud
     result['delay_decrease'] = delay_decrease_new
     result['cost_increase'] = cost_increase_new
     result['Acpu'] = Acpu_new
