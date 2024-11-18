@@ -16,9 +16,9 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from igraph import *
-from computeNc import computeNc
+from computeNc import computeN
 from scipy.io import savemat
-from buildFci import buildFci
+from buildFi import buildFi
 from numpy import inf
 import time
 import logging

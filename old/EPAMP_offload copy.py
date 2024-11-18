@@ -12,8 +12,6 @@ from computeDTot import computeDTot
 import logging
 import sys
 import utils
-import random
-import S2id
 
 
 np.seterr(divide='ignore', invalid='ignore')
@@ -99,55 +97,22 @@ def offload(params):
     delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]  # Total delay of the current configuration. It includes only network delays
     Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
 
-
+    ## BUILDING OF DEPENDENCY PATHS ##
     if dependency_paths_b is None:
         dependency_paths_b = np.empty((0,M), int) # Storage of binary-based (b) encoded dependency paths
-        ## BUILDING OF DP_TOT RANDOM DEPENDENCY PATHS ##
-        dependency_paths_b = np.empty((0,M), int) # Storage of binary-based (b) encoded dependency paths
-        DP_TOT = 100000 # Total number of dependency paths to consider
-        dp_ids=list()
-        for i in range(DP_TOT):
-            
-            span=set()
-            span.add(M-1)
-            span_old=set()
-            span_old.add(M-1)
-            span_new=set()
-            while True:
-                for j in span_old:
-                    for k in np.argwhere(Fcm[j,:]>0).flatten().tolist():
-                        if random.random() < Fcm[j,k]:
-                            span_new.add(k)
-                            span.add(k)
-                if len(span_new)>0:
-                    span_old=span_new.copy()
-                    span_new=set()
-                else:
-                    break
-            path_n = list(span)
-            if all(S_b_old[M+np.array([path_n])].squeeze()==1):
-                continue
-            else:
-                path_b = np.zeros((1,M),int)
-                path_b[0,path_n] = 1 # Binary-based (b) encoding of the dependency path
-                if S2id.S2id(path_b[0]) in dp_ids:
-                    continue
-                dp_ids.append(S2id.S2id(path_b[0]))
-                logger.debug(f'new {i} dependency path {np.argwhere(path_b[0]==1).flatten()}')
-                dependency_paths_b = np.append(dependency_paths_b,path_b,axis=0)
 
-        # ## COMPUTE DEPENDENCY PATHS WITH SOME MICROSERVICE IN THE CLOUD ##
-        # for ms in range(M-1):
-        #     paths_n = list(nx.all_simple_paths(G, source=M-1, target=ms)) 
-        #     for path_n in paths_n:
-        #         # path_n numerical id (n) of the microservices of the dependency path
-        #         # If all microservices in the path are in the edge this path is not a cloud-edge path
-        #         if all(S_b_old[M+np.array([path_n])].squeeze()==1):
-        #             continue
-        #         else:
-        #             path_b = np.zeros((1,M),int)
-        #             path_b[0,path_n] = 1 # Binary-based (b) encoding of the dependency path
-        #             dependency_paths_b = np.append(dependency_paths_b,path_b,axis=0)
+        ## COMPUTE DEPENDENCY PATHS WITH SOME MICROSERVICE IN THE CLOUD ##
+        for ms in range(M-1):
+            paths_n = list(nx.all_simple_paths(G, source=M-1, target=ms)) 
+            for path_n in paths_n:
+                # path_n numerical id (n) of the microservices of the dependency path
+                # If all microservices in the path are in the edge this path is not a cloud-edge path
+                if all(S_b_old[M+np.array([path_n])].squeeze()==1):
+                    continue
+                else:
+                    path_b = np.zeros((1,M),int)
+                    path_b[0,path_n] = 1 # Binary-based (b) encoding of the dependency path
+                    dependency_paths_b = np.append(dependency_paths_b,path_b,axis=0)
     
 
     ## GREEDY ADDITION OF CLOUD-EDGE DEPENDECY PATHS TO EDGE CLUSTER ##
@@ -187,7 +152,7 @@ def offload(params):
         np.copyto(Nci_new,Nci_opt)
         delay_new = delay_opt   # delay_new is the new delay. It includes only network delays
         Cost_edge_new  = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the new configuration
-        logger.info(f'new state {np.argwhere(S_b_new[M:]==1).squeeze()}, delay decrease {1000*(delay_old-delay_new)}, cost {Cost_edge_new}, cost increase / delay decrease {cost_increase_opt/(1000*delay_decrease_opt)}')
+        logger.info(f'new state {np.argwhere(S_b_new[M:]==1).squeeze()}, cost {Cost_edge_new}, delay decrease {1000*(delay_old-delay_new)}, cost increase {Cost_edge_new-Cost_edge_old}')
         
         # Check if the delay reduction and other constraints are reached
         added_dp = len(dependency_paths_b)-len(dependency_paths_b_residual) # number of dependency path added so far
@@ -214,7 +179,7 @@ def offload(params):
         logger.debug(f"number of depencency paths without upgrade limit: {len(dependency_paths_b_residual)}")
         rl = np.argwhere(np.sum(np.maximum(dependency_paths_b_residual-S_b_new[M:],0),axis=1)<=u_limit)   # index of dependency paths with microservices upgrade less than u_limit
         logger.debug(f"number of depencency paths with upgrade limit: {len(rl)}")
-        
+            
         for path_b in dependency_paths_b_residual[rl] :
             # merging path_b and S_b_new into S_b_temp
             path_n = np.argwhere(path_b.flatten()==1).squeeze() # numerical id of the microservices of the dependency path
@@ -228,7 +193,7 @@ def offload(params):
             
             Fci_temp = np.matrix(buildFi(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
             Nci_temp = computeN(Fci_temp, M, 2)    # number of instance call per user request of the temp state
-            delay_temp = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0] # Total delay of the temp state. It includes only network delays
+            delay_temp,_,_,rhoce = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0)) # Total delay of the temp state. It includes only network delays
             delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
             if skip_delay_increase and delay_decrease_temp<0:
                 logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()} skipped for negative delay decrease')
@@ -242,11 +207,14 @@ def offload(params):
             
             # weighting
             r_delay_decrease = delay_decrease_target - (delay_old-delay_new) # residul delay to decrease wrt previous conf
-            if delay_decrease_temp <= 0:
+            added_ms = np.argwhere(S_b_temp-S_b_old).flatten()-M
+            if rhoce == 1 or delay_decrease_temp <= 0:
                 # addition provides delay increase,  weighting penalize both cost and delay increase
-                # edge_freq_increase = np.sum(Nci_temp[M:])-np.sum(Nci_new[M:])
-                # w = 1e6 + cost_increase_temp/edge_freq_increase
-                w = 1e6 - cost_increase_temp * 1000 * delay_decrease_temp   # 1000 usedto move delay in the ms scale
+                # dp_centrality = np.sum(np.sum(dependency_paths_b,axis=1)[added_ms]) # centrality of the added microservices in the dependency graph
+                # w = 1e6 + cost_increase_temp/dp_centrality
+                # w = 1e6 - cost_increase_temp * 1000 * delay_decrease_temp   # 1000 used to move delay in the ms scale
+                w = 1e6 - cost_increase_temp * 1000 * delay_decrease_temp   # 1000 used to move delay in the ms scale
+                # w = 1e6 - sum(Nci_temp[M:]-Nci_old[M:]) # prefer mostrly used microservices 
             else:
                 w = cost_increase_temp /  max(min(1000*delay_decrease_temp, 1000*r_delay_decrease),1e-3) # 1e-3 used to avoid division by zero
                 skip_delay_increase = True
@@ -274,6 +242,7 @@ def offload(params):
         for pr,path_b in enumerate(dependency_paths_b_residual):
             if np.sum(path_b) == np.sum(path_b * S_b_opt[M:]):
                 # dependency path already fully included at edge
+                logger.debug(f'pruning dependency path {np.argwhere(path_b>0).flatten()} already fully included at edge')
                 PR.append(pr)
         dependency_paths_b_residual = np.delete(dependency_paths_b_residual, PR, axis=0)
 
@@ -282,38 +251,45 @@ def offload(params):
     # Remove microservice from leaves to reduce cost
     S_b_old_a = np.array(S_b_old[M:]).reshape(M,1)
     while added_dp > min_added_dp:
-        c_max = 0 # max cost of the leaf microservice to remove
-        leaf_max = -1 # index of the leaf microservice to remove
+        w_opt = -1 # weight of the best removal
+        leaf_best = -1 # index of the leaf microservice to remove
+        S_b_temp = np.zeros(2*M)
         # try to remove leaves microservices
         Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
+        Nci_new = computeN(Fci_new, M, 2)
         S_b_new_a = np.array(S_b_new[M:]).reshape(M,1)
-        edge_leaves = np.logical_and(np.sum(Fci_new[M:,:], axis=1)==0, S_b_new_a==1) # edge microservice with no outgoing calls
-        if (no_evolutionary):
+        delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
+        utils.computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old)
+        Cost_edge_new = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
+        edge_leaves = np.logical_and(np.sum(Fci_new[M:,M:], axis=1)==0, S_b_new_a==1) # edge microservice with no outgoing calls
+        if (no_evolutionary==False):
             edge_leaves = np.logical_and(edge_leaves, S_b_old_a==0)    # old edge microservice can not be removed for incremental constraint
         edge_leaves = np.argwhere(edge_leaves)[:,0]
         edge_leaves = edge_leaves+M # index of the edge microservice in the full state
+        logger.info(f'pruning candidates {edge_leaves-M}')
         for leaf in edge_leaves:
             # try remove microservice
             np.copyto(S_b_temp,S_b_new)
             S_b_temp[leaf] = 0
+            Acpu_temp = np.zeros(2*M)
+            Amem_temp = np.zeros(2*M)
             Fci_temp = np.matrix(buildFi(S_b_temp, Fcm, M))
             Nci_temp = computeN(Fci_temp, M, 2)
             delay_temp = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
-            delay_decrease_temp = delay_old - delay_temp
-            if delay_decrease_temp>=delay_decrease_target:
+            delay_increase_temp = delay_temp - delay_new
+            utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_new,Amem_new,Nci_new)
+            Cost_edge_temp = utils.computeCost(Acpu_temp[M:], Amem_temp[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
+            cost_decrease = Cost_edge_new - Cost_edge_temp
+            w = cost_decrease/delay_increase_temp
+            utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_new,Amem_new,Nci_new)
+            if w>w_opt and delay_old - delay_temp > delay_decrease_target:
                 # possible removal
-                Cost_edge_temp = utils.computeCost(Acpu_new[leaf], Amem_new[leaf], Qcpu[leaf], Qmem[leaf], Cost_cpu_edge, Cost_mem_edge)[0]
-                if  Cost_edge_temp > c_max:
-                    c_max = Cost_edge_temp
-                    leaf_max = leaf
-        if leaf_max>-1:
-            logger.debug(f'cleaning microservice {leaf_max}')
-            S_b_new[leaf_max] = 0
-            # resource edge cloud resource shifting
-            Acpu_new[leaf_max-M] = Acpu_new[leaf_max-M] + Acpu_new[leaf_max] # cloud cpu increase
-            Amem_new[leaf_max-M] = Amem_new[leaf_max-M] + Amem_new[leaf_max] # cloud mem increase
-            Acpu_new[leaf_max] = 0 # edge cpu decrease
-            Amem_new[leaf_max] = 0 # edge mem decrease
+                w_opt = w
+                leaf_best = leaf
+                delay_reduction = delay_old - delay_temp
+        if leaf_best>-1:
+            logger.info(f'pruned microservice {leaf_best-M}, delay reduction: {delay_reduction}')
+            S_b_new[leaf_best] = 0
             added_dp = added_dp - 1
         else:
             break

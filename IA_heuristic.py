@@ -1,7 +1,7 @@
 import numpy as np
 import utils
-from computeNc import computeNc
-from buildFci import buildFci
+from computeN import computeN
+from buildFi import buildFi
 from computeDTot import computeDTot
 from numpy import inf
 
@@ -33,10 +33,10 @@ def IA_heuristic(params):
     Cost_old = utils.computeCost(Acpu_old, Amem_old, Qcpu, Qmem ,Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0] # Total cost of old state
     
     ## COMPUTE THE DELAY OF THE OLD STATE ##
-    Fci_old = np.matrix(buildFci(S_b_old, Fcm, M))
-    Nci_old = computeNc(Fci_old, M, 2)
+    Fci_old = np.matrix(buildFi(S_b_old, Fcm, M))
+    Nci_old = computeN(Fci_old, M, 2)
     delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)[0]
-    Nc = computeNc(Fcm, M, 1)
+    Nc = computeN(Fcm, M, 1)
     delay_decrease_new = 0
     S_b_new = S_b_old.copy()
 
@@ -70,8 +70,8 @@ def IA_heuristic(params):
             S_b_new[maxes["ms_i"]+M] = 1
             S_b_new[maxes["ms_j"]+M] = 1
             
-            Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-            Nci_new = computeNc(Fci_new, M, 2)
+            Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
+            Nci_new = computeN(Fci_new, M, 2)
             delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)[0] 
             delay_decrease_new = delay_old - delay_new
             if np.all(S_b_new[M:] == 1):
@@ -85,8 +85,8 @@ def IA_heuristic(params):
     # compute final values
     Acpu_new = np.zeros(2*M)
     Amem_new = np.zeros(2*M)
-    Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-    Nci_new = computeNc(Fci_new, M, 2)
+    Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
+    Nci_new = computeN(Fci_new, M, 2)
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M)
     delay_decrease_new = delay_old - delay_new
     utils.computeResourceShift(Acpu_new, Amem_new, Nci_new, Acpu_old, Amem_old, Nci_old)

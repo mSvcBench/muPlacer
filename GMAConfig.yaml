@@ -50,7 +50,8 @@ spec:
     edge-cloud-rtt: 100ms # static RTT between edge and cloud
   optimizer:
     epamp:
-      u-limit: 2  # upgrade limit optimization paramenter of EPAMP
+      expanding-depth: 2  # expanding depth optimization paramenter of EPAMP
+      max-sgs: 100 # maximum number of expanding subgrapgh to consider in EPAMP iteration
     max-delay-reduction : 50ms  # max requested delay reduction per placement action 
     max-delay-increase : 50ms # max requested delay increase per placement action
     delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading

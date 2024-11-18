@@ -1,5 +1,5 @@
 import numpy as np
-from buildFci import buildFci
+from buildFi import buildFi
 from computeNc import computeNcMat
 from old.computeDi import computeDi
 from netdelay import netdelay
@@ -21,7 +21,7 @@ from netdelay import netdelay2
 
 def delayMat(S, Fcm, Rcpu, Rcpu_req, RTT, Ne, lambd, Rs, M, e):
     MN = M * e   # edge+cloud microservice instance-sets
-    Fci = np.matrix(buildFci(S, Fcm, M, e))
+    Fci = np.matrix(buildFi(S, Fcm, M, e))
     Nc = computeNcMat(Fci, M, e)
     Di = computeDi(Nc, Rcpu, Rcpu_req, lambd, M, e) if np.sum(Rcpu_req) > 0 else np.zeros(2*M) 
     Dn, Tnce = netdelay2(S, RTT, Ne, lambd, Rs, Fci, Nc, M)

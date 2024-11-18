@@ -5,8 +5,8 @@ environ['OMP_NUM_THREADS'] = N_THREADS
 
 import numpy as np
 import networkx as nx
-from computeNc import computeNc
-from buildFci import buildFci
+from computeNc import computeN
+from buildFi import buildFi
 from numpy import inf
 from computeDTot import computeDTot
 import logging
@@ -91,8 +91,8 @@ def offload(params):
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to support matrix operations
     
     # SAVE INITIAL (OLD) METRICS VALUES ##
-    Fci_old = np.matrix(buildFci(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
-    Nci_old = computeNc(Fci_old, M, 2)  # (2*M,) number of instance call per user request
+    Fci_old = np.matrix(buildFi(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
+    Nci_old = computeN(Fci_old, M, 2)  # (2*M,) number of instance call per user request
     delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]  # Total delay of the current configuration. It includes only network delays
     Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
 
@@ -206,10 +206,10 @@ def offload(params):
                     continue
             else:
                 #tic = time.time()
-                Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
+                Fci_temp = np.matrix(buildFi(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
                 #logger.info(f'Fci_temp processing time {time.time()-tic}')
                 #tic = time.time()
-                Nci_temp = computeNc(Fci_temp, M, 2)    # number of instance call per user request of the temp state
+                Nci_temp = computeN(Fci_temp, M, 2)    # number of instance call per user request of the temp state
                 #logger.info(f'Nci_temp processing time {time.time()-tic}')
                 #tic = time.time()
                 delay_temp,_,_,rhoce = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0)) # Total delay of the temp state. It includes only network delays
@@ -248,8 +248,8 @@ def offload(params):
                 S_all_next_in[ S_all_next_in > 0 ] = 1 
                 Acpu_temp_all_next_in = np.zeros(2*M)
                 Amem_temp_all_next_in = np.zeros(2*M)
-                Fci_all_next_in = buildFci(S_all_next_in, Fcm, M)
-                Nci_all_next_in = computeNc(Fci_all_next_in, M, 2)
+                Fci_all_next_in = buildFi(S_all_next_in, Fcm, M)
+                Nci_all_next_in = computeN(Fci_all_next_in, M, 2)
                 utils.computeResourceShift(Acpu_temp_all_next_in,Amem_temp_all_next_in,Nci_all_next_in,Acpu_old,Amem_old,Nci_old)
                 Cost_edge_all_next_in= utils.computeCost(Acpu_temp_all_next_in[M:], Amem_temp_all_next_in[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the temp state
                 delay_all_next_in,_,_,_ = computeDTot(S_all_next_in, Nci_all_next_in, Fci_all_next_in, Di, Rs, RTT, Ne, lambd, M, np.empty(0)) # Total delay of the temp state. It includes only network delays
@@ -322,8 +322,8 @@ def offload(params):
         c_max = 0 # max cost of the leaf microservice to remove
         dpi_best = -1 # index of the leaf microservice to remove
         # try to remove leaves microservices
-        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-        Nci_new = computeNc(Fci_new, M, 2)
+        Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
+        Nci_new = computeN(Fci_new, M, 2)
         delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
         utils.computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old)
         Cost_edge_new = utils.computeCost(Acpu_new[M:], Amem_new[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0]
@@ -346,8 +346,8 @@ def offload(params):
             S_b_temp[S_b_temp>0] = 1
             Acpu_temp = np.zeros(2*M)
             Amem_temp = np.zeros(2*M)
-            Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))
-            Nci_temp = computeNc(Fci_temp, M, 2)
+            Fci_temp = np.matrix(buildFi(S_b_temp, Fcm, M))
+            Nci_temp = computeN(Fci_temp, M, 2)
             delay_temp = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, np.empty(0))[0]
             delay_increase_temp = max(1e-6,delay_temp - delay_new)
             utils.computeResourceShift(Acpu_temp,Amem_temp,Nci_temp,Acpu_new,Amem_new,Nci_new)
@@ -382,8 +382,8 @@ def offload(params):
     np.copyto(S_b_new,S_b_opt)
     
     # compute final values
-    Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-    Nci_new = computeNc(Fci_new, M, 2)
+    Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
+    Nci_new = computeN(Fci_new, M, 2)
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, np.empty(0))
     delay_decrease_new = delay_old - delay_new
     utils.computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_old,Amem_old,Nci_old)

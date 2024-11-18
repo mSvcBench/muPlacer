@@ -5,16 +5,16 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from EPAMP_offload_sweeping import offload
+from EPAMP_offload import offload
 from MFU_heuristic import mfu_heuristic
 from IA_heuristic import IA_heuristic
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from igraph import *
-from computeNc import computeNc
+from computeN import computeN
 from scipy.io import savemat
-from buildFci import buildFci
+from buildFi import buildFi
 from numpy import inf
 from computeDTot import computeDTot
 import time
@@ -42,7 +42,7 @@ target_delay = 0.1   # target delay
 app_delay_no_net = 0.05  # delay of the application without network
 #delay_decrease_target = 0.03    # requested delay reduction
 lambda_val = 500    # request per second
-Ne =1e9    # bitrate cloud-edge
+B =1e9    # bitrate cloud-edge
 
 graph_algorithm = 'barabasi' # 'random' or 'barabasi
 barabasi=dict()
@@ -52,12 +52,12 @@ barabasi['zero_appeal'] = 3.125
 random=dict()
 random['n_parents'] = 3
 
-Fcm_range_min = 0.1 # min value of microservice call frequency 
-Fcm_range_max = 0.5 # max value of microservice call frequency 
-Acpu_range_min = 1  # min value of actual CPU consumption per instance-set per 10 req/s
-Acpu_range_max = 8 # max value of actual CPU consumption per instance-set per 10 req/s
-Rs_range_min = 200000 # min value of response size in bytes
-Rs_range_max = 2000000   # max of response size in bytes
+Fm_range_min = 0.1 # min value of microservice call frequency 
+Fm_range_max = 0.5 # max value of microservice call frequency 
+Ucpu_range_min = 1  # min value of CPU usage per cloud/edge instance set per 10 req/s
+Ucpu_range_max = 8 # max value of CPU usage per cloud/edge instance set per 10 req/s
+L_range_min = 200000 # min value of response length in bytes
+L_range_max = 2000000   # max of response length in bytes
 Di_range_min = 0.005 # min value of internal delay (sec)
 Di_range_max = 0.01 # max value of internal delay (sec)
 
@@ -86,8 +86,8 @@ for M in range(11,M_max,10):
     S_edge_b[M-1] = 1 # Last value is the user must be set equal to one
     S_b = np.concatenate((np.ones(M), S_edge_b)) # (2*M,) full state
     S_b[M-1] = 0  # User is not in the cloud
-    Qcpu = np.zeros(2*M) # CPU quota, not considered CPU request as cost model
-    Qmem = np.zeros(2*M) # memory quota, not considered memory request as cost model
+    Qcpu = np.ones(2*M) # CPU quota, 1 CPU per instance
+    Qmem = np.ones(2*M)*2 # memory quota, 2 GB per instance
     Di = np.random.uniform(Di_range_min,Di_range_max,M)
     Di[M-1] = 0 # user has no internal delay
     Di = np.tile(Di, 2)    
@@ -95,58 +95,58 @@ for M in range(11,M_max,10):
     
     for k in range(trials):
         print(f'\n\ntrial {k}')  
-        Rs = np.random.randint(Rs_range_min,Rs_range_max,M)  # random response size bytes
-        Rs[M-1]=0 # user has no response size
+        L = np.random.randint(L_range_min,L_range_max,M)  # random response length bytes
+        L[M-1]=0 # user has no response size
         
         # build dependency graph
-        Fcm = np.zeros([M,M])   # microservice call frequency matrix
+        Fm = np.zeros([M,M])   # microservice call frequency matrix
         if graph_algorithm == 'barabasi':
             g = Graph.Barabasi(n=barabasi['n'],m=barabasi['m'],power=barabasi['power'],zero_appeal=barabasi['zero_appeal'], directed=True)
             edges_reversal(g)
-            Fcm[:M-1,:M-1] = np.matrix(g.get_adjacency()) 
+            Fm[:M-1,:M-1] = np.matrix(g.get_adjacency()) 
         elif graph_algorithm == 'random':
             n_parents = 3
             for i in range(1,M-1):
                 n_parent=np.random.randint(1,random['n_parents'])
                 for j in range(n_parent):
                     a = np.random.randint(i)
-                    Fcm[a,i]=1
+                    Fm[a,i]=1
             
         # set random values for microservice call frequency matrix
         for i in range(0,M-1):
             for j in range(0,M-1):
-                Fcm[i,j]=np.random.uniform(Fcm_range_min,Fcm_range_max) if Fcm[i,j]>0 else 0
-        Fcm[M-1,0] = 1  # user call microservice 0 (the ingress microservice)
+                Fm[i,j]=np.random.uniform(Fm_range_min,Fm_range_max) if Fm[i,j]>0 else 0
+        Fm[M-1,0] = 1  # user call microservice 0 (the ingress microservice)
 
-        # set random values for CPU and memory requests in case of cloud only deployment
-        Acpu_void = np.random.uniform(Acpu_range_min,Acpu_range_max,size=M) * lambda_val / 10
-        Acpu_void[M-1]=0   # user has no CPU request
-        Amem_void = Acpu_void * 2 # memory request is twice the CPU request (rule of thumb 1 CPU x 2GBs)
-        Acpu_void = np.append(Acpu_void, np.zeros(M))
-        Amem_void = np.append(Amem_void, np.zeros(M))
+        # set random values for CPU and memory usage in case of cloud only deployment
+        Ucpu_void = np.random.uniform(Ucpu_range_min,Ucpu_range_max,size=M) * lambda_val / 10
+        Ucpu_void[M-1]=0   # user has no CPU request
+        Umem_void = Ucpu_void * 2 # memory request is twice the CPU request (rule of thumb 1 CPU x 2GBs)
+        Ucpu_void = np.append(Ucpu_void, np.zeros(M))
+        Umem_void = np.append(Umem_void, np.zeros(M))
         S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
         S_b_void[M-1] = 0  # User is not in the cloud
         S_b_void[2*M-1] = 1  # User is in the cloud
-        Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
-        Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
+        Fi_void = np.matrix(buildFi(S_b_void, Fm, M))    # instance call frequency matrix of the void state
+        N_void = computeN(Fi_void, M, 2)    # number of instance call per user request of the void state
         
-        # compute Acpu and Amem for the current state
+        # compute Ucpu and Umem for the current state
         # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
-        Fci = np.matrix(buildFci(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
-        Nci = computeNc(Fci, M, 2)    # number of instance call per user request of the current state
-        Acpu = Acpu_void.copy()
-        Amem = Amem_void.copy()
-        utils.computeResourceShift(Acpu, Amem, Nci, Acpu_void, Amem_void, Nci_void) # compute the resource shift from void state to the current S_b state
-        delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, Nci, Fci, Di, np.tile(Rs, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
+        Fi = np.matrix(buildFi(S_b, Fm, M))    # instance call frequency matrix of the current state
+        N = computeN(Fi, M, 2)    # number of instance call per user request of the current state
+        Ucpu = Ucpu_void.copy()
+        Umem = Umem_void.copy()
+        utils.computeResourceShift(Ucpu, Umem, N, Ucpu_void, Umem_void, N_void) # compute the resource shift from void state to the current S_b state
+        delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, N, Fi, Di, np.tile(L, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
         # Di rescaling
         scaling_factor = delay_no_network / app_delay_no_net
         Di = Di / scaling_factor
-        delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, Nci, Fci, Di, np.tile(Rs, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
-        delay_void,_,_,rhoce_void = computeDTot(S_b_void, Nci_void, Fci_void, Di, np.tile(Rs, 2), RTT, Ne, lambda_val, M)
+        delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, N, Fi, Di, np.tile(L, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
+        delay_void,_,_,rhoce_void = computeDTot(S_b_void, N_void, Fi_void, Di, np.tile(L, 2), RTT, B, lambda_val, M)
         delay_decrease_target = max(delay_void - target_delay,0)
     
         if show_graph:
-            G = nx.DiGraph(Fcm)
+            G = nx.DiGraph(Fm)
             nx.draw(G,with_labels=True)
             plt.show()
         
@@ -200,29 +200,27 @@ for M in range(11,M_max,10):
         alg_type[a] = "E_PAMP - Traces"
         params = {
             'S_edge_b': S_edge_b.copy(),
-            'Acpu': Acpu.copy(),
-            'Amem': Amem.copy(),
+            'Ucpu': Ucpu.copy(),
+            'Umem': Umem.copy(),
             'Qcpu': Qcpu.copy(),
             'Qmem': Qmem.copy(),
-            'Fcm': Fcm.copy(),
+            'Fm': Fm.copy(),
             'M': M,
             'lambd': lambda_val,
-            'Rs': Rs,
+            'L': L,
             'Di': Di,
             'delay_decrease_target': delay_decrease_target,
             'RTT': RTT,
-            'Ne': Ne,
+            'B': B,
             'Cost_cpu_edge': Cost_cpu_edge,
             'Cost_mem_edge': Cost_mem_edge,
             'Cost_cpu_cloud': Cost_cpu_cloud,
             'Cost_mem_cloud': Cost_mem_cloud,
             'Cost_network': Cost_network,
-            'locked': None,
-            'dependency_paths_b': None,
-            'dp_builder': 'dp_builder_traces',
-            'u_limit': 2,
-            'max_dps': 128,
-            'max_traces': 2048,
+            'sgs-builder': 'sgs_builder_traces',
+            'expanding-depth': 2,
+            'max-sgs': 128,
+            'max-traces': 2048,
         }
         tic = time.time()
         result = offload(params)[1]
@@ -244,18 +242,18 @@ for M in range(11,M_max,10):
         alg_type[a] = "MFU"
         params = {
             'S_edge_b': S_edge_b.copy(),
-            'Acpu': Acpu.copy(),
-            'Amem': Amem.copy(),
-            'Fcm': Fcm.copy(),
+            'Ucpu': Ucpu.copy(),
+            'Umem': Umem.copy(),
+            'Fm': Fm.copy(),
             'Qcpu': Qcpu.copy(),
             'Qmem': Qmem.copy(),
             'M': M,
             'lambd': lambda_val,
-            'Rs': Rs,
+            'L': L,
             'Di': Di,
             'delay_decrease_target': delay_decrease_target,
             'RTT': RTT,
-            'Ne': Ne,
+            'B': B,
             'Cost_cpu_edge': Cost_cpu_edge,
             'Cost_mem_edge': Cost_mem_edge,
             'Cost_cpu_cloud': Cost_cpu_cloud,
@@ -283,27 +281,25 @@ for M in range(11,M_max,10):
         alg_type[a] = "E_PAMP - SPA"
         params = {
             'S_edge_b': S_edge_b.copy(),
-            'Acpu': Acpu.copy(),
-            'Amem': Amem.copy(),
+            'Ucpu': Ucpu.copy(),
+            'Umem': Umem.copy(),
             'Qcpu': Qcpu.copy(),
             'Qmem': Qmem.copy(),
-            'Fcm': Fcm.copy(),
+            'Fm': Fm.copy(),
             'M': M,
             'lambd': lambda_val,
-            'Rs': Rs,
+            'L': L,
             'Di': Di,
             'delay_decrease_target': delay_decrease_target,
             'RTT': RTT,
-            'Ne': Ne,
+            'B': B,
             'Cost_cpu_edge': Cost_cpu_edge,
             'Cost_mem_edge': Cost_mem_edge,
             'Cost_cpu_cloud': Cost_cpu_cloud,
             'Cost_mem_cloud': Cost_mem_cloud,
             'Cost_network': Cost_network,
-            'locked': None,
-            'dependency_paths_b': None,
-            'dp_builder': 'dp_builder_with_single_path_adding',
-            'u_limit': 2
+            'sgs-builder': 'sgs_builder_with_single_path_adding',
+            'expanding-depth': 2
         }
         tic = time.time()
         result = offload(params)[1]

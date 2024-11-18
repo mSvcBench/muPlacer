@@ -17,7 +17,7 @@ import EPAMP_unoffload_from_void as EPAMP_unoffload_from_void
 import EPAMP_GMA_Connector
 import requests
 
-def update_acpu():
+def update_ucpu():
     global gma_config, prom_client, metrics
 
     logger.info(f"Update actual cpu utilization")
@@ -36,9 +36,9 @@ def update_acpu():
             logger.error(f"Prometheus query exception for query {query_cpu}: {str(e)}")
             return
         
-        # clean the acpu values
-        status['service-metrics']['acpu'][area]['value'] = np.zeros(M, dtype=float)
-        status['service-metrics']['acpu'][area]['last-update'] = now
+        # clean the ucpu values
+        status['service-metrics']['ucpu'][area]['value'] = np.zeros(M, dtype=float)
+        status['service-metrics']['ucpu'][area]['last-update'] = now
         
         if query_results:
             for result in query_results:
@@ -49,9 +49,9 @@ def update_acpu():
                             value = 0
                         else:
                             value = float(result["value"][1])
-                        status['service-metrics']['acpu'][area]['value'][service['id']] = status['service-metrics']['acpu'][area]['value'][service['id']]+value
+                        status['service-metrics']['ucpu'][area]['value'][service['id']] = status['service-metrics']['ucpu'][area]['value'][service['id']]+value
 
-def update_amem():
+def update_umem():
     global gma_config, prom_client, metrics
 
     logger.info(f"Update actual memory utilization")
@@ -70,8 +70,8 @@ def update_amem():
             logger.error(f"Prometheus query exception for query {query_mem}: {str(e)}")
             return
         
-        status['service-metrics']['amem'][area]['value'] = np.zeros(M, dtype=float)
-        status['service-metrics']['amem'][area]['last-update'] = now
+        status['service-metrics']['umem'][area]['value'] = np.zeros(M, dtype=float)
+        status['service-metrics']['umem'][area]['last-update'] = now
         if query_results:
             for result in query_results:
                 for service_name in services:
@@ -81,7 +81,7 @@ def update_amem():
                             value = 0
                         else:
                             value = float(result["value"][1])
-                        status['service-metrics']['amem'][area]['value'][service['id']] = status['service-metrics']['amem'][area]['value'][service['id']] + value
+                        status['service-metrics']['umem'][area]['value'][service['id']] = status['service-metrics']['umem'][area]['value'][service['id']] + value
 
 def update_ingress_lambda():
     global gma_config, prom_client, status, M
@@ -117,7 +117,7 @@ def update_ingress_lambda():
     return
 
 
-def update_Rs():
+def update_response_length():
     global gma_config, prom_client, metrics
 
     logger.info(f"Update response size values")
@@ -139,8 +139,8 @@ def update_Rs():
         return
     
     # clean Rs values
-    status['service-metrics']['rs']['value'] = np.zeros(M, dtype=float)
-    status['service-metrics']['rs']['last-update'] = now
+    status['service-metrics']['response-length']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['response-length']['last-update'] = now
     
     if r1:
         for result in r1:
@@ -151,11 +151,11 @@ def update_Rs():
                     value = 0
                 else:
                     value = float(result["value"][1])
-                if status['service-metrics']['rs']['value'][service['id']] != 0:
+                if status['service-metrics']['response-length']['value'][service['id']] != 0:
                     logger.critical(f"Multiple results for the Rs query {query_Rs} and service {service_name}")
                     exit(1)
-                status['service-metrics']['rs']['value'][service['id']] = value
-                status['service-metrics']['rs']['last-update'] = now
+                status['service-metrics']['response-length']['value'][service['id']] = value
+                status['service-metrics']['response-length']['last-update'] = now
     return
 
 def update_resource_scaling():
@@ -197,7 +197,7 @@ def update_resource_scaling():
                         status['service-metrics']['resource-scaling']['value'][service['id']] = value
                         break
 
-def update_Fcm_and_lambda():
+def update_Fm_and_lambda():
     global gma_config, prom_client, metrics
     
     logger.info(f"Update call frequency matrix")
@@ -205,14 +205,14 @@ def update_Fcm_and_lambda():
     now = time.time()
 
     if status['service-metrics']['service-lambda']['value'][M-1] == 0:
-        logger.info(f"Lambda value for the istio-ingress is 0, skipping Fcm and lambda update")
+        logger.info(f"Lambda value for the istio-ingress is 0, skipping Fm and lambda update")
         return
 
-    # update lambda and Fcm values
+    # update lambda and Fm values
     destination_app_regex = "|".join(status['service-info'].keys())
     cluster_regex = cluster['cloud-area']+"|"+cluster['edge-area']
     source_app_regex = edge_istio_ingress_app+"|"+destination_app_regex
-    fcm_query_num=f'sum by (source_app,destination_app) (rate(istio_requests_total{{cluster=~"{cluster_regex}",namespace="{namespace}",source_app=~"{source_app_regex}",destination_app=~"{destination_app_regex}",reporter="destination",response_code="200"}}[{query_period_str}])) '
+    fm_query_num=f'sum by (source_app,destination_app) (rate(istio_requests_total{{cluster=~"{cluster_regex}",namespace="{namespace}",source_app=~"{source_app_regex}",destination_app=~"{destination_app_regex}",reporter="destination",response_code="200"}}[{query_period_str}])) '
     lambda_query=f'sum by (destination_app) (rate(istio_requests_total{{cluster=~"{cluster_regex}",namespace="{namespace}",source_app=~"{source_app_regex}",destination_app=~"{destination_app_regex}",reporter="destination",response_code="200"}}[{query_period_str}])) '
     try:
         r = prom_client.custom_query(query=lambda_query)
@@ -220,14 +220,14 @@ def update_Fcm_and_lambda():
         logger.error(f"Prometheus query exception for query {lambda_query}: {str(e)}")
         return
     try:
-        r2 = prom_client.custom_query(query=fcm_query_num)
+        r2 = prom_client.custom_query(query=fm_query_num)
     except PrometheusApiClientException as e:
-        logger.error(f"Prometheus query exception for query {fcm_query_num}: {str(e)}")
+        logger.error(f"Prometheus query exception for query {fm_query_num}: {str(e)}")
         return
     
-    # clean lambda and Fcm values
-    status['service-metrics']['fcm']['value'] = np.zeros((M,M),dtype=float)
-    status['service-metrics']['fcm']['last-update'] = now
+    # clean lambda and Fm values
+    status['service-metrics']['fm']['value'] = np.zeros((M,M),dtype=float)
+    status['service-metrics']['fm']['last-update'] = now
     status['service-metrics']['service-lambda']['value'][:M-1] = 0 # M-1 is the index of the istio-ingress in the global lambda vector and this function does not update the lambda of the istio-ingress due to the reporter="destination" filter. update_ingress_lambda() function is responsible for that.
     status['service-metrics']['service-lambda']['last-update'] = now
     
@@ -260,11 +260,11 @@ def update_Fcm_and_lambda():
                 else:
                     value = float(result["value"][1])/status['service-metrics']['service-lambda']['value'][source_service['id']]
 
-            if status['service-metrics']['fcm']['value'][source_service['id']][destination_service['id']]!=0:
-                logger.critical(f"Multiple results for the Fcm query {fcm_query_num} and source service {source_service_name}, destination service {destination_service_name}")
+            if status['service-metrics']['fm']['value'][source_service['id']][destination_service['id']]!=0:
+                logger.critical(f"Multiple results for the Fm query {fm_query_num} and source service {source_service_name}, destination service {destination_service_name}")
                 exit(1)
-            status['service-metrics']['fcm']['value'][source_service['id']][destination_service['id']] = value
-            status['service-metrics']['fcm']['last-update'] = now
+            status['service-metrics']['fm']['value'][source_service['id']][destination_service['id']] = value
+            status['service-metrics']['fm']['last-update'] = now
             continue
         if source_service_name == edge_istio_ingress_app and destination_service_name in status['service-info']:
             if status['service-metrics']['service-lambda']['value'][M-1] == 0: # M-1 is the index of the istio-ingress in the global lambda vector
@@ -274,11 +274,11 @@ def update_Fcm_and_lambda():
                     value = 0
                 else:
                     value = float(result["value"][1])/status['service-metrics']['service-lambda']['value'][M-1]
-            if status['service-metrics']['fcm']['value'][M-1][status['service-info'][destination_service_name]['id']] != 0:
-                logger.critical(f"Multiple results for the Fcm query {fcm_query_num} and source service {source_service_name}, destination service {destination_service_name}")
+            if status['service-metrics']['fm']['value'][M-1][status['service-info'][destination_service_name]['id']] != 0:
+                logger.critical(f"Multiple results for the Fm query {fm_query_num} and source service {source_service_name}, destination service {destination_service_name}")
                 exit(1)
-            status['service-metrics']['fcm']['value'][M-1][status['service-info'][destination_service_name]['id']] = value
-            status['service-metrics']['fcm']['last-update'] = now
+            status['service-metrics']['fm']['value'][M-1][status['service-info'][destination_service_name]['id']] = value
+            status['service-metrics']['fm']['last-update'] = now
     return
 
 # Function that get the average delay from the istio-ingress gateway
@@ -434,11 +434,11 @@ def update_and_check_HPA():
     return hpa_running
 
 def update_metrics():
-    update_acpu()
-    update_amem()
+    update_ucpu()
+    update_umem()
     update_ingress_lambda()
-    update_Rs()
-    update_Fcm_and_lambda()
+    update_response_length()
+    update_Fm_and_lambda()
     update_ingress_delay()
     update_ingress_delay_quantile()
     update_resource_scaling()
@@ -462,11 +462,7 @@ def apply_configuration(result_list):
         workload_name = service['regex']['cloud-area']['workload']['regex']
         workload_type = service['regex']['cloud-area']['workload']['type']
         if workload_type != 'daemonset':
-<<<<<<< HEAD
-            cloud_replicas_increase = status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]
-=======
             cloud_replicas_increase = np.ceil(status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]/status['service-metrics']['resource-scaling']['value'][service_id]) #-status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
->>>>>>> 5898d5f7f99851b0b716891280fede52c426632b
             cloud_replicas = status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id]+cloud_replicas_increase
             cloud_replicas = min(status['service-metrics']['hpa']['cloud-area']['max-replicas'][service_id],cloud_replicas)
             cloud_replicas = max(status['service-metrics']['hpa']['cloud-area']['min-replicas'][service_id],cloud_replicas)
@@ -727,15 +723,15 @@ def init():
     status['service-metrics']['n-services']= mid+1 # number of microservices
     M = status['service-metrics']['n-services'] 
 
-    status['service-metrics']['fcm'] = dict()
-    status['service-metrics']['fcm']['info'] = 'Call frequency matrix'
-    status['service-metrics']['fcm']['value'] = np.zeros((M,M),dtype=float)
-    status['service-metrics']['fcm']['last-update'] = 0 # last update time
+    status['service-metrics']['fm'] = dict()
+    status['service-metrics']['fm']['info'] = 'Call frequency matrix'
+    status['service-metrics']['fm']['value'] = np.zeros((M,M),dtype=float)
+    status['service-metrics']['fm']['last-update'] = 0 # last update time
 
-    status['service-metrics']['rs'] = dict()
-    status['service-metrics']['rs']['info'] = 'Response size vector in bytes'
-    status['service-metrics']['rs']['value'] = np.zeros(M,dtype=float)
-    status['service-metrics']['rs']['last-update'] = 0 # last update time
+    status['service-metrics']['response-length'] = dict()
+    status['service-metrics']['response-length']['info'] = 'Response size vector in bytes'
+    status['service-metrics']['response-length']['value'] = np.zeros(M,dtype=float)
+    status['service-metrics']['response-length']['last-update'] = 0 # last update time
 
     status['service-metrics']['hpa'] = dict()
     status['service-metrics']['hpa']['cloud-area'] = dict()
@@ -755,25 +751,25 @@ def init():
     status['service-metrics']['hpa']['edge-area']['max-replicas'] = np.zeros(M,dtype=int)
     status['service-metrics']['hpa']['edge-area']['last-update'] = 0 # last update time
     
-    status['service-metrics']['acpu'] = dict()
-    status['service-metrics']['acpu']['cloud-area'] = dict()
-    status['service-metrics']['acpu']['cloud-area']['info'] = 'Actual CPU utilizatiion vector in seconds per second for cloud area'
-    status['service-metrics']['acpu']['cloud-area']['value'] = np.zeros(M, dtype=float)
-    status['service-metrics']['acpu']['cloud-area']['last-update'] = 0 # last update time
-    status['service-metrics']['acpu']['edge-area'] = dict()
-    status['service-metrics']['acpu']['edge-area']['info'] = 'Actual CPU utilizatiion vector in seconds per second for edge area'
-    status['service-metrics']['acpu']['edge-area']['value'] = np.zeros(M, dtype=float)
-    status['service-metrics']['acpu']['edge-area']['last-update'] = 0 # last update time
+    status['service-metrics']['ucpu'] = dict()
+    status['service-metrics']['ucpu']['cloud-area'] = dict()
+    status['service-metrics']['ucpu']['cloud-area']['info'] = 'Actual CPU utilizatiion vector in seconds per second for cloud area'
+    status['service-metrics']['ucpu']['cloud-area']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['ucpu']['cloud-area']['last-update'] = 0 # last update time
+    status['service-metrics']['ucpu']['edge-area'] = dict()
+    status['service-metrics']['ucpu']['edge-area']['info'] = 'Actual CPU utilizatiion vector in seconds per second for edge area'
+    status['service-metrics']['ucpu']['edge-area']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['ucpu']['edge-area']['last-update'] = 0 # last update time
     
-    status['service-metrics']['amem'] = dict()
-    status['service-metrics']['amem']['cloud-area'] = dict()
-    status['service-metrics']['amem']['cloud-area']['info'] = 'Actual memory utilizatiion vector in bytes for cloud area'
-    status['service-metrics']['amem']['cloud-area']['value'] = np.zeros(M, dtype=float)
-    status['service-metrics']['amem']['cloud-area']['last-update'] = 0 # last update time
-    status['service-metrics']['amem']['edge-area'] = dict()
-    status['service-metrics']['amem']['edge-area']['info'] = 'Actual memory utilizatiion vector in bytes for edge area'
-    status['service-metrics']['amem']['edge-area']['value'] = np.zeros(M, dtype=float)
-    status['service-metrics']['amem']['edge-area']['last-update'] = 0 # last update time
+    status['service-metrics']['umem'] = dict()
+    status['service-metrics']['umem']['cloud-area'] = dict()
+    status['service-metrics']['umem']['cloud-area']['info'] = 'Actual memory utilizatiion vector in bytes for cloud area'
+    status['service-metrics']['umem']['cloud-area']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['umem']['cloud-area']['last-update'] = 0 # last update time
+    status['service-metrics']['umem']['edge-area'] = dict()
+    status['service-metrics']['umem']['edge-area']['info'] = 'Actual memory utilizatiion vector in bytes for edge area'
+    status['service-metrics']['umem']['edge-area']['value'] = np.zeros(M, dtype=float)
+    status['service-metrics']['umem']['edge-area']['last-update'] = 0 # last update time
     
     status['service-metrics']['qcpu'] = dict()
     status['service-metrics']['qcpu']['cloud-area'] = dict()
@@ -1093,8 +1089,8 @@ class GMAStataMachine():
             logger.info('avg-driven offloading')
         
         offload_parameters = status['service-metrics'].copy()
-        offload_parameters['acpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['acpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
-        offload_parameters['amem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['amem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
+        offload_parameters['ucpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['ucpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
+        offload_parameters['umem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['umem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
         
         if offload_type == 'avg-driven':
             target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
@@ -1135,8 +1131,8 @@ class GMAStataMachine():
             logger.info('avg-driven unoffloading')
 
         unoffload_parameters = status['service-metrics'].copy()
-        unoffload_parameters['acpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['acpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
-        unoffload_parameters['amem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['amem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
+        unoffload_parameters['ucpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['ucpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
+        unoffload_parameters['umem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['umem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
         if unoffload_type == 'avg-driven':
             target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
         else:

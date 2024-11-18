@@ -15,10 +15,10 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from igraph import *
-from computeNc import computeNc
+from computeNc import computeN
 from computeDTot import computeDTot
 from scipy.io import savemat
-from buildFci import buildFci
+from buildFi import buildFi
 from numpy import inf
 from utils import computeCost, computeResourceShift
 import time
@@ -144,8 +144,8 @@ for t in range(trials):
     S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
     S_b_void[M-1] = 0  # User is not in the cloud
     S_b_void[2*M-1] = 1  # User is in the cloud
-    Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
-    Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
+    Fci_void = np.matrix(buildFi(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
+    Nci_void = computeN(Fci_void, M, 2)    # number of instance call per user request of the void state
     Cost_void = computeCost(Acpu_void, Amem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud)[0]# Total cost of the void state  
     if show_graph:
         G = nx.DiGraph(Fcm)
@@ -163,8 +163,8 @@ for t in range(trials):
     S_b_full_e[M-1]=0
     Acpu_full_e = np.zeros(2*M)
     Amem_full_e = np.zeros(2*M)
-    Fci_full_e = np.matrix(buildFci(S_b_full_e, Fcm, M))
-    Nci_full_e = computeNc(Fci_full_e, M, 2)
+    Fci_full_e = np.matrix(buildFi(S_b_full_e, Fcm, M))
+    Nci_full_e = computeN(Fci_full_e, M, 2)
     delay_full_e = computeDTot(S_b_full_e, Nci_full_e, Fci_full_e, Di, np.tile(Rs,2), RTT, Ne, lambda_max, M, np.empty(0))[0]
     if delay_full_e > offload_threshold:
         print(f"Full edge delay {delay_full_e} sec greather than offload threshold {offload_threshold} sec, simulation aborted")
@@ -180,8 +180,8 @@ for t in range(trials):
         S_b_new = S_b_old_dict[a].copy()
         Acpu_new = np.zeros(2*M)
         Amem_new = np.zeros(2*M)
-        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-        Nci_new = computeNc(Fci_new, M, 2)
+        Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
+        Nci_new = computeN(Fci_new, M, 2)
         computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_void,Amem_void,Nci_void)
         delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, np.tile(Rs,2), RTT, Ne, lambda_val, M, np.empty(0))[0] # Total delay of the temp state. It includes only network delays
         if delay_new > offload_threshold:
@@ -258,8 +258,8 @@ for t in range(trials):
         S_b_new = S_b_old_dict[a].copy()
         Acpu_new = np.zeros(2*M)
         Amem_new = np.zeros(2*M)
-        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-        Nci_new = computeNc(Fci_new, M, 2)
+        Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
+        Nci_new = computeN(Fci_new, M, 2)
         computeResourceShift(Acpu_new,Amem_new,Nci_new,Acpu_void,Amem_void,Nci_void)
         delay_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, np.tile(Rs,2), RTT, Ne, lambda_val, M, np.empty(0))[0] # Total delay of the temp state. It includes only network delays
         if delay_new > offload_threshold:

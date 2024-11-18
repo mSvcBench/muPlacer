@@ -4,7 +4,7 @@ import subprocess
 import time
 from kubernetes import client, config
 from old.EPAMP_offload_caching import offload
-from buildFcm import Fcm
+from old.buildFm_from_istio import Fm
 
 
 #   E_PAMP function to offload microservice instance-sets from cloud cluster to edge cluster
@@ -12,7 +12,7 @@ from buildFcm import Fcm
 
 def E_PAMP_off(RTT, AVG_DELAY, APP, APP_EDGE, RCPU, RMEM, Rs, M, SLO, lambda_value, CTX_CLUSTER2, NAMESPACE, prom, SLO_MARGIN_UNOFFLOAD, PERIOD, MICROSERVICE_DIRECTORY, HPA_DIRECTORY, NE):
     min_delay_delta = (AVG_DELAY - SLO) / 1000.0 # Minimum delay delta to satisfy SLO
-    output = offload(RCPU, RMEM, Fcm(prom, PERIOD, APP), int(M), lambda_value, Rs, APP_EDGE, min_delay_delta, RTT, NE) # Offload function
+    output = offload(RCPU, RMEM, Fm(prom, PERIOD, APP), int(M), lambda_value, Rs, APP_EDGE, min_delay_delta, RTT, NE) # Offload function
     best_S_edge = np.array(output) # Istance-sets that must stay in the edge cluster according to E_PAMP
     best_S_edge = np.delete(best_S_edge, -1) # Remove the last value (user) from best_S_edge
     

@@ -7,8 +7,8 @@ import numpy as np
 import networkx as nx
 import utils
 from numpy import inf
-from computeNc import computeNc
-from buildFci import buildFci
+from computeNc import computeN
+from buildFi import buildFi
 from computeDTot import computeDTot
 from EPAMP_offload_sweeping_old import offload
 
@@ -69,8 +69,8 @@ def unoffload(params):
     S_b_old = np.concatenate((S_cloud_old, S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
 
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to support matrix operations
-    Fci_old = np.matrix(buildFci(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
-    Nci_old = computeNc(Fci_old, M, 2)  # (2*M,) number of instance call per user request
+    Fci_old = np.matrix(buildFi(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
+    Nci_old = computeN(Fci_old, M, 2)  # (2*M,) number of instance call per user request
     delay_old = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M)[0]  # Total delay of the current configuration. It includes only network delays
     delay_target = delay_old + delay_increase_target
     Cost_edge_old = utils.computeCost(Acpu_old[M:], Amem_old[M:], Qcpu[M:], Qmem[M:], Cost_cpu_edge, Cost_mem_edge)[0] # Total edge cost of the current state
@@ -88,8 +88,8 @@ def unoffload(params):
     Amem_void[:M] = Amem_old[:M]+Amem_old[M:]
     Amem_void[M:] = np.zeros(M)
 
-    Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
-    Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
+    Fci_void = np.matrix(buildFi(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
+    Nci_void = computeN(Fci_void, M, 2)    # number of instance call per user request of the void state
     delay_void = computeDTot(S_b_void, Nci_void, Fci_void, Di, Rs, RTT, Ne, lambd, M)[0]
     delay_decrease_target = max(delay_void - delay_target,0)
 

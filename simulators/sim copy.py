@@ -12,9 +12,9 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from igraph import *
-from computeNc import computeNc
+from computeNc import computeN
 from scipy.io import savemat
-from buildFci import buildFci
+from buildFi import buildFi
 from numpy import inf
 import time
 import utils
@@ -107,13 +107,13 @@ for k in range(trials):
     S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
     S_b_void[M-1] = 0  # User is not in the cloud
     S_b_void[2*M-1] = 1  # User is in the cloud
-    Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
-    Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
+    Fci_void = np.matrix(buildFi(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
+    Nci_void = computeN(Fci_void, M, 2)    # number of instance call per user request of the void state
     
     # compute Acpu and Amem for the current state
     # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
-    Fci = np.matrix(buildFci(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
-    Nci = computeNc(Fci, M, 2)    # number of instance call per user request of the current state
+    Fci = np.matrix(buildFi(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
+    Nci = computeN(Fci, M, 2)    # number of instance call per user request of the current state
     Acpu = Acpu_void.copy()
     Amem = Amem_void.copy()
     utils.computeResourceShift(Acpu, Amem, Nci, Acpu_void, Amem_void, Nci_void) # compute the resource shift from void state to the current S_b state

@@ -5,8 +5,8 @@ environ['OMP_NUM_THREADS'] = N_THREADS
 
 import numpy as np
 import networkx as nx
-from computeNc import computeNc
-from buildFci import buildFci
+from computeNc import computeN
+from buildFi import buildFi
 from S2id import S2id
 from id2S import id2S
 from numpy import inf
@@ -111,8 +111,8 @@ def offload(params):
     Rs = np.tile(Rs, 2)  # Expand the Rs vector to support matrix operations
     
     # SAVE CURRENT METRICS VALUES ##
-    Fci_old = np.matrix(buildFci(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
-    Nci_old = computeNc(Fci_old, M, 2)  # (2*M,) number of instance call per user request
+    Fci_old = np.matrix(buildFi(S_b_old, Fcm, M)) # (2*M,2*M) instance-set call frequency matrix
+    Nci_old = computeN(Fci_old, M, 2)  # (2*M,) number of instance call per user request
     delay_old,_,_,_ = computeDTot(S_b_old, Nci_old, Fci_old, Di, Rs, RTT, Ne, lambd, M, Rsd)  # Total delay of the current configuration. It includes only network delays
   
     Acpu_edge_old_sum = np.sum(qz(S_b_old[M:] * Acpu_old[M:],Qcpu[M:])) # Total CPU requested by instances in the edge
@@ -221,8 +221,8 @@ def offload(params):
                 if skip_delay_increase and delay_decrease_temp<0:
                     continue
             else:
-                Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
-                Nci_temp = computeNc(Fci_temp, M, 2)    # number of instance call per user request of the temp state
+                Fci_temp = np.matrix(buildFi(S_b_temp, Fcm, M))    # instance-set call frequency matrix of the temp state
+                Nci_temp = computeN(Fci_temp, M, 2)    # number of instance call per user request of the temp state
                 delay_temp,_,_,_ = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, Rsd) # Total delay of the temp state. It includes only network delays
                 delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
                 if skip_delay_increase and delay_decrease_temp<0:
@@ -315,7 +315,7 @@ def offload(params):
         c_max=0 # max cost of the leaf microservice to remove
         leaf_max=-1 # index of the leaf microservice to remove
         # try to remove leaves microservices
-        Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
+        Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
         S_b_new_a = np.array(S_b_new[M:]).reshape(M,1)
         edge_leaves = np.logical_and(np.sum(Fci_new[M:,:], axis=1)==0, S_b_new_a==1) # edge microservice with no outgoing calls
         if (no_evolutionary):
@@ -326,8 +326,8 @@ def offload(params):
             # try remove microservice
             np.copyto(S_b_temp,S_b_new)
             S_b_temp[leaf] = 0
-            Fci_temp = np.matrix(buildFci(S_b_temp, Fcm, M))
-            Nci_temp = computeNc(Fci_temp, M, 2)
+            Fci_temp = np.matrix(buildFi(S_b_temp, Fcm, M))
+            Nci_temp = computeN(Fci_temp, M, 2)
             delay_temp,_,_,_ = computeDTot(S_b_temp, Nci_temp, Fci_temp, Di, Rs, RTT, Ne, lambd, M, Rsd)
             delay_decrease_temp = delay_old - delay_temp
             if delay_decrease_temp>=delay_decrease_target:
@@ -348,8 +348,8 @@ def offload(params):
     logger.info(f"++++++++++++++++++++++++++++++")
     # compute final values
     n_rounds = 1
-    Fci_new = np.matrix(buildFci(S_b_new, Fcm, M))
-    Nci_new = computeNc(Fci_new, M, 2)
+    Fci_new = np.matrix(buildFi(S_b_new, Fcm, M))
+    Nci_new = computeN(Fci_new, M, 2)
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, Nci_new, Fci_new, Di, Rs, RTT, Ne, lambd, M, Rsd)
     delay_decrease_new = delay_old - delay_new
     np.copyto(Acpu_new,Acpu_old) 
@@ -489,13 +489,13 @@ def main():
     S_b_void = np.concatenate((np.ones(M), np.zeros(M))) # (2*M,) state with no instance-set in the edge
     S_b_void[M-1] = 0  # User is not in the cloud
     S_b_void[2*M-1] = 1  # User is in the cloud
-    Fci_void = np.matrix(buildFci(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
-    Nci_void = computeNc(Fci_void, M, 2)    # number of instance call per user request of the void state
+    Fci_void = np.matrix(buildFi(S_b_void, Fcm, M))    # instance-set call frequency matrix of the void state
+    Nci_void = computeN(Fci_void, M, 2)    # number of instance call per user request of the void state
     
     # compute Acpu and Amem for the current state
     # assumption is that cloud resource are reduced proportionally with respect to the reduction of the number of times instances are called
-    Fci = np.matrix(buildFci(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
-    Nci = computeNc(Fci, M, 2)    # number of instance call per user request of the current state
+    Fci = np.matrix(buildFi(S_b, Fcm, M))    # instance-set call frequency matrix of the current state
+    Nci = computeN(Fci, M, 2)    # number of instance call per user request of the current state
     Acpu = Acpu_void.copy()
     Amem = Amem_void.copy()
     cloud_cpu_decrease = (1-Nci[:M]/Nci_void[:M]) * Acpu_void[:M]

@@ -4,8 +4,8 @@ import datetime
 import numpy as np
 import networkx as nx
 from computeNc import computeNcMat
-from buildFci import buildFci
-from buildFci import buildFcinew
+from buildFi import buildFi
+from buildFi import buildFcinew
 from S2id import S2id
 from old.delayMat import delayMat 
 from old.delayMat import delayMatNcFci
