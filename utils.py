@@ -33,6 +33,10 @@ def computeReplicas(Ucpu,Qcpu,Qmem,HPA_cpu_th=None):
     Rp_cloud = np.ceil(scaled_Ucpu[:M]/Qcpu[:M])
     Rp_cloud = np.maximum(Rp_cloud,1)
     Rp_edge = np.ceil(scaled_Ucpu[M:]/Qcpu[M:])
+    # replace nan value with zero
+    Rp_edge = np.nan_to_num(Rp_edge)
+    Rp_cloud = np.nan_to_num(Rp_cloud) 
+
     return Rp_cloud, Rp_edge
       
 def computeCost(Ucpu,Umem,Qcpu,Qmem,Cost_cpu_edge,Cost_mem_edge,Cost_cpu_cloud,Cost_mem_cloud,Tnce,Cost_network,HPA_cpu_th=None):

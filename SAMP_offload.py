@@ -145,20 +145,20 @@ def offload(params):
                 del global_cache['expire'][key]
     
     def sgs_builder_with_single_path_adding(S_b_init, Ucpu_init, Umem_init, N_init, round):
-        ## BUILDING OF COMPOSITE DEPENDENCY PATHS WITH SINGLE PATH ADDING##
+        ## BUILDING OF EXPANDING SUBGRAPH WITH SINGLE PATH ADDING##
         
         nonlocal expanding_subgraphs_b_full_built, expanding_subgraphs_b_full
         if not expanding_subgraphs_b_full_built:
             for ms in range(global_M-1):
                 paths_n = list(nx.all_simple_paths(global_G, source=global_M-1, target=ms)) 
                 for path_n in paths_n:
-                    # path_n numerical id (n) of the microservices of the dependency path
-                    # If all microservices in the path are in the edge this path is not a cloud-joined path
+                    # path_n numerical id (n) of the microservices of the expanding subgraph
+                    # If all microservices in the subgraph are in the edge this subgraph can not extend the edge graph
                     if all(global_S_b_old[global_M+np.array([path_n])].squeeze()==1):
                         continue
                     else:
                         path_b = np.zeros((1,global_M),int)
-                        path_b[0,path_n] = 1 # Binary-based (b) encoding of the dependency path
+                        path_b[0,path_n] = 1 # Binary-based (b) encoding of the expanding subgraph
                         expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full,path_b,axis=0)
             expanding_subgraphs_b_full_built = True
         residual = np.sum(np.maximum(expanding_subgraphs_b_full-S_b_init[global_M:],0),axis=1)
@@ -166,12 +166,10 @@ def offload(params):
         return expanding_subgraphs_b_full[rl]
     
     def sgs_builder_traces(S_b_init, Ucpu_init, Umem_init, N_init, round):
-        ## BUILDING OF SIMULATION TRACES#
+        ## BUILDING OF EXPANDING SUBGRAPHS FROM TRACES#
         nonlocal expanding_subgraphs_b_full_built, expanding_subgraphs_b_full
-        hit, result = evaluate_perf(S_b_init, Ucpu_init, Umem_init, N_init, round)
-        #delay_init = result['delay']
+        _,result = evaluate_perf(S_b_init, Ucpu_init, Umem_init, N_init, round)
         Fi_init = result['Fi']
-        #cost_init = result['cost']
         if not expanding_subgraphs_b_full_built:
             n_traces = global_max_traces
             expanding_subgraphs_b_full = np.empty((0,global_M), int)
@@ -182,8 +180,6 @@ def offload(params):
                 trace_sample_b = np.zeros(global_M)
                 trace_sample_b = sgs_builder_trace(user,trace_sample_b,global_Fm, S_b_init)
                 expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
-                # if not any(np.array_equal(trace_sample_b, row) for row in dependency_paths_b_full):
-                #    dependency_paths_b_full = np.append(dependency_paths_b_full, trace_sample_b.reshape(1, -1), axis=0)
                 if len(expanding_subgraphs_b_full) >= n_traces or (iteration > 100*n_traces and len(expanding_subgraphs_b_full) > 20):
                     break
             trace_sample_b = np.ones(global_M)  # add full edge trace
@@ -207,13 +203,12 @@ def offload(params):
         # remove microservice looked by the user
         expanding_subgraphs_b[:,np.argwhere(global_locked_b>0)]=0
 
-        # compute the frequency of the dependency paths to return the most frequently used
+        # compute the frequency of the expanding subgraph paths to return the most frequently used
         expanding_subgraphs_b, paths_freq = np.unique(expanding_subgraphs_b, axis=0,return_counts=True)
         mfu_expanding_subgraph_id = np.flip(np.argsort(paths_freq))
 
         return expanding_subgraphs_b[mfu_expanding_subgraph_id[:min(global_max_sgs,len(mfu_expanding_subgraph_id))]]
 
-    
     def sgs_builder_trace(node,trace,global_Fm, S_b_init):
         children = np.argwhere(global_Fm[node,0:global_M]>0).flatten()
         for child in children:
@@ -248,7 +243,7 @@ def offload(params):
     global_look_ahead = params['look-ahead'] if 'look_ahead' in params else 1 # look ahead factor to increase the delay decrease target
     global_cache_ttl = params['cache-ttl'] if 'cache-ttl' in params else 10 # cache expiry in round
     global_locked_b = params['locked_b'] if 'locked_b' in params else np.zeros(global_M) # binary encoding of microservice that can not be moved at the edge
-    global_sgs_builder = locals()[params['sgs-builder']] if 'sgs-builder' in params else locals()['sgs_builder_traces'] # dependency path builder function
+    global_sgs_builder = locals()[params['sgs-builder']] if 'sgs-builder' in params else locals()['sgs_builder_traces'] # expanding subgraph builder function
     global_S_cloud_old = np.ones(int(global_M)) # EPAMP assumes all microservice instances run in the cloud
     global_S_cloud_old[global_M-1] = 0 # M-1 and 2M-1 are associated to the edge ingress gateway, therefore M-1 must be set to 0 and 2M-1 to 1 
     global_S_b_old = np.concatenate((global_S_cloud_old, global_S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
@@ -312,17 +307,17 @@ def offload(params):
 
     skip_delay_increase = False    # skip delay increase states to accelerate computation wheter possible
     if global_traces_b is None:
-        expanding_subgraphs_b_full_built = False # flag to check if the full dependency paths have been built
-        expanding_subgraphs_b_full = np.empty((0,global_M), int) # Storage of full set of binary-based (b) encoded dependency paths
+        expanding_subgraphs_b_full_built = False # flag to check if the full expanding subgraph set has been built
+        expanding_subgraphs_b_full = np.empty((0,global_M), int) # Storage of full set of binary-based (b) encoded expanding subraphs
     else:
         expanding_subgraphs_b_full_built = True
         expanding_subgraphs_b_full = global_traces_b
 
 
-    ## Greedy addition of dependency paths ##
+    ## Greedy addition of expanding subgraphs paths ##
     logger.info(f"ADDING PHASE")
     round = -1
-    dependency_paths_b_added = np.empty((0,global_M),dtype=int) # list of added dependency paths
+    expanding_subgraphs_b_added = np.empty((0,global_M),dtype=int) # list of added expanding subgraphs
     while True:
         round += 1
         logger.info(f'-----------------------')
@@ -344,21 +339,21 @@ def offload(params):
             logger.info(f'delay reduction reached')
             break
 
-        # BUILDING OF COMPOSITE DEPENDENCY PATHS WITH SWEEPING
+        # BUILDING OF EXPANDING SUBGRAPH
         N_new = computeN(Fi_new, global_M, 2)
         expanding_subgraphs_b = global_sgs_builder(S_b_new, Ucpu_new, Umem_new, N_new, round)
         
         if len(expanding_subgraphs_b) == 0:
-            # All dependency path considered no other way to reduce delay
-            logger.info(f'All dependency path considered no other way to reduce delay')
+            # All expanding subgraph considered no other way to reduce delay
+            logger.info(f'All expanding subgraphs considered no other way to reduce delay')
             break
 
         ## GREEDY ROUND ##
-        for dpi,path_b in enumerate(expanding_subgraphs_b) :
+        for _,subgraph_b in enumerate(expanding_subgraphs_b) :
             # merging path_b and S_b_new into S_b_temp
-            path_n = np.argwhere(path_b.flatten()==1).squeeze() # numerical id of the microservices of the dependency path
+            subgraph_n = np.argwhere(subgraph_b.flatten()==1).squeeze() # numerical id of the microservices of the expanding subgraph
             np.copyto(S_b_temp, S_b_new)
-            S_b_temp[global_M+path_n] = 1
+            S_b_temp[global_M+subgraph_n] = 1
             
             # cache probing
             _, result = evaluate_perf(S_b_temp, Ucpu_new, Umem_new, N_new, round)
@@ -372,7 +367,7 @@ def offload(params):
             cost_increase_temp = Cost_temp - cost_new # cost increase wrt the new state 
             delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
             if skip_delay_increase and delay_decrease_temp<0:
-                logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()} skipped for negative delay decrease')
+                logger.debug(f'considered expanding subgrah {np.argwhere(subgraph_b[0]==1).flatten()} skipped for negative delay decrease')
                 continue
 
             # weighting
@@ -385,7 +380,7 @@ def offload(params):
                 skip_delay_increase = True
             
             
-            logger.debug(f'considered dependency path {np.argwhere(path_b[0]==1).flatten()}, cost increase {cost_increase_temp}, delay decrease {1000*delay_decrease_temp} ms, delay {delay_temp} ms, weight {w}')
+            logger.debug(f'considered expanding subgraph {np.argwhere(subgraph_b[0]==1).flatten()}, cost increase {cost_increase_temp}, delay decrease {1000*delay_decrease_temp} ms, delay {delay_temp} ms, weight {w}')
 
             if w < w_opt:
                 # update best state of the greedy round
@@ -396,10 +391,10 @@ def offload(params):
                 delay_opt = delay_temp
                 rhoce_opt = rhoce_temp
                 w_opt = w
-                dp_opt = path_b.copy().reshape(1,global_M)
+                sg_opt = subgraph_b.copy().reshape(1,global_M)
                 cost_opt = Cost_temp
        
-        dependency_paths_b_added = np.append(dependency_paths_b_added,dp_opt,axis=0)
+        expanding_subgraphs_b_added = np.append(expanding_subgraphs_b_added,sg_opt,axis=0)
         logger.info(f"chache hit probability {global_cache['cache_hit']/(global_cache['cache_access'])}")
         
         if w_opt == inf:
@@ -407,7 +402,7 @@ def offload(params):
             logger.info(f'no improvement possible in the greedy round')
             break
         
-        logger.info(f'added dependency path {np.argwhere(dp_opt==1)[:,1].flatten()}')  
+        logger.info(f'added expanding subgraph {np.argwhere(sg_opt==1)[:,1].flatten()}')  
  
         # cache cleaning
         cache_cleaning(round)

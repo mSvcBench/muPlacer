@@ -1,7 +1,7 @@
 import numpy as np
 
 def Connector(GMA_params):
-    # Take params from GMA and return EPAMP params
+    # Take params from GMA and return samp params
     M = GMA_params['n-services']
     S_edge_b = np.minimum(GMA_params['hpa']['edge-area']['current-replicas'],1)
     S_edge_b[M-1]=1 # Last service is always on the edge since it represent the istio-ingress/user
@@ -30,39 +30,45 @@ def Connector(GMA_params):
     RTT = GMA_params['network']['edge-cloud-rtt']['value']/1000.0
     Cost_cpu_edge = GMA_params['cost']['edge-area']['cpu']['value']
     Cost_mem_edge = GMA_params['cost']['edge-area']['memory']['value']
+    Cost_cpu_cloud = GMA_params['cost']['cloud-area']['cpu']['value']
+    Cost_mem_cloud = GMA_params['cost']['cloud-area']['memory']['value']
+    Cost_network = GMA_params['cost']['cloud-area']['network']['value']
 
-    if 'expanding-depth' in GMA_params['optimizer']['epamp']:
-        expanding_depth = int(GMA_params['optimizer']['epamp']['expanding-depth'])
+    if 'expanding-depth' in GMA_params['optimizer']['samp']:
+        expanding_depth = int(GMA_params['optimizer']['samp']['expanding-depth'])
     else:
         expanding_depth = 2
-    if 'max-sgs' in GMA_params['optimizer']['epamp']:
-        max_sgs = int(GMA_params['optimizer']['epamp']['max-sgs'])
+    if 'max-sgs' in GMA_params['optimizer']['samp']:
+        max_sgs = int(GMA_params['optimizer']['samp']['max-sgs'])
     else:
         max_sgs = 64
-    if 'locked' in GMA_params['optimizer']:
-        locked = GMA_params['optimizer']['locked']
+    if 'locked_b' in GMA_params['optimizer']:
+        locked_b = GMA_params['optimizer']['locked']
     else:
-        locked = None
+        locked_b = np.zeros(M)
 
     params = {
         'S_edge_b': S_edge_b,
-        'Acpu': Ucpu,
-        'Amem': Umem,
-        'Fcm': Fm,
+        'Ucpu': Ucpu,
+        'Umem': Umem,
+        'Fm': Fm,
         'M': M,
         'lambd': lambda_val,
-        'Rs': L,
+        'L': L,
         'Di': Di,
         'delay_decrease_target': delay_decrease_target,
         'delay_increase_target': delay_increase_target,
         'RTT': RTT,
-        'Ne': B,
+        'B': B,
         'Cost_cpu_edge': Cost_cpu_edge,
         'Cost_mem_edge': Cost_mem_edge,
-        'locked': locked,
-        'dependency_paths_b': None,
-        'u_limit': u_limit,
+        'Cost_cpu_cloud': Cost_cpu_cloud,
+        'Cost_mem_cloud': Cost_mem_cloud,
+        'Cost_network': Cost_network,
+        'locked_b': locked_b,
         'Qcpu': Qcpu,
-        'Qmem': Qmem
+        'Qmem': Qmem,
+        'max-sgs': max_sgs,
+        'expanding-depth': expanding_depth
     }
     return params

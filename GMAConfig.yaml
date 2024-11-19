@@ -15,14 +15,15 @@ spec:
     offload-delay-threshold: 150ms # average delay threshold for avg-driven offloading
     unoffload-delay-threshold: 100ms  # average delay threshold for avg-driven unoffloading
     offload-delay-quantile-threshold: 1000s # delay quantile threshold for quantile-driven offloading
-    unoffload-delay-quantile-threshold: 0s # delay quantile threshold threshold for quantile-driven unoffloading
+    unoffload-delay-quantile-threshold: 1000s # delay quantile threshold threshold for quantile-driven unoffloading
     delay-quantile: 0.90 # delay quantile used for quantile-driven offloading, e.g., 0.9 means 90% of the requests
   cloud-area:
     cluster: "" # cluster name used for prometheus query cloud area
     context: liqo-admin@kubernetes  # kubernetec context used to control cloud area
     cost:
-      cpu: 0  # cost of cpu unit in  the cloud area
-      memory: 0 # cost of mem unit (GB) in  the cloud area
+      cpu:  0.0208  # cost of cpu unit in  the cloud area
+      memory:  0.0104 # cost of mem unit (GB) in  the cloud area
+      network: 0.02 # cost of  network unit (GB) in the cloud area
     istio:
       istio-ingress-source-app: istio-ingress # source app label of the istio-ingress in the edge area
       istio-ingress-namespace: istio-ingress  # namespace of the istio-ingress in the edge area
@@ -32,8 +33,9 @@ spec:
     cluster: "" # cluster name used for prometheus query edge area
     context: liqo-admin@kubernetes # kubernetec context used to control edge area
     cost:
-      cpu: 1 # cost of cpu unit in  the edge area
-      memory: 0 # cost of mem unit (GB) in  the edge area
+      cpu: 0.028 # cost of cpu unit in  the edge area
+      memory: 0.014 # cost of mem unit (GB) in  the edge area
+      network: 0.02 # cost of  network unit (GB) in the cloud area
     istio:
       istio-ingress-source-app: istio-ingress # source app label of the istio-ingress in the edge area
       istio-ingress-namespace: istio-ingress  # namespace of the istio-ingress in the edge area
@@ -47,13 +49,13 @@ spec:
     #netprober-server-cloud: http://httpnetprober-cloud:8080
     cloud-edge-bps: 1000Mbps  # static bandwidth between cloud and edge
     edge-cloud-bps: 1000Mbps  # static bandwidth between edge and cloud   
-    edge-cloud-rtt: 100ms # static RTT between edge and cloud
+    edge-cloud-rtt: 80ms # static RTT between edge and cloud
   optimizer:
-    epamp:
-      expanding-depth: 2  # expanding depth optimization paramenter of EPAMP
-      max-sgs: 100 # maximum number of expanding subgrapgh to consider in EPAMP iteration
+    samp:
+      expanding-depth: 2  # expanding depth optimization paramenter of SAMP
+      max-sgs: 128 # maximum number of expanding subgrapgh to consider in SAMP iteration
     max-delay-reduction : 50ms  # max requested delay reduction per placement action 
-    max-delay-increase : 50ms # max requested delay increase per placement action
+    max-delay-increase : 20ms # max requested delay increase per placement action
     delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading
     # locked: #  services that should not be offloaded by the optimizer 
 

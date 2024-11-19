@@ -1,5 +1,5 @@
 # pylint: disable=C0103, C0301
-from EPAMP_offload import offload
+from SAMP_offload import offload
 from MFU_heuristic import mfu_heuristic
 import argparse
 import logging

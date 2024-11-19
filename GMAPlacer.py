@@ -12,9 +12,9 @@ import yaml
 from os import environ
 from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
 
-import EPAMP_offload as EPAMP_offload
-import EPAMP_unoffload_from_void as EPAMP_unoffload_from_void
-import EPAMP_GMA_Connector
+import SAMP_offload as SAMP_offload
+import SAMP_unoffload_from_void as SAMP_unoffload_from_void
+import SAMP_GMA_Connector
 import requests
 
 def update_ucpu():
@@ -848,13 +848,20 @@ def init():
     status['service-metrics']['cost']['edge-area']['memory'] = dict()
     status['service-metrics']['cost']['edge-area']['memory']['value'] = gma_config['spec']['edge-area']['cost']['memory']
     status['service-metrics']['cost']['edge-area']['memory']['info'] = 'Cost of memory in the edge area'
+    status['service-metrics']['cost']['edge-area']['network'] = dict()
+    status['service-metrics']['cost']['edge-area']['network']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
+    status['service-metrics']['cost']['edge-area']['network']['info'] = 'Cost of external network for the edge area'
+
     status['service-metrics']['cost']['cloud-area'] = dict()
     status['service-metrics']['cost']['cloud-area']['cpu'] = dict()
     status['service-metrics']['cost']['cloud-area']['cpu']['value'] = gma_config['spec']['cloud-area']['cost']['cpu']
-    status['service-metrics']['cost']['cloud-area']['cpu']['info'] = 'Cost of CPU in the edge area'
+    status['service-metrics']['cost']['cloud-area']['cpu']['info'] = 'Cost of CPU in the cloud area'
     status['service-metrics']['cost']['cloud-area']['memory'] = dict()
     status['service-metrics']['cost']['cloud-area']['memory']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
-    status['service-metrics']['cost']['cloud-area']['memory']['info'] = 'Cost of memory in the edge area'
+    status['service-metrics']['cost']['cloud-area']['memory']['info'] = 'Cost of memory in the cloud area'
+    status['service-metrics']['cost']['cloud-area']['network'] = dict()
+    status['service-metrics']['cost']['cloud-area']['network']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
+    status['service-metrics']['cost']['cloud-area']['network']['info'] = 'Cost of external network for the cloud area'
 
     status['service-metrics']['resource-scaling'] = dict()
     status['service-metrics']['resource-scaling']['info'] = 'Cloud-to-edge resource scaling factor'
@@ -1013,7 +1020,7 @@ class GMAStataMachine():
 
         # check delay quantile violation for unoffloading
         if status['service-metrics']['edge-user-delay-quantile']['value'] < unoffload_delay_quantile_threshold_ms:
-            logger.info('Delay above unoffload quantile threshold')
+            logger.info('Delay below unoffload quantile threshold')
             if np.all(status['service-metrics']['hpa']['edge-area']['current-replicas'][:-1] == 0):
                 logger.warning('No microservice in the edge area, can not unoffload more')
                 self.next = self.camping
@@ -1106,8 +1113,8 @@ class GMAStataMachine():
 
         logger.info(f"Offloading with target delay reduction {offload_parameters['edge-user-delay']['value']-offload_parameters['edge-user-target-delay']['value']} ms ")
         # offloading logic
-        params = EPAMP_GMA_Connector.Connector(offload_parameters)
-        result_list = EPAMP_offload.offload(params)
+        params = SAMP_GMA_Connector.Connector(offload_parameters)
+        result_list = SAMP_offload.offload(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')
@@ -1147,8 +1154,8 @@ class GMAStataMachine():
         
         logger.info(f"Unoffloading with target delay increase {unoffload_parameters['edge-user-target-delay']['value']-unoffload_parameters['edge-user-delay']['value']}ms ")
         # unoffloading logic
-        params = EPAMP_GMA_Connector.Connector(unoffload_parameters)
-        result_list = EPAMP_unoffload_from_void.unoffload(params)
+        params = SAMP_GMA_Connector.Connector(unoffload_parameters)
+        result_list = SAMP_unoffload_from_void.unoffload(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')

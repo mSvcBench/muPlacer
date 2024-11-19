@@ -10,7 +10,7 @@ from numpy import inf
 from computeNc import computeN
 from buildFi import buildFi
 from computeDTot import computeDTot
-from EPAMP_offload import offload
+from SAMP_offload import offload
 
 
 np.seterr(divide='ignore', invalid='ignore')
