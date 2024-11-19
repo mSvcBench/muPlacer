@@ -240,7 +240,6 @@ def offload(params):
     global_Di = params['Di'] if 'Di' in params else np.zeros(2*global_M)
     global_Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*global_M)
     global_Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*global_M)
-    global_look_ahead = params['look-ahead'] if 'look_ahead' in params else 1 # look ahead factor to increase the delay decrease target
     global_cache_ttl = params['cache-ttl'] if 'cache-ttl' in params else 10 # cache expiry in round
     global_locked_b = params['locked_b'] if 'locked_b' in params else np.zeros(global_M) # binary encoding of microservice that can not be moved at the edge
     global_sgs_builder = locals()[params['sgs-builder']] if 'sgs-builder' in params else locals()['sgs_builder_traces'] # expanding subgraph builder function
@@ -251,6 +250,7 @@ def offload(params):
     global_traces_b = params['traces-b'] if 'traces-b' in params else None # flag to enable traces generation
     global_max_sgs = params['max-sgs'] if 'max-sgs' in params else 1e6 # maximum number of subgraphs to consider in an optimization iteration
     global_max_traces = params['max-traces'] if 'max-traces' in params else 1024 # maximum number of traces to generate
+    global_delay_decrease_stop_condition = params['delay_decrease_stop_condition'] if 'delay_decrease_stop_condition' in params else global_delay_decrease_target # delay decrease early stop
     
     # Check if the graph is acyclic
     Fm_unitary = np.where(global_Fm > 0, 1, 0)
@@ -334,9 +334,12 @@ def offload(params):
         
         # Check if the delay reduction and other constraints are reached
         
-        if global_delay_old-delay_new >= global_delay_decrease_target * global_look_ahead:
+        if global_delay_old-delay_new >= global_delay_decrease_stop_condition:
             # delay reduction reached
-            logger.info(f'delay reduction reached')
+            logger.info(f'delay reduction stop value reached')
+            if global_delay_old-delay_new >= global_delay_decrease_target:
+                # delay reduction reached
+                logger.info(f'target delay reduction reached')
             break
 
         # BUILDING OF EXPANDING SUBGRAPH

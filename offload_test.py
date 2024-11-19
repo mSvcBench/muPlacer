@@ -19,8 +19,8 @@ import json
 # MAIN
 def main():
     # small simulation to test the offload function
-    #strategy = offload
-    strategy = mfu_heuristic
+    strategy = offload
+    #strategy = mfu_heuristic
     RTT = 0.106    # RTT edge-cloud
     M = 200 # n. microservices
     delay_decrease_target = 0.05    # requested delay reduction
@@ -102,6 +102,7 @@ def main():
         'L': L,
         'Di': Di,
         'delay_decrease_target': delay_decrease_target,
+        'delay_decrease_stop_condition': delay_decrease_target * 0.75,
         'RTT': RTT,
         'B': B,
         'Cost_cpu_edge': Cost_cpu_edge,

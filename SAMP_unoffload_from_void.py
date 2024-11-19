@@ -24,12 +24,12 @@ logger.propagate = False
 def unoffload(params):
 
     ## INITIALIZE VARIABLES ##
-    #Acpu_old (2*M,) vector of CPU req by instance-set at the cloud (:M) and at the edge (M:)
-    #Amem_old (2*M,) vector of Memory req by instance-set at the cloud (:M) and at the edge (M:)
-    #Fcm (M,M)microservice call frequency matrix
+    #Ucpu_old (2*M,) vector of CPU used by instance-set at the cloud (:M) and at the edge (M:)
+    #Umem_old (2*M,) vector of Memory used by instance-set at the cloud (:M) and at the edge (M:)
+    #Fm (M,M)microservice call frequency matrix
     #M number of microservices
     #lambd user request rate
-    #Rs (M,) vector of response size of microservices
+    #L (M,) vector of response size of microservices
     #S_edge_old (M,) vector of binary values indicating if the microservice is at the edge or not
     #delay_increase_target delay increase target
     #RTT fixed delay to add to microservice interaction in addition to the time depending on the response size
@@ -51,6 +51,7 @@ def unoffload(params):
     lambd = params['lambd'] # user request rate
     L = params['L'] # response size of microservices
     delay_increase_target = params['delay_increase_target'] # requested delay increase
+    delay_increase_stop_condition = params['delay_increase_stop_condition'] if 'delay_increase_stop_condition' in params else delay_increase_target # stop condition for delay increase
     RTT = params['RTT'] # fixed delay to add to microservice interaction in addition to the time depending on the response size
     B = params['B'] # network bitrate cloud-edge
     Cost_cpu_edge = params['Cost_cpu_edge'] # Cost of CPU at the edge per hour
@@ -106,6 +107,7 @@ def unoffload(params):
         'L': L[:M],
         'Di': Di,
         'delay_decrease_target': delay_decrease_target,
+        'delay_decrease_stop_condition': delay_increase_stop_condition,
         'RTT': RTT,
         'B': B,
         'Cost_cpu_edge': Cost_cpu_edge,

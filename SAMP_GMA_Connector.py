@@ -24,8 +24,12 @@ def Connector(GMA_params):
         Di = GMA_params['di']['value']
     else:
         Di = np.zeros(2*M)
+    
     delay_decrease_target = (GMA_params['edge-user-delay']['value'] - GMA_params['edge-user-target-delay']['value'])/1000.0
+    delay_decrease_stop_condition = delay_decrease_target * 0.75 # 75% of the target, TODO export to config
     delay_increase_target = - delay_decrease_target
+    delay_increase_stop_condition = delay_increase_target * 0.75 # 75% of the target, TODO export to config
+
     B = GMA_params['network']['cloud-edge-bps']['value']
     RTT = GMA_params['network']['edge-cloud-rtt']['value']/1000.0
     Cost_cpu_edge = GMA_params['cost']['edge-area']['cpu']['value']
@@ -58,6 +62,8 @@ def Connector(GMA_params):
         'Di': Di,
         'delay_decrease_target': delay_decrease_target,
         'delay_increase_target': delay_increase_target,
+        'delay_decrease_stop_condition': delay_decrease_stop_condition,
+        'delay_increase_stop_condition': delay_increase_stop_condition,
         'RTT': RTT,
         'B': B,
         'Cost_cpu_edge': Cost_cpu_edge,
