@@ -28,29 +28,7 @@ logger.propagate = False
 
 def sbmp_o(params):
 
-    ## INITIALIZE VARIABLES ##
-    # S_edge_old (M,) vector of binary values indicating if the microservice instance-set is running in the edge or not
-    # Ucpu_old (2*M,) vector of actual CPU req by instance-set at the cloud (:M) and at the edge (M:)
-    # Umem_old (2*M,) vector of actual Memory req by instance-set at the cloud (:M) and at the edge (M:)
-    # Fm(M,M) microservice call frequency matrix
-    # M number of microservices
-    # lambd user request rate
-    # L(M,) vector of response size of microservices
-    # Di(M,) vector of internal delay of microservices
-    # delay_decrease_target delay reduction target
-    # RTT fixed delay to add to microservice interaction in addition to the time depending on the response size
-    # B cloud-edge network bitrate
-    # Cost_cpu_edge cost of CPU unit at the edge
-    # Cost_mem_edge cost of Memory unit at the edge
-    # Cost_cpu_cloud cost of CPU unit at the cloud
-    # Cost_mem_cloud cost of Memory unit at the cloud
-    # Qmem (M,) memory quantum in bytes, Kubernetes memory request
-    # Qcpu (M,) CPU quantum in cpu sec, Kubernetes CPU request
-    
-    # expanding_subgraph_b (N,M) binary-based (b) encoded expanding subgraphs set
-    # expanding_depth maximum expasion of the edge graph to consider in the single path adding greedy iteraction
-    # locked_b (M,) binary encoding of cloud-only microservice that can not be moved at the edge
-    # global_max_sgs maximum number of expanding subgraph paths to consider in the optimization
+   
 
     def cache_probe(S_b, round):
         result=dict()
@@ -200,18 +178,19 @@ def sbmp_o(params):
     #             trace = sgs_builder_trace(child,trace,global_Fm)
     #     return trace
 
+    ## INITIALIZE VARIABLES ##
 
     # mandatory paramenters
-    global_S_edge_old = params['S_edge_b']
-    global_Ucpu_old = params['Ucpu']
-    global_Umem_old = params['Umem']
-    global_Fm = params['Fm']
-    global_M = params['M']
-    global_lambd = params['lambd']
-    global_L = params['L']
-    global_delay_decrease_target = params['delay_decrease_target']
-    global_RTT = params['RTT']
-    global_B = params['B']
+    global_S_edge_old = params['S_edge_b'] # (M,) binary presence at the edge
+    global_Ucpu_old = params['Ucpu'] # (2*M,) CPU usage vector
+    global_Umem_old = params['Umem'] # (2*M,) Memory usage vector
+    global_Fm = params['Fm'] # (M,M) microservice call frequency matrix
+    global_M = params['M'] # number of microservices
+    global_lambd = params['lambd'] # user request rate vector
+    global_L = params['L'] # (M,) response length vector
+    global_delay_decrease_target = params['delay_decrease_target'] # target delay decrease
+    global_RTT = params['RTT'] # RTT between edge and cloud
+    global_B = params['B'] # network bandwidth
     global_Cost_cpu_edge = params['Cost_cpu_edge'] # Cost of CPU unit at the edge per hours
     global_Cost_mem_edge = params['Cost_mem_edge'] # Cost of Memory unit at the edge per hours
     global_Cost_cpu_cloud = params['Cost_cpu_cloud']   # Cost of CPU unit at the cloud per hours
@@ -219,9 +198,9 @@ def sbmp_o(params):
     global_Cost_network = params['Cost_network']   # Cost of network per GB
 
     # optional paramenters
-    global_Di = params['Di'] if 'Di' in params else np.zeros(2*global_M)
-    global_Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*global_M)
-    global_Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*global_M)
+    global_Di = params['Di'] if 'Di' in params else np.zeros(2*global_M) # (2*M,) interna delay vector
+    global_Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*global_M) # (2*M,) memory quota vector (Kubernetes CPU Request)
+    global_Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*global_M) # (2*M,) CPU quota vector (Kubernetes MEM Request)
     global_cache_ttl = params['cache-ttl'] if 'cache-ttl' in params else 10 # cache expiry in round
     global_locked_b = params['locked_b'] if 'locked_b' in params else np.zeros(global_M) # binary encoding of microservice that can not be moved at the edge
     global_sgs_builder = locals()[params['sgs-builder']] if 'sgs-builder' in params else locals()['sgs_builder_traces'] # expanding subgraph builder function

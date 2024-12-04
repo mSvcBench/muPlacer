@@ -51,9 +51,11 @@ spec:
     edge-cloud-bps: 1000Mbps  # static bandwidth between edge and cloud   
     edge-cloud-rtt: 80ms # static RTT between edge and cloud
   optimizer:
-    samp:
-      expanding-depth: 2  # expanding depth optimization paramenter of SAMP
-      max-sgs: 128 # maximum number of expanding subgrapgh to consider in SAMP iteration
+    sbmp:
+      expanding-depth: 2  # expanding depth optimization paramenter of SBMP
+      max-sgs: 256 # maximum number of expanding subgrapgh to consider in SBMP iteration
+      max-traces: 2048 # maximum number of traces to consider in SBMP iteration
+
     max-delay-reduction : 50ms  # max requested delay reduction per placement action 
     max-delay-increase : 20ms # max requested delay increase per placement action
     delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading

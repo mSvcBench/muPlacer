@@ -1,7 +1,7 @@
 import numpy as np
 
 def Connector(GMA_params):
-    # Take params from GMA and return samp params
+    # Take params from GMA and return sbmp params
     M = GMA_params['n-services']
     S_edge_b = np.minimum(GMA_params['hpa']['edge-area']['current-replicas'],1)
     S_edge_b[M-1]=1 # Last service is always on the edge since it represent the istio-ingress/user
@@ -38,14 +38,26 @@ def Connector(GMA_params):
     Cost_mem_cloud = GMA_params['cost']['cloud-area']['memory']['value']
     Cost_network = GMA_params['cost']['cloud-area']['network']['value']
 
-    if 'expanding-depth' in GMA_params['optimizer']['samp']:
-        expanding_depth = int(GMA_params['optimizer']['samp']['expanding-depth'])
+    if 'expanding-depth' in GMA_params['optimizer']['sbmp']:
+        expanding_depth = int(GMA_params['optimizer']['sbmp']['expanding-depth'])
     else:
         expanding_depth = 2
-    if 'max-sgs' in GMA_params['optimizer']['samp']:
-        max_sgs = int(GMA_params['optimizer']['samp']['max-sgs'])
+    if 'max-sgs' in GMA_params['optimizer']['sbmp']:
+        max_sgs = int(GMA_params['optimizer']['sbmp']['max-sgs'])
     else:
-        max_sgs = 64
+        max_sgs = 256
+    if 'max-traces' in GMA_params['optimizer']['sbmp']:
+        max_traces = int(GMA_params['optimizer']['sbmp']['max-traces'])
+    else:
+        max_traces = 2048
+    if 'traces-b' in GMA_params['optimizer']['sbmp']:
+        traces_b = GMA_params['optimizer']['sbmp']['traces-b']
+    else:
+        traces_b = None
+    if 'HPA_cpu_th' in GMA_params['optimizer']['sbmp']:
+        HPA_cpu_th = GMA_params['optimizer']['sbmp']['HPA_cpu_th']
+    else:
+        HPA_cpu_th = None
     if 'locked_b' in GMA_params['optimizer']:
         locked_b = GMA_params['optimizer']['locked']
     else:
