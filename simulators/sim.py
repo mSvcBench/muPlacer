@@ -6,8 +6,8 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from old.EPAMP_offload_caching import offload
-from MFU_heuristic import mfu_heuristic
-from IA_heuristic import IA_heuristic
+from MFU import mfu
+from IA import IA_heuristic
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -246,7 +246,7 @@ for k in range(trials):
         'mode': 'offload'
     }
     tic = time.time()
-    result = mfu_heuristic(params)
+    result = mfu(params)
     toc = time.time()
     print(f'processing time {alg_type[a]} {(toc-tic)} sec')
     print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")

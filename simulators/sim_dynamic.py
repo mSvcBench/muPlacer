@@ -7,15 +7,15 @@ from os import environ
 N_THREADS = '1'
 environ['OMP_NUM_THREADS'] = N_THREADS
 
-from EPAMP_offload_sweeping import offload
-from SAMP_unoffload_from_void import unoffload
-from MFU_heuristic import mfu_heuristic
-from IA_heuristic import IA_heuristic
+from SBMP_offload import sbmp_o
+from SBMP_unoffload import sbmp_u
+from MFU import mfu
+from IA import IA_heuristic
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from igraph import *
-from computeNc import computeN
+from computeN import computeN
 from computeDTot import computeDTot
 from scipy.io import savemat
 from buildFi import buildFi
@@ -229,7 +229,7 @@ for t in range(trials):
                 'dependency_paths_b': None
             }
             tic = time.time()
-            result = offload(params)[1] if mode == 'offload' else unoffload(params)[1]
+            result = sbmp_o(params)[1] if mode == 'offload' else sbmp_u(params)[1]
             # if result['delay'] < unoffload_threshold and mode == 'offload':
             #     params['S_edge_b'] = result['S_edge_b']
             #     params['Amem'] = result['Amem']
@@ -306,7 +306,7 @@ for t in range(trials):
                 'mode': mode
             }
             tic = time.time()
-            result = mfu_heuristic(params)
+            result = mfu(params)
             toc = time.time()
             print(f'processing time {alg_type[a]} {(toc-tic)} sec')
             if mode == 'offload':

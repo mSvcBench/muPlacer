@@ -7,7 +7,7 @@ sys.path.append(parent_dir)
 
 from SAMP_offload import offload
 from mfu_heuristic import mfu_heuristic
-from IA_heuristic import IA_heuristic
+from IA import IA_heuristic
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt

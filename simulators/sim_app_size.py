@@ -5,9 +5,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from SAMP_offload import offload
-from MFU_heuristic import mfu_heuristic
-from IA_heuristic import IA_heuristic
+from SBMP_offload import sbmp_o
+from MFU import mfu
+from IA import IA_heuristic
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -21,6 +21,7 @@ import time
 import utils
 import random
 import logging
+import graph_gen
 from trace_builder import dp_builder_trace
 
 def edges_reversal(graph):
@@ -37,25 +38,27 @@ trials = 50
 seed = 150273
 np.random.seed(seed)
 random.seed(seed)
-RTT = 0.06    # RTT edge-cloud
+RTT = 0.08    # RTT edge-cloud
 target_delay = 0.1   # target delay 
 app_delay_no_net = 0.05  # delay of the application without network
 #delay_decrease_target = 0.03    # requested delay reduction
-lambda_val = 500    # request per second
+lambda_val = 50    # request per second
 B =1e9    # bitrate cloud-edge
 
-graph_algorithm = 'barabasi' # 'random' or 'barabasi
+graph_algorithm = 'barabasi-pareto' # 'random' or 'barabasi
 barabasi=dict()
 barabasi['m'] = 1
 barabasi['power'] = 0.9
 barabasi['zero_appeal'] = 3.125
+barabasi['pareto_shape'] = 10
 random=dict()
 random['n_parents'] = 3
 
 Fm_range_min = 0.1 # min value of microservice call frequency 
 Fm_range_max = 0.5 # max value of microservice call frequency 
-Ucpu_range_min = 1  # min value of CPU usage per cloud/edge instance set per 10 req/s
-Ucpu_range_max = 8 # max value of CPU usage per cloud/edge instance set per 10 req/s
+u_scale = 10 # scaling factor for CPU usage per req/sec
+Ucpu_range_min = 5  # min value of CPU usage per cloud/edge instance set per u_scale req/s
+Ucpu_range_max = 40 # max value of CPU usage per cloud/edge instance set per u_scale req/s
 L_range_min = 200000 # min value of response length in bytes
 L_range_max = 2000000   # max of response length in bytes
 Di_range_min = 0.005 # min value of internal delay (sec)
@@ -97,6 +100,8 @@ for M in range(11,M_max,10):
         print(f'\n\ntrial {k}')  
         L = np.random.randint(L_range_min,L_range_max,M)  # random response length bytes
         L[M-1]=0 # user has no response size
+        L[0]=2e6 # ingress microservice response size is set to 2MB
+        #lambda_val = B*0.8/(L[0]*8) # lambda is set to 80% of the edge-cloud network capacity
         
         # build dependency graph
         Fm = np.zeros([M,M])   # microservice call frequency matrix
@@ -111,7 +116,9 @@ for M in range(11,M_max,10):
                 for j in range(n_parent):
                     a = np.random.randint(i)
                     Fm[a,i]=1
-            
+        elif graph_algorithm=='barabasi-pareto':
+            g = graph_gen.barabasi_albert_with_pareto(n=barabasi['n'], pshape=barabasi['pareto_shape'], power=barabasi['power'], zero_appeal=barabasi['zero_appeal'])
+            Fm[:M-1,:M-1] = nx.adjacency_matrix(g).toarray() 
         # set random values for microservice call frequency matrix
         for i in range(0,M-1):
             for j in range(0,M-1):
@@ -119,7 +126,7 @@ for M in range(11,M_max,10):
         Fm[M-1,0] = 1  # user call microservice 0 (the ingress microservice)
 
         # set random values for CPU and memory usage in case of cloud only deployment
-        Ucpu_void = np.random.uniform(Ucpu_range_min,Ucpu_range_max,size=M) * lambda_val / 10
+        Ucpu_void = np.random.uniform(Ucpu_range_min,Ucpu_range_max,size=M) * lambda_val / u_scale
         Ucpu_void[M-1]=0   # user has no CPU request
         Umem_void = Ucpu_void * 2 # memory request is twice the CPU request (rule of thumb 1 CPU x 2GBs)
         Ucpu_void = np.append(Ucpu_void, np.zeros(M))
@@ -153,51 +160,9 @@ for M in range(11,M_max,10):
         alg_type = [""] * max_algotithms # vector of strings describing algorithms used in a trial
         a=-1
         
-        ## E_PAMP ##
-        # a+=1
-        # alg_type[a] = "E_PAMP - min SWP"
-        # params = {
-        #     'S_edge_b': S_edge_b.copy(),
-        #     'Acpu': Acpu.copy(),
-        #     'Amem': Amem.copy(),
-        #     'Qcpu': Qcpu.copy(),
-        #     'Qmem': Qmem.copy(),
-        #     'Fcm': Fcm.copy(),
-        #     'M': M,
-        #     'lambd': lambda_val,
-        #     'Rs': Rs,
-        #     'Di': Di,
-        #     'delay_decrease_target': delay_decrease_target,
-        #     'RTT': RTT,
-        #     'Ne': Ne,
-        #     'Cost_cpu_edge': Cost_cpu_edge,
-        #     'Cost_mem_edge': Cost_mem_edge,
-        #     'Cost_cpu_cloud': Cost_cpu_cloud,
-        #     'Cost_mem_cloud': Cost_mem_cloud,
-        #     'Cost_network': Cost_network,
-        #     'locked': None,
-        #     'dependency_paths_b': None,
-        #     'dp_builder': 'dp_builder_with_minimum_sweeping',
-        #     'u_limit': 2
-        # }
-        # tic = time.time()
-        # result = offload(params)[1]
-        # toc = time.time()
-        # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-        # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        # cost_v[k,Mi,a] = result['Cost']
-        # cost_v_edge[k,Mi,a] = result['Cost_edge']
-        # cost_v_cloud[k,Mi,a] = result['Cost_cloud']
-        # delay_v[k,Mi,a] = result['delay']
-        # rhoce_v[k,Mi,a] = result['rhoce']
-        # cost_v_traffic[k,Mi,a] = result['Cost_traffic']
-        # delta_cost_v[k,Mi,a] = result['cost_increase']
-        # p_time_v[k,Mi,a] = toc-tic
-        # edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
-
-        ## E_PAMP ##
+        ## SBMP ##
         a+=1
-        alg_type[a] = "E_PAMP - Traces"
+        alg_type[a] = "SBMP - Traces"
         params = {
             'S_edge_b': S_edge_b.copy(),
             'Ucpu': Ucpu.copy(),
@@ -219,11 +184,11 @@ for M in range(11,M_max,10):
             'Cost_network': Cost_network,
             'sgs-builder': 'sgs_builder_traces',
             'expanding-depth': 2,
-            'max-sgs': 128,
+            'max-sgs': 256,
             'max-traces': 2048,
         }
         tic = time.time()
-        result = offload(params)[1]
+        result = sbmp_o(params)[2]
         toc = time.time()
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
@@ -262,7 +227,7 @@ for M in range(11,M_max,10):
             'mode': 'offload'
         }
         tic = time.time()
-        result = mfu_heuristic(params)[1]
+        result = mfu(params)[2]
         toc = time.time()
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
@@ -276,9 +241,9 @@ for M in range(11,M_max,10):
         p_time_v[k,Mi,a] = toc-tic
         edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
         
-        ## E_PAMP ##
+        ## SBMP ##
         a+=1
-        alg_type[a] = "E_PAMP - SPA"
+        alg_type[a] = "SBMP - SPA (PAMP)"
         params = {
             'S_edge_b': S_edge_b.copy(),
             'Ucpu': Ucpu.copy(),
@@ -302,7 +267,7 @@ for M in range(11,M_max,10):
             'expanding-depth': 2
         }
         tic = time.time()
-        result = offload(params)[1]
+        result = sbmp_o(params)[2]
         toc = time.time()
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
@@ -317,39 +282,43 @@ for M in range(11,M_max,10):
         edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
 
 
-        ## IA ##
-        # a+=1
-        # alg_type[a] = "IA"
-        # params = {
-        #     'S_edge_b': S_edge_b.copy(),
-        #     'Acpu': Acpu.copy(),
-        #     'Amem': Amem.copy(),
-        #     'Qcpu': Qcpu.copy(),
-        #     'Qmem': Qmem.copy(),
-        #     'Fcm': Fcm.copy(),
-        #     'M': M,
-        #     'lambd': lambda_val,
-        #     'Rs': Rs,
-        #     'Di': Di,
-        #     'delay_decrease_target': delay_decrease_target,
-        #     'RTT': RTT,
-        #     'Ne': Ne,
-        #     'Cost_cpu_edge': Cost_cpu_edge,
-        #     'Cost_mem_edge': Cost_mem_edge,
-        #     'Cost_cpu_cloud': Cost_cpu_cloud,
-        #     'Cost_mem_cloud': Cost_mem_cloud
-        # }
-        # tic = time.time()
-        # result = IA_heuristic(params)
-        # toc = time.time()
-        # print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-        # print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
-        # cost_v[k,Mi,a] = result['Cost']
-        # cost_v_edge[k,Mi,a] = result['Cost_edge']
-        # cost_v_cloud[k,Mi,a] = result['Cost_cloud']
-        # delta_v[k,Mi,a] = result['delay_decrease']
-        # p_time_v[k,Mi,a] = toc-tic
-        # edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
+        # IA ##
+        a+=1
+        alg_type[a] = "IA"
+        params = {
+            'S_edge_b': S_edge_b.copy(),
+            'Ucpu': Ucpu.copy(),
+            'Umem': Umem.copy(),
+            'Qcpu': Qcpu.copy(),
+            'Qmem': Qmem.copy(),
+            'Fm': Fm.copy(),
+            'M': M,
+            'lambd': lambda_val,
+            'L': L,
+            'Di': Di,
+            'delay_decrease_target': delay_decrease_target,
+            'RTT': RTT,
+            'B': B,
+            'Cost_cpu_edge': Cost_cpu_edge,
+            'Cost_mem_edge': Cost_mem_edge,
+            'Cost_cpu_cloud': Cost_cpu_cloud,
+            'Cost_mem_cloud': Cost_mem_cloud,
+            'Cost_network': Cost_network
+        }
+        tic = time.time()
+        result = IA_heuristic(params)[2]
+        toc = time.time()
+        print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+        print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+        cost_v[k,Mi,a] = result['Cost']
+        cost_v_edge[k,Mi,a] = result['Cost_edge']
+        cost_v_cloud[k,Mi,a] = result['Cost_cloud']
+        delay_v[k,Mi,a] = result['delay']
+        rhoce_v[k,Mi,a] = result['rhoce']
+        cost_v_traffic[k,Mi,a] = result['Cost_traffic']
+        delta_cost_v[k,Mi,a] = result['cost_increase']
+        p_time_v[k,Mi,a] = toc-tic
+        edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
     
     if show_plot:
         markers = ['o', 's', 'D', '^', 'v', 'p', '*', 'h', 'x', '+']
@@ -362,4 +331,4 @@ for M in range(11,M_max,10):
 
     # Matlab save
 mdic = {"cost_v": cost_v, "cost_v_edge": cost_v_edge, "cost_v_cloud": cost_v_cloud, "delay_v": delay_v, "delta_cost_v": delta_cost_v, "p_time_v": p_time_v, "edge_ms_v": edge_ms_v, "rhoce_v": rhoce_v, "cost_v_traffic": cost_v_traffic}
-savemat("res1_const_delay.mat", mdic)
+savemat(f"res1_const_delay_pareto{barabasi['pareto_shape']}.mat", mdic)

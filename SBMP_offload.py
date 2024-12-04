@@ -15,19 +15,18 @@ import utils
 from S2id import S2id
 from id2S import id2S
 import time
-#from EPAMP_unoffload5 import unoffload
 
 
 np.seterr(divide='ignore', invalid='ignore')
 
 # Set up logger
-logger = logging.getLogger('EPAMP_offload')
+logger = logging.getLogger('SBMP_offload')
 logger_stream_handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(logger_stream_handler)
-logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s EPAMP offload %(levelname)s %(message)s'))
+logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s SBMP offload %(levelname)s %(message)s'))
 logger.propagate = False
 
-def offload(params):
+def sbmp_o(params):
 
     ## INITIALIZE VARIABLES ##
     # S_edge_old (M,) vector of binary values indicating if the microservice instance-set is running in the edge or not
@@ -48,10 +47,9 @@ def offload(params):
     # Qmem (M,) memory quantum in bytes, Kubernetes memory request
     # Qcpu (M,) CPU quantum in cpu sec, Kubernetes CPU request
     
-    # look_ahead look ahead factor to increase the delay decrease target
     # expanding_subgraph_b (N,M) binary-based (b) encoded expanding subgraphs set
     # expanding_depth maximum expasion of the edge graph to consider in the single path adding greedy iteraction
-    # locked_b (M,) binary encoding of microservice that can not be moved at the edge
+    # locked_b (M,) binary encoding of cloud-only microservice that can not be moved at the edge
     # global_max_sgs maximum number of expanding subgraph paths to consider in the optimization
 
     def cache_probe(S_b, round):
@@ -102,27 +100,6 @@ def offload(params):
             result['cost'] = cost_new
         return hit, result
     
-    # def evaluate_perf_no_caching(S_b_new, Ucpu_old, Umem_old, Nci_old, round):
-    #     # fake caching test
-    #     Ucpu_new_p = np.zeros(2*global_M)
-    #     Umem_new_p = np.zeros(2*global_M)
-    #     Fi_new_p = np.matrix(buildFi(S_b_new, global_Fm, global_M))
-    #     Nci_new_p = computeNc(Fi_new_p, global_M, 2)
-    #     delay_new_p,_,_,rhoce_new_p = computeDTot(S_b_new, Nci_new_p, Fi_new_p, global_Di, global_Rs, global_RTT, global_Ne, global_lambd, global_M, np.empty(0))
-    #     utils.computeResourceShift(Ucpu_new_p, Umem_new_p,Nci_new_p,Ucpu_old,Umem_old,Nci_old)
-    #     cost_new_p = utils.computeCost(Ucpu_new_p, Umem_new_p, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new_p*global_Ne, global_Cost_network)[0] # Total  cost of the temp state
-    #     result = dict()
-    #     result['delay'] = delay_new_p
-    #     result['Ucpu'] = Ucpu_new_p.copy()
-    #     result['Umem'] = Umem_new_p.copy()
-    #     result['Fi'] = Fi_new_p.copy()
-    #     result['N'] = Nci_new_p.copy()
-    #     result['rhoce'] = rhoce_new_p
-    #     result['cost'] = cost_new_p
-    #     global_cache['cache_access'] += 1
-    #     hit = False
-    #     return hit, result
-    
     def cache_insert(S_b, delay, Ucpu, Umem, Fi, N, rhoce, cost, round):
         S_id_edge=np.array2string(S_b[global_M:])
         global_cache['delay'][S_id_edge] = delay
@@ -145,7 +122,7 @@ def offload(params):
                 del global_cache['expire'][key]
     
     def sgs_builder_with_single_path_adding(S_b_init, Ucpu_init, Umem_init, N_init, round):
-        ## BUILDING OF EXPANDING SUBGRAPH WITH SINGLE PATH ADDING##
+        ## BUILDING OF EXPANDING SUBGRAPH WITH SINGLE PATH ADDING - PAMP Algorithm ##
         
         nonlocal expanding_subgraphs_b_full_built, expanding_subgraphs_b_full
         if not expanding_subgraphs_b_full_built:
@@ -171,19 +148,20 @@ def offload(params):
         _,result = evaluate_perf(S_b_init, Ucpu_init, Umem_init, N_init, round)
         Fi_init = result['Fi']
         if not expanding_subgraphs_b_full_built:
-            n_traces = global_max_traces
-            expanding_subgraphs_b_full = np.empty((0,global_M), int)
-            user = global_M-1
-            iteration = 0
-            while True:
-                iteration += 1
-                trace_sample_b = np.zeros(global_M)
-                trace_sample_b = sgs_builder_trace(user,trace_sample_b,global_Fm, S_b_init)
-                expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
-                if len(expanding_subgraphs_b_full) >= n_traces or (iteration > 100*n_traces and len(expanding_subgraphs_b_full) > 20):
-                    break
-            trace_sample_b = np.ones(global_M)  # add full edge trace
-            expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
+            expanding_subgraphs_b_full = utils.sgs_builder_traces_full(global_M,global_max_traces,global_Fm)
+            # n_traces = global_max_traces
+            # expanding_subgraphs_b_full = np.empty((0,global_M), int)
+            # user = global_M-1
+            # iteration = 0
+            # while True:
+            #     iteration += 1
+            #     trace_sample_b = np.zeros(global_M)
+            #     trace_sample_b = sgs_builder_trace(user,trace_sample_b,global_Fm)
+            #     expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
+            #     if len(expanding_subgraphs_b_full) >= n_traces or (iteration > 100*n_traces and len(expanding_subgraphs_b_full) > 20):
+            #         break
+            # trace_sample_b = np.ones(global_M)  # add full edge trace
+            # expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
             expanding_subgraphs_b_full_built = True
         
         expanding_subgraphs_b = np.empty((0,global_M), int)
@@ -198,10 +176,15 @@ def offload(params):
             allowed_cloud_ms = np.append(allowed_cloud_ms, np.argwhere(global_ms_distances[edge_gw][:] <= global_expanding_depth).flatten())
         allowed_cloud_ms = np.unique(allowed_cloud_ms)
         not_allowed_ms = np.setdiff1d(np.arange(global_M), allowed_cloud_ms)
+        
         expanding_subgraphs_b[:,not_allowed_ms]=0
         
         # remove microservice looked by the user
         expanding_subgraphs_b[:,np.argwhere(global_locked_b>0)]=0
+
+        # remove traces fully in the edge
+        residual = np.argwhere(np.sum(np.maximum(expanding_subgraphs_b-S_b_init[global_M:],0),axis=1)>0).flatten()
+        expanding_subgraphs_b = expanding_subgraphs_b[residual]
 
         # compute the frequency of the expanding subgraph paths to return the most frequently used
         expanding_subgraphs_b, paths_freq = np.unique(expanding_subgraphs_b, axis=0,return_counts=True)
@@ -209,13 +192,13 @@ def offload(params):
 
         return expanding_subgraphs_b[mfu_expanding_subgraph_id[:min(global_max_sgs,len(mfu_expanding_subgraph_id))]]
 
-    def sgs_builder_trace(node,trace,global_Fm, S_b_init):
-        children = np.argwhere(global_Fm[node,0:global_M]>0).flatten()
-        for child in children:
-            if np.random.random() < global_Fm[node,child]:
-                trace[child] = 1
-                trace = sgs_builder_trace(child,trace,global_Fm,S_b_init)
-        return trace
+    # def sgs_builder_trace(node,trace,global_Fm):
+    #     children = np.argwhere(global_Fm[node,0:global_M]>0).flatten()
+    #     for child in children:
+    #         if np.random.random() < global_Fm[node,child]:
+    #             trace[child] = 1
+    #             trace = sgs_builder_trace(child,trace,global_Fm)
+    #     return trace
 
 
     # mandatory paramenters
@@ -235,7 +218,6 @@ def offload(params):
     global_Cost_mem_cloud = params['Cost_mem_cloud']   # Cost of Memory unit at the cloud per hours
     global_Cost_network = params['Cost_network']   # Cost of network per GB
 
-    
     # optional paramenters
     global_Di = params['Di'] if 'Di' in params else np.zeros(2*global_M)
     global_Qmem = params['Qmem'] if 'Qmem' in params else np.zeros(2*global_M)
@@ -243,21 +225,23 @@ def offload(params):
     global_cache_ttl = params['cache-ttl'] if 'cache-ttl' in params else 10 # cache expiry in round
     global_locked_b = params['locked_b'] if 'locked_b' in params else np.zeros(global_M) # binary encoding of microservice that can not be moved at the edge
     global_sgs_builder = locals()[params['sgs-builder']] if 'sgs-builder' in params else locals()['sgs_builder_traces'] # expanding subgraph builder function
-    global_S_cloud_old = np.ones(int(global_M)) # EPAMP assumes all microservice instances run in the cloud
-    global_S_cloud_old[global_M-1] = 0 # M-1 and 2M-1 are associated to the edge ingress gateway, therefore M-1 must be set to 0 and 2M-1 to 1 
-    global_S_b_old = np.concatenate((global_S_cloud_old, global_S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     global_expanding_depth = params['expanding-depth'] if 'expanding-depth' in params else global_M # maximum number of microservices upgrade to consider in the single path adding greedy iteraction (lower reduce optimality but increase computaiton speed)
     global_traces_b = params['traces-b'] if 'traces-b' in params else None # flag to enable traces generation
     global_max_sgs = params['max-sgs'] if 'max-sgs' in params else 1e6 # maximum number of subgraphs to consider in an optimization iteration
     global_max_traces = params['max-traces'] if 'max-traces' in params else 1024 # maximum number of traces to generate
     global_delay_decrease_stop_condition = params['delay_decrease_stop_condition'] if 'delay_decrease_stop_condition' in params else global_delay_decrease_target # delay decrease early stop
+    global_HPA_cpu_th = params['HPA_cpu_th'] if 'HPA_cpu_th' in params else None # CPU threshold for HPA
     
+    
+    global_S_cloud_old = np.ones(int(global_M)) # SBMP assumes all microservice instances run in the cloud
+    global_S_cloud_old[global_M-1] = 0 # M-1 and 2M-1 are associated to the edge ingress gateway, therefore M-1 must be set to 0 and 2M-1 to 1 
+    global_S_b_old = np.concatenate((global_S_cloud_old, global_S_edge_old)) # (2*M,) Initial status of the instance-set in the edge and cloud. (:M) binary presence at the cloud, (M:) binary presence at the edge
     # Check if the graph is acyclic
     Fm_unitary = np.where(global_Fm > 0, 1, 0)
     global_G = nx.DiGraph(Fm_unitary) # Create microservice dependency graph
     global_ms_distances = nx.floyd_warshall_numpy(global_G)
     if nx.is_directed_acyclic_graph(global_G)==False: 
-        logger.critical(f"Microservice dependency graph is not acyclic, EPAMP optimization can not be used")
+        logger.critical(f"Microservice dependency graph is not acyclic, SBMP optimization can not be used")
         result_edge=dict()
         result_edge['S_edge_b'] = global_S_b_old[global_M:].astype(int)
         result_edge['to-apply'] = list()
@@ -272,7 +256,7 @@ def offload(params):
     global_Fi_old = np.matrix(buildFi(global_S_b_old, global_Fm, global_M)) # (2*M,2*M) instance-set call frequency matrix
     global_N_old = computeN(global_Fi_old, global_M, 2)  # (2*M,) number of instance call per user request
     global_delay_old,_,_,global_rhonce_old = computeDTot(global_S_b_old, global_N_old, global_Fi_old, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))  # Total delay of the current configuration. It includes only network delays
-    global_Cost_old, global_Cost_old_edge,global_Cost_old_cloud,global_Cost_traffic_old = utils.computeCost(global_Ucpu_old, global_Umem_old, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, global_rhonce_old * global_B, global_Cost_network)
+    global_Cost_old, global_Cost_old_edge,global_Cost_old_cloud,global_Cost_traffic_old = utils.computeCost(global_Ucpu_old, global_Umem_old, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, global_rhonce_old * global_B, global_Cost_network, global_HPA_cpu_th)
 
     ## variables initialization ##
     S_b_temp = np.copy(global_S_b_old) # S_b_temp is the temporary placement state used in a greedy round
@@ -329,8 +313,8 @@ def offload(params):
         np.copyto(Fi_new,Fi_opt)      # Fi_new is the new instance-set call frequency matrix, Fi_opt is the best instance-set call frequency matrix computed by the previos greedy round
         delay_new = delay_opt           # delay_new is the new delay. It includes only network delays
         rhoce_new = rhoce_opt           # rhoce_new is the new cloud-edge network utilization
-        cost_new  = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_B, global_Cost_network)[0] # Total  cost of the new configuration
-        logger.info(f'new state {np.argwhere(S_b_new[global_M:]==1).squeeze()}, cost {cost_new}, delay decrease {1000*(global_delay_old-delay_new)} ms, cost increase {cost_new-global_Cost_old}')
+        Cost_new  = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_B, global_Cost_network,global_HPA_cpu_th)[0] # Total  cost of the new configuration
+        logger.info(f'new state {np.argwhere(S_b_new[global_M:]==1).squeeze()}, cost {Cost_new}, delay decrease {1000*(global_delay_old-delay_new)} ms, cost increase {Cost_new-global_Cost_old}')
         
         # Check if the delay reduction and other constraints are reached
         
@@ -367,14 +351,13 @@ def offload(params):
             rhoce_temp = result['rhoce']
             Cost_temp = result['cost']
             
-            cost_increase_temp = Cost_temp - cost_new # cost increase wrt the new state 
+            cost_increase_temp = Cost_temp - Cost_new # cost increase wrt the new state 
             delay_decrease_temp = delay_new - delay_temp    # delay reduction wrt the new state
             if skip_delay_increase and delay_decrease_temp<0:
                 logger.debug(f'considered expanding subgrah {np.argwhere(subgraph_b[0]==1).flatten()} skipped for negative delay decrease')
                 continue
 
             # weighting
-            # r_delay_decrease = global_delay_decrease_target * global_look_ahead - (global_delay_old-delay_new) # residul delay to decrease wrt previous conf
             r_delay_decrease = 1e6  # test
             if delay_decrease_temp <= 0:  
                 w = 1e6 + cost_increase_temp *  1000 * abs(delay_decrease_temp)
@@ -423,7 +406,7 @@ def offload(params):
         S_b_new_a = np.array(S_b_new[global_M:]).reshape(global_M,1)
         delay_new,_,_,rhoce_new = computeDTot(S_b_new, N_new, Fi_new, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))
         utils.computeResourceShift(Ucpu_new,Umem_new,N_new,global_Ucpu_old,global_Umem_old,global_N_old)
-        cost_new = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge,global_Cost_cpu_cloud, global_Cost_mem_cloud,rhoce_new*global_B,global_Cost_network)[0]
+        Cost_new = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge,global_Cost_cpu_cloud, global_Cost_mem_cloud,rhoce_new*global_B,global_Cost_network,global_HPA_cpu_th)[0]
         edge_leaves = np.logical_and(np.sum(Fi_new[global_M:2*global_M-1,global_M:2*global_M-1], axis=1)==0, S_b_new_a[:global_M-1]==1) # edge microservice with no outgoing calls to other edge microservices
         edge_leaves = np.argwhere(edge_leaves)[:,0]
         edge_leaves = edge_leaves+global_M # index of the edge microservice in the full state
@@ -439,8 +422,8 @@ def offload(params):
             delay_temp,_,_,rhoce_temp = computeDTot(S_b_temp, N_temp, Fi_temp, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))
             delay_increase_temp = max(delay_temp - delay_new,1e-3)
             utils.computeResourceShift(Ucpu_temp,Umem_temp,N_temp,Ucpu_new,Umem_new,N_new)
-            Cost_temp = utils.computeCost(Ucpu_temp, Umem_temp, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud,rhoce_temp*global_B, global_Cost_network)[0]
-            cost_decrease = cost_new - Cost_temp
+            Cost_temp = utils.computeCost(Ucpu_temp, Umem_temp, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud,rhoce_temp*global_B, global_Cost_network, global_HPA_cpu_th)[0]
+            cost_decrease = Cost_new - Cost_temp
             w = cost_decrease/delay_increase_temp
             utils.computeResourceShift(Ucpu_temp,Umem_temp,N_temp,Ucpu_new,Umem_new,N_new)
             
@@ -461,27 +444,27 @@ def offload(params):
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, N_new, Fi_new, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))
     delay_decrease_new = global_delay_old - delay_new
     utils.computeResourceShift(Ucpu_new,Umem_new,N_new,global_Ucpu_old,global_Umem_old,global_N_old)
-    cost_new, Cost_new_edge, Cost_new_cloud, Cost_traffic_new = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_B, global_Cost_network) # Total cost of new state
-    cost_increase_new = cost_new - global_Cost_old
+    Cost_new, Cost_new_edge, Cost_new_cloud, Cost_traffic_new = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_B, global_Cost_network, global_HPA_cpu_th) # Total cost of new state
+    cost_increase_new = Cost_new - global_Cost_old
 
-    result_edge = dict()
+    result_metrics = dict()
     
     # extra information
-    result_edge['S_edge_b'] = S_b_new[global_M:].astype(int)
-    result_edge['Cost'] = cost_new
-    result_edge['Cost_edge'] = Cost_new_edge
-    result_edge['Cost_cloud'] = Cost_new_cloud
-    result_edge['Cost_traffic'] = Cost_traffic_new
-    result_edge['delay_decrease'] = delay_decrease_new
-    result_edge['cost_increase'] = cost_increase_new
-    result_edge['Ucpu'] = Ucpu_new
-    result_edge['Umem'] = Umem_new
-    result_edge['Fi'] = Fi_new
-    result_edge['N'] = N_new
-    result_edge['delay'] = delay_new
-    result_edge['di'] = di_new
-    result_edge['dn'] = dn_new
-    result_edge['rhoce'] = rhoce_new
+    result_metrics['S_edge_b'] = S_b_new[global_M:].astype(int)
+    result_metrics['Cost'] = Cost_new
+    result_metrics['Cost_edge'] = Cost_new_edge
+    result_metrics['Cost_cloud'] = Cost_new_cloud
+    result_metrics['Cost_traffic'] = Cost_traffic_new
+    result_metrics['delay_decrease'] = delay_decrease_new
+    result_metrics['cost_increase'] = cost_increase_new
+    result_metrics['Ucpu'] = Ucpu_new
+    result_metrics['Umem'] = Umem_new
+    result_metrics['Fi'] = Fi_new
+    result_metrics['N'] = N_new
+    result_metrics['delay'] = delay_new
+    result_metrics['di'] = di_new
+    result_metrics['dn'] = dn_new
+    result_metrics['rhoce'] = rhoce_new
     
     # required return information
      
@@ -491,18 +474,19 @@ def offload(params):
     result_cloud['placement'] = utils.numpy_array_to_list(np.argwhere(S_b_new[:global_M]==1))
     result_cloud['info'] = f"Result for offload - cloud microservice ids: {result_cloud['placement']}"
 
-
+    result_edge = dict()
     result_edge['to-apply'] = utils.numpy_array_to_list(np.argwhere(S_b_new[global_M:]-global_S_b_old[global_M:]>0))
     result_edge['to-delete'] = utils.numpy_array_to_list(np.argwhere(global_S_b_old[global_M:]-S_b_new[global_M:]>0))
     result_edge['placement'] = utils.numpy_array_to_list(np.argwhere(S_b_new[global_M:]==1))
 
     result_edge['info'] = f"Result for offload - edge microservice ids: {result_edge['placement']}"
 
-    if result_edge['delay_decrease'] < global_delay_decrease_target:
+    if result_metrics['delay_decrease'] < global_delay_decrease_target:
         logger.warning(f"offload: delay decrease target not reached")
     
     result_return=list()
     result_return.append(result_cloud)  
     result_return.append(result_edge)
+    result_return.append(result_metrics)
     return result_return
 

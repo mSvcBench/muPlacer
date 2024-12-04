@@ -12,9 +12,9 @@ import yaml
 from os import environ
 from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
 
-import SAMP_offload as SAMP_offload
-import SAMP_unoffload_from_void as SAMP_unoffload_from_void
-import SAMP_GMA_Connector
+import SBMP_offload as SBMP_offload
+import SBMP_unoffload as SBMP_unoffload
+import SBMP_GMA_Connector
 import requests
 
 def update_ucpu():
@@ -1113,8 +1113,8 @@ class GMAStataMachine():
 
         logger.info(f"Offloading with target delay reduction {offload_parameters['edge-user-delay']['value']-offload_parameters['edge-user-target-delay']['value']} ms ")
         # offloading logic
-        params = SAMP_GMA_Connector.Connector(offload_parameters)
-        result_list = SAMP_offload.offload(params)
+        params = SBMP_GMA_Connector.Connector(offload_parameters)
+        result_list = SBMP_offload.sbmp_o(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')
@@ -1154,8 +1154,8 @@ class GMAStataMachine():
         
         logger.info(f"Unoffloading with target delay increase {unoffload_parameters['edge-user-target-delay']['value']-unoffload_parameters['edge-user-delay']['value']}ms ")
         # unoffloading logic
-        params = SAMP_GMA_Connector.Connector(unoffload_parameters)
-        result_list = SAMP_unoffload_from_void.unoffload(params)
+        params = SBMP_GMA_Connector.Connector(unoffload_parameters)
+        result_list = SBMP_unoffload.sbmp_u(params)
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')

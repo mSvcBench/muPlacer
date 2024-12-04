@@ -14,7 +14,7 @@ from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
 
 import old.EPAMP_offload_caching as EPAMP_offload_caching
 import old.EPAMP_unoffload_from_void as EPAMP_unoffload_from_void
-import SAMP_GMA_Connector
+import SBMP_GMA_Connector
 
 def update_acpu():
     global gma_config, prom_client, metrics
@@ -960,7 +960,7 @@ class GMAStataMachine():
         update_metrics()
         metric_to_pass = metrics['global'].copy()
         metric_to_pass['target-delay']['edge-area']['value'][-1] = offload_delay_threshold_ms
-        params = SAMP_GMA_Connector.Connector(metric_to_pass)
+        params = SBMP_GMA_Connector.Connector(metric_to_pass)
         # offloading logic
         result_list = EPAMP_offload_caching.offload(params)
         logger.info(f"Offload result: {result_list[1]['info']}")
@@ -977,7 +977,7 @@ class GMAStataMachine():
         update_metrics()
         metric_to_pass = metrics['global'].copy()
         metric_to_pass['target-delay']['edge-area']['value'][-1] = offload_delay_threshold_ms
-        params = SAMP_GMA_Connector.Connector(metric_to_pass)
+        params = SBMP_GMA_Connector.Connector(metric_to_pass)
         # unoffloading logic
         result_list = EPAMP_unoffload_from_void.unoffload(params)
         logger.info(f"Unoffload result: {result_list[1]['info']}")

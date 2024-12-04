@@ -1,6 +1,6 @@
 # pylint: disable=C0103, C0301
-from SAMP_offload import offload
-from MFU_heuristic import mfu_heuristic
+from SBMP_offload import sbmp_o
+from MFU import mfu
 import argparse
 import logging
 import sys
@@ -19,7 +19,7 @@ import json
 # MAIN
 def main():
     # small simulation to test the offload function
-    strategy = offload
+    strategy = sbmp_o
     #strategy = mfu_heuristic
     RTT = 0.106    # RTT edge-cloud
     M = 200 # n. microservices
@@ -124,7 +124,7 @@ def main():
     tic = time.time()    
     result_list = strategy(params)
     toc = time.time()
-    result=result_list[1]
+    result=result_list[2]
     print(f"Initial config:\n edge microservices: {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_old}")
     print(f"Result for offload:\n edge microservices: {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
     #print(json.dumps(result, indent=4))

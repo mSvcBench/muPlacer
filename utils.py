@@ -28,8 +28,8 @@ def computeReplicas(Ucpu,Qcpu,Qmem,HPA_cpu_th=None):
     # HPA_cpu_th : CPU threshold for HPA
     M = int(len(Ucpu)/2)
     if HPA_cpu_th is None:
-        HPA_cpu_th = np.ones(M) * 0.6 # default value
-    scaled_Ucpu = np.divide(Ucpu,np.tile(HPA_cpu_th,2))
+        HPA_cpu_th = np.ones(2*M) # default value 0.6
+    scaled_Ucpu = np.divide(Ucpu,HPA_cpu_th)
     Rp_cloud = np.ceil(scaled_Ucpu[:M]/Qcpu[:M])
     Rp_cloud = np.maximum(Rp_cloud,1)
     Rp_edge = np.ceil(scaled_Ucpu[M:]/Qcpu[M:])
@@ -55,7 +55,7 @@ def computeCost(Ucpu,Umem,Qcpu,Qmem,Cost_cpu_edge,Cost_mem_edge,Cost_cpu_cloud,C
     # HPA_cpu_th : CPU threshold for HPA
     M = int(len(Ucpu)/2)
     if HPA_cpu_th is None:
-        HPA_cpu_th = np.ones(M) * 0.6 # default value
+        HPA_cpu_th = np.ones(2*M) * 0.6 # default value
     
     # Compute the cost per instance
     Ci_cloud = Cost_cpu_cloud * Qcpu[:M] + Cost_mem_cloud * Qmem[:M]
@@ -95,6 +95,33 @@ def computeResourceShift(Ucpu_new,Umem_new,N_new,Ucpu_old,Umem_old,N_old):
     
     return Ucpu_new, Umem_new
 
+def sgs_builder_traces_full(M,max_traces,Fm):
+    # Create a random trace
+    # M : number of microservices
+    # max_traces : maximum number of traces
+    # Fm : microservice call frequency matrix
+    n_traces = max_traces
+    expanding_subgraphs_b_full = np.empty((0,M), int)
+    user = M-1
+    iteration = 0
+    while True:
+        iteration += 1
+        trace_sample_b = np.zeros(M)
+        trace_sample_b = sgs_builder_trace(user,trace_sample_b,Fm)
+        expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
+        if len(expanding_subgraphs_b_full) >= n_traces or (iteration > 100*n_traces and len(expanding_subgraphs_b_full) > 20):
+            break
+    trace_sample_b = np.ones(M)  # add full edge trace
+    expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
+    return expanding_subgraphs_b_full
+
+def sgs_builder_trace(node,trace,Fm):
+    children = np.argwhere(Fm[node,:]>0).flatten()
+    for child in children:
+        if np.random.random() < Fm[node,child]:
+            trace[child] = 1
+            trace = sgs_builder_trace(child,trace,Fm)
+    return trace
 # def computeCost_old(Acpu,Amem,Qcpu,Qmem,Cost_cpu,Cost_mem):
 
 #     # Compute the cost of a configuration 

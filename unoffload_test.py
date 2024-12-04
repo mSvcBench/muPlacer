@@ -9,17 +9,19 @@ import utils
 from numpy import inf
 from computeN import computeN
 from buildFi import buildFi
-from SAMP_unoffload_from_void import unoffload
+from SBMP_unoffload import sbmp_u
+from MFU import mfu
 from computeDTot import computeDTot
 import random
 
 def main():
     # small simulation to test the unoffload function
+    strategy = sbmp_u
 
     RTT = 0.106    # RTT edge-cloud
     M = 100 # n. microservices
     delay_increase_target = 0.01    # requested delay reduction
-    lambda_val = 20     # request per second
+    lambda_val = 50     # request per second
     B = 1e9    # bitrate cloud-edge
     
     S_edge_b = np.zeros(M)  # initial state. 
@@ -123,12 +125,13 @@ def main():
         'expanding-depth':2,
         'max-sgs': 128,
         'max-traces': 2048,
-        'sgs-builder': 'sgs_builder_traces'
+        'sgs-builder': 'sgs_builder_traces',
+        'mode': 'unoffload'
     }
     
     # Call the unoffload function
-    result_list = unoffload(params)
-    result=result_list[1]
+    result_list = strategy(params)
+    result=result_list[2]
     print(f"Initial config:\n {np.argwhere(S_edge_b==1).squeeze()}, Cost: {Cost_edge}")
     print(f"Result for unoffload:\n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}")
 
