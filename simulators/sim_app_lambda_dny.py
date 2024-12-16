@@ -3,23 +3,21 @@
 import os, sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+sys.path.append(f'{parent_dir}/utils')
+sys.path.append(f'{parent_dir}/strategies')
 
 from SBMP_offload import sbmp_o
 from SBMP_unoffload import sbmp_u
 from MFU import mfu
 from IA import IA_heuristic
+from igraph import *
+from utils import buildFi, computeN, computeDTot, computeCost, sgs_builder_traces_full
+from scipy.io import savemat
+from numpy import inf
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from igraph import *
-from computeN import computeN
-from scipy.io import savemat
-from buildFi import buildFi
-from numpy import inf
-from computeDTot import computeDTot
 import time
-import utils
 import random
 import logging
 import graph_gen
@@ -174,7 +172,7 @@ for k in range(trials):
     Fi = np.matrix(buildFi(S_b, Fm, M))
     N = computeN(Fi, M, 2)
 
-    traces_b = utils.sgs_builder_traces_full(M,2048,Fm)
+    traces_b = sgs_builder_traces_full(M,2048,Fm)
     
     for lambda_i,lambda_val in enumerate(lambda_range):
 
@@ -189,7 +187,7 @@ for k in range(trials):
         Ucpu_void[:M] = Ucpu[:M]+Ucpu[M:]
         Umem_void[:M] = Umem[:M]+Umem[M:]
         B_void = L[0]*8*lambda_val
-        Cost_void = utils.computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, B_void, Cost_network)[0]  
+        Cost_void = computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, B_void, Cost_network)[0]  
         
         if delay > offload_threshold:
             delay_decrease_target = delay - target_delay
@@ -237,7 +235,7 @@ for k in range(trials):
             result = sbmp_u(params)[2]
             print(f"Result {alg_type[a]} for unoffload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay increase: {result['delay_increase']}, cost increase from void: {result['Cost']-Cost_void}, rhoce: {result['rhoce']}")
         else:
-            Cost_sum, Cost_edge, Cost_cloud, Cost_traffic_ce = utils.computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)
+            Cost_sum, Cost_edge, Cost_cloud, Cost_traffic_ce = computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)
             result['delay'] = delay
             result['Ucpu'] = Ucpu
             result['Umem'] = Umem
@@ -297,7 +295,7 @@ for k in range(trials):
         Ucpu_void[:M] = Ucpu[:M]+Ucpu[M:]
         Umem_void[:M] = Umem[:M]+Umem[M:]
         B_void = L[0]*8*lambda_val
-        Cost_void = utils.computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, B_void, Cost_network)[0]  
+        Cost_void = computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, B_void, Cost_network)[0]  
 
         if delay > offload_threshold:
             delay_decrease_target = delay - target_delay
@@ -341,7 +339,7 @@ for k in range(trials):
             result = mfu(params)[2]
             print(f"Result {alg_type[a]} for unoffload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay increase: {result['delay_increase']}, cost increase from void: {result['Cost']-Cost_void}, rhoce: {result['rhoce']}")
         else:
-            Cost_sum, Cost_edge, Cost_cloud, Cost_traffic_ce = utils.computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)
+            Cost_sum, Cost_edge, Cost_cloud, Cost_traffic_ce = computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)
             result['delay'] = delay
             result['Ucpu'] = Ucpu
             result['Umem'] = Umem
@@ -403,7 +401,7 @@ for k in range(trials):
         Ucpu_void[:M] = Ucpu[:M]+Ucpu[M:]
         Umem_void[:M] = Umem[:M]+Umem[M:]
         B_void = L[0]*8*lambda_val
-        Cost_void = utils.computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, B_void, Cost_network)[0]
+        Cost_void = computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, B_void, Cost_network)[0]
 
         if delay > offload_threshold:
             delay_decrease_target = delay - target_delay
@@ -451,7 +449,7 @@ for k in range(trials):
             result = sbmp_u(params)[2]
             print(f"Result {alg_type[a]} for unoffload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, cost increase from void: {result['Cost']-Cost_void}, rhoce: {result['rhoce']}")
         else:
-            Cost_sum, Cost_edge, Cost_cloud, Cost_traffic_ce = utils.computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)
+            Cost_sum, Cost_edge, Cost_cloud, Cost_traffic_ce = computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)
             result['delay'] = delay
             result['Ucpu'] = Ucpu
             result['Umem'] = Umem

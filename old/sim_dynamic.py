@@ -1,7 +1,8 @@
 import os, sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+sys.path.append(f'{parent_dir}/utils')
+sys.path.append(f'{parent_dir}/strategies')
 
 from os import environ
 N_THREADS = '1'
@@ -11,19 +12,16 @@ from SBMP_offload import sbmp_o
 from SBMP_unoffload import sbmp_u
 from MFU import mfu
 from IA import IA_heuristic
+from igraph import *
+from utils import buildFi, computeN, computeDTot, computeCost
+from scipy.io import savemat
+from numpy import inf
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from igraph import *
-from computeN import computeN
-from computeDTot import computeDTot
-from scipy.io import savemat
-from buildFi import buildFi
-from numpy import inf
-from utils import computeCost, computeResourceShift
 import time
-import logging
 import random
+import logging
 
 def edges_reversal(graph):
     for edge in graph.get_edgelist():

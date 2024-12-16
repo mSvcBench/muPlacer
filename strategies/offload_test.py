@@ -1,18 +1,16 @@
 # pylint: disable=C0103, C0301
 from SBMP_offload import sbmp_o
 from MFU import mfu
+from IA import IA_heuristic
+from utils import buildFi, computeDiTot, computeDnTot, computeDTot, computeN, computeResourceShift, computeCost, sgs_builder_traces_full, numpy_array_to_list, S2id, id2S    
+
 import argparse
 import logging
 import sys
 import numpy as np
 import networkx as nx
-import utils
 import random
 import time
-from computeN import computeN
-from computeDTot import computeDTot
-from buildFi import buildFi
-import json
 
 
 
@@ -20,7 +18,8 @@ import json
 def main():
     # small simulation to test the offload function
     strategy = sbmp_o
-    #strategy = mfu_heuristic
+    #strategy = mfu
+    #strategy = IA_heuristic
     RTT = 0.106    # RTT edge-cloud
     M = 200 # n. microservices
     delay_decrease_target = 0.05    # requested delay reduction
@@ -85,9 +84,9 @@ def main():
     N_void = computeN(Fi_void, M, 2)    # number of instance call per user request of the void state
     
 
-    utils.computeResourceShift(Ucpu_void,Umem_void,N_void,Ucpu_void,Umem_void,N_void)
+    computeResourceShift(Ucpu_void,Umem_void,N_void,Ucpu_void,Umem_void,N_void)
     delay_old,_,_,rhoce_old = computeDTot(S_b_void, N_void, Fi_void, Di, np.tile(L, 2), RTT, B, lambda_val, M)
-    Cost_old,Cost_edge_old,Cost_cloud_old,Cost_traffic_ce_old = utils.computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_old * B, Cost_network)
+    Cost_old,Cost_edge_old,Cost_cloud_old,Cost_traffic_ce_old = computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_old * B, Cost_network)
     # set 0 random internal delay
     # print(f"{Cost_old},{Cost_edge_old},{Cost_cpu_edge_old},{Cost_mem_edge_old},{Cost_cloud_old},{Cost_cpu_cloud_old},{Cost_mem_cloud_old},{Cost_traffic_ce_old}")
     

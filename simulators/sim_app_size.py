@@ -3,26 +3,24 @@
 import os, sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+sys.path.append(f'{parent_dir}/utils')
+sys.path.append(f'{parent_dir}/strategies')
 
 from SBMP_offload import sbmp_o
+from SBMP_unoffload import sbmp_u
 from MFU import mfu
 from IA import IA_heuristic
+from igraph import *
+from utils import buildFi, computeN, computeDTot, computeCost, computeResourceShift
+from scipy.io import savemat
+from numpy import inf
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from igraph import *
-from computeN import computeN
-from scipy.io import savemat
-from buildFi import buildFi
-from numpy import inf
-from computeDTot import computeDTot
 import time
-import utils
 import random
 import logging
 import graph_gen
-from trace_builder import dp_builder_trace
 
 def edges_reversal(graph):
     for edge in graph.get_edgelist():
@@ -97,7 +95,8 @@ for M in range(11,M_max,10):
     barabasi['n'] = M-1
     
     for k in range(trials):
-        print(f'\n\ntrial {k}')  
+        print(f'\n\ntrial {k}')
+        print(f'\n\nNumber of microservices {M}')  
         L = np.random.randint(L_range_min,L_range_max,M)  # random response length bytes
         L[M-1]=0 # user has no response size
         L[0]=2e6 # ingress microservice response size is set to 2MB
@@ -143,7 +142,7 @@ for M in range(11,M_max,10):
         N = computeN(Fi, M, 2)    # number of instance call per user request of the current state
         Ucpu = Ucpu_void.copy()
         Umem = Umem_void.copy()
-        utils.computeResourceShift(Ucpu, Umem, N, Ucpu_void, Umem_void, N_void) # compute the resource shift from void state to the current S_b state
+        computeResourceShift(Ucpu, Umem, N, Ucpu_void, Umem_void, N_void) # compute the resource shift from void state to the current S_b state
         delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, N, Fi, Di, np.tile(L, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
         # Di rescaling
         scaling_factor = delay_no_network / app_delay_no_net

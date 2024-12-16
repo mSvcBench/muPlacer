@@ -5,7 +5,7 @@ import sys
 import argparse
 import numpy as np
 import networkx as nx
-import utils
+import strategies.utils as utils
 from numpy import inf
 from computeNc import computeN
 from buildFi import buildFi

@@ -6,8 +6,8 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from SBMP_offload import sbmp_o
-from MFU import mfu
-from IA import IA_heuristic
+from strategies.MFU import mfu
+from strategies.IA import IA_heuristic
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -17,7 +17,7 @@ from scipy.io import savemat
 from buildFi import buildFi
 from numpy import inf
 import time
-import utils
+import strategies.utils as utils
 import random
 import logging
 

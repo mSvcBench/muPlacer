@@ -5,11 +5,8 @@ import sys
 import argparse
 import numpy as np
 import networkx as nx
-import utils
+from utils import buildFi, computeDiTot, computeDnTot, computeDTot, computeN, computeResourceShift, computeCost, sgs_builder_traces_full, numpy_array_to_list
 from numpy import inf
-from computeN import computeN
-from buildFi import buildFi
-from computeDTot import computeDTot
 from SBMP_offload import sbmp_o
 
 
@@ -18,7 +15,7 @@ np.seterr(divide='ignore', invalid='ignore')
 logger = logging.getLogger('SBMP_unoffload')
 logger_stream_handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(logger_stream_handler)
-logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s EPAMP unoffload %(levelname)s %(message)s'))
+logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s SBMP unoffload %(levelname)s %(message)s'))
 logger.propagate = False
 
 def sbmp_u(params):
@@ -64,7 +61,7 @@ def sbmp_u(params):
     delay_old,_,_,rhoce_old = computeDTot(S_b_old, Ni_old, Fi_old, Di, L, RTT, B, lambd, M)  # Total delay of the current configuration. It includes only network delays
     delay_target = delay_old + delay_increase_target # Target delay to reach 
     delay_stop = delay_old + delay_increase_stop_condition # Stop condition for delay increase
-    Cost_old = utils.computeCost(Ucpu_old, Umem_old, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_old * B, Cost_network)[0] # Total cost of the current state
+    Cost_old = computeCost(Ucpu_old, Umem_old, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_old * B, Cost_network)[0] # Total cost of the current state
 
     S_edge_void = np.zeros(int(M))  # (M,) edge state with no instance-set in the edge
     S_edge_void[M-1] = 1  # edge istio proxy (user)
@@ -112,19 +109,26 @@ def sbmp_u(params):
         'max-traces': max_traces,
         'traces-b': traces_b,
         'mode': 'unoffload',
-        'HPA_cpu_th': HPA_cpu_th,
+        'HPA-cpu-th': HPA_cpu_th,
         'expanding_depth': expanding_depth,
         'cache-ttl': cache_ttl
     }
     logger.info(f"unoffload calls offload with void edge and delay_decrease_target: {delay_decrease_target}")
+    
     result_list = sbmp_o(params)
-    result=result_list[2]
-    result['delay_increase'] = (delay_void-result['delay_decrease']) - delay_old
-    result['cost_decrease'] = Cost_old-result['Cost']
-    result['to-apply'] = utils.numpy_array_to_list(np.argwhere(result['S_edge_b']-S_b_old[M:]>0))
-    result['to-delete']= utils.numpy_array_to_list(np.argwhere(S_b_old[M:]-result['S_edge_b']>0))
-    del result['delay_decrease']
-    del result['cost_increase']
-    message = f"Result for unoffload - edge microservice ids: {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay increase: {result['delay_increase']}, cost decrease: {result['cost_decrease']}"
-    result['info'] = message
+    result_metrics=result_list[2]
+    result_metrics['delay_increase'] = (delay_void-result_metrics['delay_decrease']) - delay_old
+    result_metrics['cost_decrease'] = Cost_old-result_metrics['Cost']
+    del result_metrics['delay_decrease']
+    del result_metrics['cost_increase']
+    
+    result_edge=result_list[1]
+    result_edge['to-apply'] = numpy_array_to_list(np.argwhere(result_metrics['S_edge_b']-S_b_old[M:]>0))
+    result_edge['to-delete']= numpy_array_to_list(np.argwhere(S_b_old[M:]-result_metrics['S_edge_b']>0))
+    message = f"Result for unoffload - edge microservice ids: {result_edge['placement']}"
+    result_edge['info'] = message
+
+    # result_cloud=result_list[0]
+    # nothing to update, cloud remains unmodified
+
     return result_list

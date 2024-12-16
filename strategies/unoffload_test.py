@@ -5,14 +5,13 @@ import sys
 import argparse
 import numpy as np
 import networkx as nx
-import utils
+import random
+
+from utils import buildFi, computeDTot, computeN, computeCost, computeResourceShift
 from numpy import inf
-from computeN import computeN
-from buildFi import buildFi
 from SBMP_unoffload import sbmp_u
 from MFU import mfu
-from computeDTot import computeDTot
-import random
+
 
 def main():
     # small simulation to test the unoffload function
@@ -98,8 +97,8 @@ def main():
     Umem = Umem_void.copy()
     Di = np.zeros(2*M)
     delay,_,_,rhoce = computeDTot(S_b, N, Fi, Di, np.tile(L, 2), RTT, B, lambda_val, M, np.empty(0))
-    utils.computeResourceShift(Ucpu,Umem,N,Ucpu_void,Umem_void,N_void)           
-    Cost_edge = utils.computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)[0]
+    computeResourceShift(Ucpu,Umem,N,Ucpu_void,Umem_void,N_void)           
+    Cost_edge = computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)[0]
     
     # Call the unoffload function
     params = {

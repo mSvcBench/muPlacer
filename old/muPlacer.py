@@ -5,7 +5,7 @@ import numpy as np
 import subprocess
 import threading
 import csv
-from simulators.conf import *
+from old.conf import *
 from E_PAMP_unoff import E_PAMP_unoff
 from E_PAMP_off import E_PAMP_off
 from old.IA_placement import IA_placement

@@ -3,22 +3,21 @@
 import os, sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
-sys.path.append(parent_dir)
+sys.path.append(f'{parent_dir}/utils')
+sys.path.append(f'{parent_dir}/strategies')
 
 from SBMP_offload import sbmp_o
+from SBMP_unoffload import sbmp_u
 from MFU import mfu
 from IA import IA_heuristic
+from igraph import *
+from utils import buildFi, computeN, computeDTot, computeCost, computeResourceShift
+from scipy.io import savemat
+from numpy import inf
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
-from igraph import *
-from computeN import computeN
-from scipy.io import savemat
-from buildFi import buildFi
-from numpy import inf
-from computeDTot import computeDTot
 import time
-import utils
 import random
 import logging
 import graph_gen
@@ -33,7 +32,7 @@ logging.basicConfig(stream=sys.stdout, level='ERROR',format='%(asctime)s GMA %(l
 M = 121 # number of microservices
 max_algotithms = 10
 
-trials = 50
+trials = 1
 seed = 150273
 np.random.seed(seed)
 random.seed(seed)
@@ -146,14 +145,14 @@ for k in range(trials):
     N = computeN(Fi, M, 2)    # number of instance call per user request of the current state
     Ucpu = Ucpu_void.copy()
     Umem = Umem_void.copy()
-    utils.computeResourceShift(Ucpu, Umem, N, Ucpu_void, Umem_void, N_void) # compute the resource shift from void state to the current S_b state
+    computeResourceShift(Ucpu, Umem, N, Ucpu_void, Umem_void, N_void) # compute the resource shift from void state to the current S_b state
     delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, N, Fi, Di, np.tile(L, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
     # Di rescaling
     scaling_factor = delay_no_network / app_delay_no_net
     Di = Di / scaling_factor
     delay_no_network,_,_,rhoce_no_network = computeDTot(S_b, N, Fi, Di, np.tile(L, 2), 0, np.inf, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
     delay_void,_,_,rhoce_void = computeDTot(S_b_void, N_void, Fi_void, Di, np.tile(L, 2), RTT, B, lambda_val, M)
-    Cost_sum_void, Cost_edge_void, Cost_cloud_void, Cost_traffic_ce_void = utils.computeCost(Ucpu_void,Umem_void,Qcpu,Qmem,Cost_cpu_edge,Cost_mem_edge,Cost_cpu_cloud,Cost_mem_cloud, rhoce_void * B, Cost_network,HPA_cpu_th=None)
+    Cost_sum_void, Cost_edge_void, Cost_cloud_void, Cost_traffic_ce_void = computeCost(Ucpu_void,Umem_void,Qcpu,Qmem,Cost_cpu_edge,Cost_mem_edge,Cost_cpu_cloud,Cost_mem_cloud, rhoce_void * B, Cost_network,HPA_cpu_th=None)
     if show_graph:
         G = nx.DiGraph(Fm)
         nx.draw(G,with_labels=True)
@@ -161,7 +160,7 @@ for k in range(trials):
     
     Ti=-1
     for exp_depth in exp_depth_v:
-        print(f'\n target_delay {target_delay}')
+        print(f'\n exp_depth {exp_depth}')
         delay_decrease_target = max(delay_void - target_delay,0)
         Ti+=1   # index of the delay target   
         alg_type = [""] * max_algotithms # vector of strings describing algorithms used in a trial

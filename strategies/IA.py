@@ -1,10 +1,8 @@
 import numpy as np
-import utils
-from computeN import computeN
-from buildFi import buildFi
-from computeDTot import computeDTot
-from numpy import inf
+import logging
 
+from numpy import inf
+from utils import buildFi, computeDTot, computeN, computeCost, computeResourceShift, numpy_array_to_list
 
 def IA_heuristic(params):
 
@@ -38,7 +36,7 @@ def IA_heuristic(params):
     Fi_old = np.matrix(buildFi(S_b_old, Fm, M))
     N_old = computeN(Fi_old, M, 2)
     delay_old,_,_,rhoce_old = computeDTot(S_b_old, N_old, Fi_old, Di, L, RTT, B, lambd, M)
-    Cost_old = utils.computeCost(Ucpu_old, Umem_old, Qcpu, Qmem , Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud,rhoce_old*B,Cost_network, global_HPA_cpu_th)[0] # Total cost of old state
+    Cost_old = computeCost(Ucpu_old, Umem_old, Qcpu, Qmem , Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud,rhoce_old*B,Cost_network, global_HPA_cpu_th)[0] # Total cost of old state
     N = computeN(Fm, M, 1)
     delay_decrease_new = 0
     S_b_new = S_b_old.copy()
@@ -94,8 +92,8 @@ def IA_heuristic(params):
     delay_decrease_new = delay_old - delay_new
     np.copyto(Ucpu_new,Ucpu_old) 
     np.copyto(Umem_new,Umem_old)
-    utils.computeResourceShift(Ucpu_new, Umem_new, N_new, Ucpu_old, Umem_old, N_old) 
-    Cost_new, Cost_new_edge, Cost_new_cloud, Cost_traffic_new = utils.computeCost(Ucpu_new, Umem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_new * B, Cost_network, global_HPA_cpu_th) # Total cost of new state
+    computeResourceShift(Ucpu_new, Umem_new, N_new, Ucpu_old, Umem_old, N_old) 
+    Cost_new, Cost_new_edge, Cost_new_cloud, Cost_traffic_new = computeCost(Ucpu_new, Umem_new, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_new * B, Cost_network, global_HPA_cpu_th) # Total cost of new state
     cost_increase_new = Cost_new - Cost_old 
 
     result_metrics = dict()
@@ -122,13 +120,13 @@ def IA_heuristic(params):
     result_cloud = dict()
     result_cloud['to-apply'] = list()
     result_cloud['to-delete'] = list()
-    result_cloud['placement'] = utils.numpy_array_to_list(np.argwhere(S_b_new[:M]==1))
+    result_cloud['placement'] = numpy_array_to_list(np.argwhere(S_b_new[:M]==1))
     result_cloud['info'] = f"Result for offload - cloud microservice ids: {result_cloud['placement']}"
 
     result_edge = dict()
-    result_edge['to-apply'] = utils.numpy_array_to_list(np.argwhere(S_b_new[M:]-S_b_old[M:]>0))
-    result_edge['to-delete'] = utils.numpy_array_to_list(np.argwhere(S_b_old[M:]-S_b_new[M:]>0))
-    result_edge['placement'] = utils.numpy_array_to_list(np.argwhere(S_b_new[M:]==1))
+    result_edge['to-apply'] = numpy_array_to_list(np.argwhere(S_b_new[M:]-S_b_old[M:]>0))
+    result_edge['to-delete'] = numpy_array_to_list(np.argwhere(S_b_old[M:]-S_b_new[M:]>0))
+    result_edge['placement'] = numpy_array_to_list(np.argwhere(S_b_new[M:]==1))
 
     result_edge['info'] = f"Result for offload - edge microservice ids: {result_edge['placement']}"
 

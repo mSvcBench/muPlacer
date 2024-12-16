@@ -11,7 +11,7 @@ from numpy import inf
 from computeDTot import computeDTot
 import logging
 import sys
-import utils
+import strategies.utils as utils
 from S2id import S2id
 import time
 from EPAMP_unoffload import unoffload

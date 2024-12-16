@@ -1,21 +1,27 @@
+import os, sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(f'{current_dir}/utils')
+sys.path.append(f'{current_dir}/strategies')
+
 import argparse
 import logging
 import re
 import sys
 import time
 import subprocess
+import requests
+
 
 import kubernetes
 import numpy as np
 import yaml
 
-from os import environ
-from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
-
 import SBMP_offload as SBMP_offload
 import SBMP_unoffload as SBMP_unoffload
 import SBMP_GMA_Connector
-import requests
+
+from os import environ
+from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
 
 def update_ucpu():
     global gma_config, prom_client, metrics
@@ -92,7 +98,7 @@ def update_ingress_lambda():
 
     # update lambda values
     destination_app_regex = "|".join(status['service-info'].keys())
-    query_lambda = f'sum by (source_app) (rate(istio_requests_total{{cluster="{cluster['edge-area']}", namespace="{namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="destination", response_code="200"}}[{query_period_str}]))'
+    query_lambda = f'sum by (source_app) (rate(istio_requests_total{{cluster="{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200", instance=~"{edge_pod_cidr_regex}"}}[{query_period_str}]))'
     try:
         query_result = prom_client.custom_query(query=query_lambda)
     except PrometheusApiClientException as e:
@@ -103,16 +109,41 @@ def update_ingress_lambda():
     status['service-metrics']['service-lambda']['value'][M-1] = 0 # M-1 is the index of the istio-ingress in the global lambda vector
     status['service-metrics']['service-lambda']['last-update'] = now
     
+    lambda_edge = 0
     if query_result:
         for result in query_result:
             if result["value"][1]=="NaN":
-                value = 0
+                lambda_edge = 0
             else:
-                value = float(result["value"][1])
+                lambda_edge = float(result["value"][1])
             if status['service-metrics']['service-lambda']['value'][M-1] != 0:
                 logger.critical(f"Multiple results for the lambda query {query_lambda} and service {edge_istio_ingress_app}")
                 exit(1)
-            status['service-metrics']['service-lambda']['value'][M-1] = value # M-1 is the index of the istio-ingress in the global lambda vector
+            status['service-metrics']['service-lambda']['value'][M-1] = lambda_edge # M-1 is the index of the istio-ingress in the global lambda vector
+            break
+    
+    # update resource scaling used for multi edge environment
+    query_lambda_tot = f'sum by (source_app) (rate(istio_requests_total{{namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200"}}[{query_period_str}]))'
+    try:
+        query_result = prom_client.custom_query(query=query_lambda_tot)
+    except PrometheusApiClientException as e:
+        logger.error(f"Prometheus query exception for query {query_lambda_tot}: {str(e)}")
+        return
+    
+    #clean ingress lambda values
+
+    if query_result:
+        if len(query_result) > 1:
+            logger.critical(f"Multiple results for the lambda tot query {query_lambda_tot} and service {edge_istio_ingress_app}")
+            exit(1)
+        for result in query_result:
+            if result["value"][1]=="NaN":
+                lambda_tot = 0
+            else:
+                lambda_tot = float(result["value"][1])
+            if lambda_tot > 0:
+                resource_scaling = lambda_edge / lambda_tot   
+                status['service-metrics']['resource-scaling']['value'] = np.ones(M,dtype=float)*resource_scaling
             break
     return
 
@@ -158,44 +189,44 @@ def update_response_length():
                 status['service-metrics']['response-length']['last-update'] = now
     return
 
-def update_resource_scaling():
-    global gma_config, prom_client, metrics, default_resource_scaling
+# def update_multi_edge_resource_scaling():
+#     global gma_config, prom_client, metrics, default_resource_scaling
     
-    logger.info(f"Update cloud to edge resource scaling")
+#     logger.info(f"Update cloud to edge resource scaling")
 
-    now = time.time()
+#     now = time.time()
 
-    edge_workload_regex = status['global-regex']['edge-area']['workload']+f'|{edge_istio_ingress_app}'
-    cloud_workload_regex = status['global-regex']['cloud-area']['workload']
+#     edge_workload_regex = status['global-regex']['edge-area']['workload']+f'|{edge_istio_ingress_app}'
+#     cloud_workload_regex = status['global-regex']['cloud-area']['workload']
 
-    if status['service-metrics']['service-lambda']['value'][M-1] == 0:
-        logger.info(f"Lambda value for the istio-ingress is 0, skipping resource scaling update")
-        return
+#     if status['service-metrics']['service-lambda']['value'][M-1] == 0:
+#         logger.info(f"Lambda value for the istio-ingress is 0, skipping resource scaling update")
+#         return
 
-    # update resource scaling factor
-    resource_scaling_query = f'sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}",source_workload=~"{edge_workload_regex}",reporter="destination"}}[{query_period_str}])) / sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}", reporter="destination"}}[{query_period_str}]))'
-    try:
-        r = prom_client.custom_query(query=resource_scaling_query)
-    except PrometheusApiClientException as e:
-        logger.error(f"Prometheus query exception for query {resource_scaling_query}: {str(e)}")
+#     # update resource scaling factor
+#     resource_scaling_query = f'sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}",source_workload=~"{edge_workload_regex}",reporter="destination"}}[{query_period_str}])) / sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}", reporter="destination"}}[{query_period_str}]))'
+#     try:
+#         r = prom_client.custom_query(query=resource_scaling_query)
+#     except PrometheusApiClientException as e:
+#         logger.error(f"Prometheus query exception for query {resource_scaling_query}: {str(e)}")
     
-    # clean rsource scaling values
-    status['service-metrics']['resource-scaling']['value'] = np.ones(M,dtype=float)*default_resource_scaling
-    status['service-metrics']['resource-scaling']['last-update'] = now
-    services=status['service-info']
-    for result in r:
-        for service_name in services:
-                    service=services[service_name]
-                    if re.search(service['regex']['cloud-area']['workload']['regex'], result['metric']['destination_workload'], re.IGNORECASE):
-                        if result["value"][1]=="NaN" or float(result["value"][1]) == 0:
-                            value = default_resource_scaling
-                        else:
-                            value = float(result["value"][1])
-                        if status['service-metrics']['resource-scaling']['value'][service['id']] != default_resource_scaling:
-                            logger.critical(f"Multiple results for the resource scaling query and service {service_name}")
-                            exit(1)
-                        status['service-metrics']['resource-scaling']['value'][service['id']] = value
-                        break
+#     # clean rsource scaling values
+#     status['service-metrics']['resource-scaling']['value'] = np.ones(M,dtype=float)*default_resource_scaling
+#     status['service-metrics']['resource-scaling']['last-update'] = now
+#     services=status['service-info']
+#     for result in r:
+#         for service_name in services:
+#                     service=services[service_name]
+#                     if re.search(service['regex']['cloud-area']['workload']['regex'], result['metric']['destination_workload'], re.IGNORECASE):
+#                         if result["value"][1]=="NaN" or float(result["value"][1]) == 0:
+#                             value = default_resource_scaling
+#                         else:
+#                             value = float(result["value"][1])
+#                         if status['service-metrics']['resource-scaling']['value'][service['id']] != default_resource_scaling:
+#                             logger.critical(f"Multiple results for the resource scaling query and service {service_name}")
+#                             exit(1)
+#                         status['service-metrics']['resource-scaling']['value'][service['id']] = value
+#                         break
 
 def update_Fm_and_lambda():
     global gma_config, prom_client, metrics
@@ -404,7 +435,7 @@ def update_and_check_HPA():
             api_instance = kubernetes.client.AutoscalingV1Api(api_client)
             try:
                 api_response = api_instance.list_namespaced_horizontal_pod_autoscaler(namespace,pretty='True',)
-            except kubernetes.client.rest.ApiException as e:
+            except Exception as e:
                 print("Exception when calling AutoscalingV1Api->list_namespaced_horizontal_pod_autoscaler: %s\n" % e)
                 return
             
@@ -433,7 +464,7 @@ def update_and_check_HPA():
                             break
     return hpa_running
 
-def update_metrics():
+def update_full_metrics():
     update_ucpu()
     update_umem()
     update_ingress_lambda()
@@ -441,8 +472,7 @@ def update_metrics():
     update_Fm_and_lambda()
     update_ingress_delay()
     update_ingress_delay_quantile()
-    update_resource_scaling()
-    net_probing()
+    update_net_metrics()
     return
 
 def apply_configuration(result_list):
@@ -518,72 +548,47 @@ def apply_configuration(result_list):
                 # Handle the exception or log the error message
             logger.info(f"Scale deployment {service['regex']['edge-area']['workload']['regex']} in edge-area to {edge_replicas} replicas: {output}")
 
-def net_probing():
-    global gma_config, status, query_period_sec
 
-    logger.info(f"Performing net probing")
-    netprobe_server_edge = gma_config['spec']['network']['netprober-server-edge']
-    netprobe_server_cloud = gma_config['spec']['network']['netprober-server-cloud']
-    if netprobe_server_edge == '' or netprobe_server_cloud == '':
-        logger.info(f"Netprobe servers not properly configured in the configuration file, no net probing performed")
+def update_net_metrics():
+    logger.info(f"Update net metrics")
+    netinfo_file = gma_config['spec']['network']['netinfo-file']
+    net_prober_url = gma_config['spec']['network']['net-prober-url']
+    if netinfo_file == '':
+        logger.info(f"Netinfo file not properly configured in the configuration file, no net metric update performed")
         return
     
-    # measure http rtt from edge to cloud with n_rtt_samples samples
-    logger.info(f"Measuring RTT from edge to cloud")
-    params = {'duration': 0, 'url': netprobe_server_cloud}
-    n_rtt_samples = 30
-    rtt = 1000
-    for _ in range(n_rtt_samples):
-        response = requests.get(f'{netprobe_server_edge}/get',params=params)
-        if response.status_code != 200:
-            logger.error(f"HTTP GET to netprobe-server failed with status code {response.status_code}")
-            return
-        response_json = response.json()
-        rtt = min(rtt,float(response_json['total_duration']))
-        time.sleep(0.1)
-    logger.info(f"Estimated RTT from edge to cloud: {rtt*1000} ms")
-
-    # get the netprobe traffic from cloud to edge 
-    probing_period = 10
-    logger.info(f"Measuring cloud-edge probing bitrate for {probing_period}s")
-    netprobe_server_edge = gma_config['spec']['network']['netprober-server-edge']
-    netprobe_server_cloud = gma_config['spec']['network']['netprober-server-cloud']
-    params = {'duration': {int(probing_period)}, 'chunk': 4096, 'url': netprobe_server_cloud}
-    try:
-        response = requests.get(f'{netprobe_server_edge}/get', params=params)
-        if response.status_code != 200:
-            logger.error(f"HTTP GET to netprobe-server failed with status code {response.status_code}")
-            return
-        response_json = response.json()
-        prober_bps = int(response_json['total_speed'])
-        logger.info(f"Measured cloud-edge probing bitrate: {prober_bps/1e6} Mbps")
-    except Exception as e:
-        logger.error(f"An error occurred during net probing: {str(e)}")
-        return
-
-    # evaluate background edge cloud traffic
-    logger.info(f"Measuring cloud-edge service bitrate")
-    background_bps=0
-    edge_workload_regex = status['global-regex']['edge-area']['workload']+f'|{edge_istio_ingress_app}'
-    cloud_workload_regex = status['global-regex']['cloud-area']['workload']
-    query = f'sum (rate(istio_response_bytes_sum{{cluster="{cluster['edge-area']}",namespace="{namespace}",source_workload=~"{edge_workload_regex}, destination_workload=~{cloud_workload_regex}"}}[{query_period_str}]))'
-    query_results = prom_client.custom_query(query=query)
-    if query_results:
-        for result in query_results:
-            if result["value"][1]=="NaN":
-                background_bps=0
-            else:
-                background_bps=8.0*float(result["value"][1])
-            break
-    logger.info(f"Measured cloud-edge service bitrate: {background_bps/1e6} Mbps")
-    measured_cloud_edge_bps = prober_bps + background_bps
-    logger.info(f"Estimated cloud-edge service bitrate: {measured_cloud_edge_bps/1e6} Mbps")
-
-    status['service-metrics']['network']['edge-cloud-rtt']['value'] = rtt*1000
-    status['service-metrics']['network']['edge-cloud-rtt']['last-update'] = time.time()
-    status['service-metrics']['network']['cloud-edge-bps']['value'] = measured_cloud_edge_bps
-    status['service-metrics']['network']['cloud-edge-bps']['last-update'] = time.time()
+    with open(netinfo_file) as f:
+            complete_yaml = yaml.load_all(f,Loader=yaml.FullLoader)
+            for partial_yaml in complete_yaml:
+                if partial_yaml['kind'] == 'NetInfo':
+                    netinfo = partial_yaml
+                    break
     
+    # update netinfo file with the net probing results
+    if net_prober_url != '':
+        logger.info(f"Net probing through {net_prober_url} ")
+        try:
+            response = requests.get(net_prober_url)
+            netinfop = response.json()
+            netinfo['spec']['edge-cloud-rtt'] = f'{int(netinfop['rtt'])}ms'
+            netinfo['spec']['cloud-edge-bw'] = f'{int(netinfop['bps']/1e6)}Mbps'
+            netinfo['spec']['edge-cloud-bw'] = f'{int(netinfop['bps']/1e6)}Mbps'
+            # write the netinfo to the file netinfo_file
+            with open(netinfo_file, 'w') as f:
+                yaml.dump(netinfo, f)
+        except Exception as e:
+            logger.error(f"Net probing failed: {str(e)}")
+    
+    if 'spec' in netinfo:
+        if 'edge-cloud-rtt' in netinfo['spec']:
+            status['service-metrics']['network']['edge-cloud-rtt-ms']['value'] = time_to_ms_converter(netinfo['spec']['edge-cloud-rtt'])
+            status['service-metrics']['network']['edge-cloud-rtt-ms']['last-update'] = time.time()
+        if 'cloud-edge-bw' in netinfo['spec']:
+            status['service-metrics']['network']['cloud-edge-bps']['value'] = bitrate_to_bps_converter(netinfo['spec']['cloud-edge-bw'])
+            status['service-metrics']['network']['cloud-edge-bps']['last-update'] = time.time()
+        if 'edge-cloud-bw' in netinfo['spec']:
+            status['service-metrics']['network']['edge-cloud-bps']['value'] = bitrate_to_bps_converter(netinfo['spec']['edge-cloud-bw'])
+            status['service-metrics']['network']['edge-cloud-bps']['last-update'] = time.time()
     return
 
 def parse_yaml():
@@ -647,8 +652,13 @@ def parse_yaml():
                                 s['regex'][area]['hpa'] = f'{partial_yaml['metadata']['name']}'
                                 status['service-metrics']['hpa'][area]['min-replicas'][s['id']] = int(partial_yaml['spec']['minReplicas'])
                                 status['service-metrics']['hpa'][area]['max-replicas'][s['id']] = int(partial_yaml['spec']['maxReplicas'])
+                                try:
+                                    status['service-metrics']['hpa'][area]['cpu-threshold'][s['id']] = float(partial_yaml['spec']['metrics'][0]['resource']['target']['averageUtilization'])/100.0
+                                except KeyError:
+                                    status['service-metrics']['hpa'][area]['cpu-threshold'][s['id']] = 0.6
+                                    logger.warning(f"No HPA cpu-threshold for the service {sc['name']} in the {area} area, using default value 0.6")
                             else:
-                                logger.critical(f"Multiple HPA for the service {sc['name']} in the cloud-area not supported")
+                                logger.critical(f"Multiple HPA for the service {sc['name']} in the {area} not supported")
                                 exit(1)
                             if status['global-regex'][area]['hpa'] == '':
                                 status['global-regex'][area]['hpa'] = f'{partial_yaml['metadata']['name']}'
@@ -656,7 +666,6 @@ def parse_yaml():
                                 status['global-regex'][area]['hpa'] = f'{status['global-regex'][area]['hpa']}|{partial_yaml['metadata']['name']}'
         
         
-
 def init():
     global gma_config, status, service_id_to_name
 
@@ -741,6 +750,7 @@ def init():
     status['service-metrics']['hpa']['cloud-area']['old-current-replicas'] = np.zeros(M, dtype=int)
     status['service-metrics']['hpa']['cloud-area']['min-replicas'] = np.zeros(M,dtype=int)
     status['service-metrics']['hpa']['cloud-area']['max-replicas'] = np.zeros(M,dtype=int)
+    status['service-metrics']['hpa']['cloud-area']['cpu-threshold'] = np.ones(M,dtype=int)*0.6
     status['service-metrics']['hpa']['cloud-area']['last-update'] = 0 # last update time
     status['service-metrics']['hpa']['edge-area'] = dict()
     status['service-metrics']['hpa']['edge-area']['info'] = 'Replicas vector for edge area'
@@ -749,6 +759,7 @@ def init():
     status['service-metrics']['hpa']['edge-area']['old-current-replicas'] = np.zeros(M, dtype=int)
     status['service-metrics']['hpa']['edge-area']['min-replicas'] = np.zeros(M, dtype=int)
     status['service-metrics']['hpa']['edge-area']['max-replicas'] = np.zeros(M,dtype=int)
+    status['service-metrics']['hpa']['edge-area']['cpu-threshold'] = np.ones(M,dtype=int)*0.6
     status['service-metrics']['hpa']['edge-area']['last-update'] = 0 # last update time
     
     status['service-metrics']['ucpu'] = dict()
@@ -825,10 +836,14 @@ def init():
     status['service-metrics']['edge-user-target-delay']['last-update'] = 0 # last update time
     
     status['service-metrics']['network'] = dict()
-    status['service-metrics']['network']['edge-cloud-rtt'] = dict()
-    status['service-metrics']['network']['edge-cloud-rtt']['value'] = time_to_ms_converter(gma_config['spec']['network']['edge-cloud-rtt'])
-    status['service-metrics']['network']['edge-cloud-rtt']['info'] = 'Round trip time from edge area to cloud area in ms'
-    status['service-metrics']['network']['edge-cloud-rtt']['last-update'] = 0 # last update time
+    status['service-metrics']['network']['edge-cloud-rtt-ms'] = dict()
+    status['service-metrics']['network']['edge-cloud-rtt-ms']['value'] = time_to_ms_converter(gma_config['spec']['network']['edge-cloud-rtt-ms'])
+    status['service-metrics']['network']['edge-cloud-rtt-ms']['info'] = 'Round trip time from edge area to cloud area in ms'
+    status['service-metrics']['network']['edge-cloud-rtt-ms']['last-update'] = 0 # last update time
+    status['service-metrics']['network']['edge-cloud-rtt-multiplier'] = dict()
+    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['value'] = max(1,int(gma_config['spec']['network']['edge-cloud-rtt-multiplier']))
+    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['info'] = 'RTT multiplier from edge area to cloud area to account for the  HTTP RTT rather than network RTT'
+    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['last-update'] = 0 # last update time
     status['service-metrics']['network']['cloud-edge-bps'] = dict()
     status['service-metrics']['network']['cloud-edge-bps']['value'] = bitrate_to_bps_converter(gma_config['spec']['network']['cloud-edge-bps'])
     status['service-metrics']['network']['cloud-edge-bps']['info'] = 'Network capacity in bit per second from cloud area to edge area in bps'
@@ -837,8 +852,6 @@ def init():
     status['service-metrics']['network']['edge-cloud-bps']['value'] = bitrate_to_bps_converter(gma_config['spec']['network']['edge-cloud-bps'])
     status['service-metrics']['network']['edge-cloud-bps']['info'] = 'Network capacity in bit per second from edge area to cloud area in bps'
     status['service-metrics']['network']['edge-cloud-bps']['last-update'] = 0 # last update time
-    status['service-metrics']['network']['netprober-server-edge'] = gma_config['spec']['network']['netprober-server-edge']
-    status['service-metrics']['network']['netprober-server-cloud'] = gma_config['spec']['network']['netprober-server-cloud']
 
     status['service-metrics']['cost'] = dict()
     status['service-metrics']['cost']['edge-area'] = dict()
@@ -957,7 +970,7 @@ class GMAStataMachine():
 
     def hpa_running(self):
         logger.info('_________________________________________________________')
-        logger.info('Entering HPA Running')
+        logger.info('Entering Camping State (HPA Running)')
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')
         time.sleep(stabilizaiton_window_sec)
         if update_and_check_HPA():
@@ -1049,9 +1062,10 @@ class GMAStataMachine():
                 self.next = self.hpa_running
                 return
             update_ingress_delay()
+            update_ingress_delay_quantile()
             logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']} ms')
             logger.info(f'user delay quantile {delay_quantile}: {status['service-metrics']['edge-user-delay-quantile']['value']} ms')
-            if status['service-metrics']['edge-user-delay']['value'] > offload_delay_threshold_ms or status['service-metrics']['edge-user-delay-quantile']['value'][delay_quantile] > offload_delay_quantile_threshold_ms:
+            if status['service-metrics']['edge-user-delay']['value'] > offload_delay_threshold_ms or status['service-metrics']['edge-user-delay-quantile']['value'] > offload_delay_quantile_threshold_ms:
                 logger.info(f'sleeping for {stabilizaiton_window_sec-i*stabilization_cycle_sec} stabilization sec')
                 time.sleep(stabilization_cycle_sec)
             else:
@@ -1070,6 +1084,7 @@ class GMAStataMachine():
                 self.next = self.hpa_running
                 return
             update_ingress_delay()
+            update_ingress_delay_quantile()
             logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']} ms')
             logger.info(f'user delay quantile {delay_quantile}: {status['service-metrics']['edge-user-delay-quantile']['value']} ms')
             if status['service-metrics']['edge-user-delay']['value'] < unoffload_delay_threshold_ms and status['service-metrics']['edge-user-delay-quantile']['value'] < unoffload_delay_quantile_threshold_ms:
@@ -1084,16 +1099,16 @@ class GMAStataMachine():
     def offloading(self):
         logger.info('_________________________________________________________')
         logger.info('Entering Offloading')
-        update_metrics()
+        update_full_metrics()
 
         offload_type = '' # quantile-driven or avg-driven
 
-        if status['service-metrics']['edge-user-delay-quantile']['value'] > offload_delay_quantile_threshold_ms:
-            offload_type = 'quantile-driven'
-            logger.info('quantile-driven offloading')
-        else:
+        if status['service-metrics']['edge-user-delay']['value'] > offload_delay_threshold_ms:
             offload_type = 'avg-driven'
             logger.info('avg-driven offloading')
+        else:
+            offload_type = 'quantile-driven'
+            logger.info('quantile-driven offloading')
         
         offload_parameters = status['service-metrics'].copy()
         offload_parameters['ucpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['ucpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
@@ -1126,16 +1141,16 @@ class GMAStataMachine():
     def unoffloading(self):
         logger.info('_________________________________________________________')
         logger.info('Entering Unoffloading')
-        update_metrics()
+        update_full_metrics()
 
         unoffload_type = '' # quantile-driven or avg-driven
 
-        if status['service-metrics']['edge-user-delay-quantile']['value'] < unoffload_delay_quantile_threshold_ms:
-            unoffload_type = 'quantile-driven'
-            logger.info('quantile-driven unoffloading')
-        else:
+        if status['service-metrics']['edge-user-delay']['value'] < unoffload_delay_threshold_ms:
             unoffload_type = 'avg-driven'
             logger.info('avg-driven unoffloading')
+        else:
+            unoffload_type = 'quantile-driven'
+            logger.info('quantile-driven unoffloading')
 
         unoffload_parameters = status['service-metrics'].copy()
         unoffload_parameters['ucpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['ucpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
@@ -1171,8 +1186,8 @@ class GMAStataMachine():
 
 # Main function
 if __name__ == "__main__":
-    config_env=environ.get('GPA_CONFIG', './GMAConfig.yaml')
-    log_env=environ.get('GPA_LOG_LEVEL', 'INFO')
+    config_env=environ.get('GMA_CONFIG', './GMAConfig.yaml')
+    log_env=environ.get('GMA_LOG_LEVEL', 'INFO')
 
     parser = argparse.ArgumentParser()
     parser.add_argument( '-c',
@@ -1258,12 +1273,18 @@ if __name__ == "__main__":
     default_resource_scaling = float(gma_config['spec']['edge-area']['default-resource-scaling'])
     
     #app
-    namespace = gma_config['spec']['app']['namespace']
-    M =  status['service-metrics']['n-services']  # number of microservices
+    namespace = gma_config['spec']['app']['namespace'] 
+    M =  status['service-metrics']['n-services']  
+
+    # cloud area
+    cloud_istio_ingress_app = gma_config['spec']['cloud-area']['istio']['istio-ingress-source-app']
+    cloud_istio_ingress_namespace = gma_config['spec']['cloud-area']['istio']['istio-ingress-namespace']
+    cloud_pod_cidr_regex = gma_config['spec']['cloud-area']['pod-cidr-regex']
     
     # edge area
     edge_istio_ingress_app = gma_config['spec']['edge-area']['istio']['istio-ingress-source-app']
     edge_istio_ingress_namespace = gma_config['spec']['edge-area']['istio']['istio-ingress-namespace']
+    edge_pod_cidr_regex = gma_config['spec']['edge-area']['pod-cidr-regex']
 
     # optimizer
     max_delay_reduction_ms = time_to_ms_converter(gma_config['spec']['optimizer']['max-delay-reduction'])
@@ -1274,10 +1295,12 @@ if __name__ == "__main__":
     for area in areas:
         cluster[area] = gma_config['spec'][area]['cluster']
     
-    # Run the state machine
+    
     # update_metrics()
     # update_ingress_delay_quantile()
     # update_and_check_HPA()
-    update_ingress_lambda()
-    update_resource_scaling()
+    # update_ingress_lambda()
+    # update_multi_edge_resource_scaling()
+    
+    # Run the state machine
     sm = GMAStataMachine()

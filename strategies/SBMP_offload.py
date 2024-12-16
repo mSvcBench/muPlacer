@@ -5,15 +5,10 @@ environ['OMP_NUM_THREADS'] = N_THREADS
 
 import numpy as np
 import networkx as nx
-from computeN import computeN
-from buildFi import buildFi
+from utils import buildFi, computeDiTot, computeDnTot, computeDTot, computeN, computeResourceShift, computeCost, sgs_builder_traces_full, numpy_array_to_list, S2id, id2S    
 from numpy import inf
-from computeDTot import computeDTot
 import logging
 import sys
-import utils
-from S2id import S2id
-from id2S import id2S
 import time
 
 
@@ -27,8 +22,6 @@ logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s SBMP offload %
 logger.propagate = False
 
 def sbmp_o(params):
-
-   
 
     def cache_probe(S_b, round):
         result=dict()
@@ -64,8 +57,8 @@ def sbmp_o(params):
             Fi_new = np.matrix(buildFi(S_b_new, global_Fm, global_M))
             N_new = computeN(Fi_new, global_M, 2)
             delay_new,_,_,rhoce_new = computeDTot(S_b_new, N_new, Fi_new, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))
-            utils.computeResourceShift(Ucpu_new, Umem_new,N_new,Ucpu_old,Umem_old,N_old)
-            cost_new = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new*global_B, global_Cost_network)[0] # Total  cost of the temp state
+            computeResourceShift(Ucpu_new, Umem_new,N_new,Ucpu_old,Umem_old,N_old)
+            cost_new = computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new*global_B, global_Cost_network)[0] # Total  cost of the temp state
             # cache insertion
             cache_insert(S_b_new, delay_new, Ucpu_new, Umem_new, Fi_new, N_new, rhoce_new, cost_new, round)
             result = dict()
@@ -100,7 +93,7 @@ def sbmp_o(params):
                 del global_cache['expire'][key]
     
     def sgs_builder_with_single_path_adding(S_b_init, Ucpu_init, Umem_init, N_init, round):
-        ## BUILDING OF EXPANDING SUBGRAPH WITH SINGLE PATH ADDING - PAMP Algorithm ##
+        ## BUILDING OF EXPANDING SUBGRAPH WITH SINGLE PATH ADDING - CO-PAMP Algorithm ##
         
         nonlocal expanding_subgraphs_b_full_built, expanding_subgraphs_b_full
         if not expanding_subgraphs_b_full_built:
@@ -126,20 +119,7 @@ def sbmp_o(params):
         _,result = evaluate_perf(S_b_init, Ucpu_init, Umem_init, N_init, round)
         Fi_init = result['Fi']
         if not expanding_subgraphs_b_full_built:
-            expanding_subgraphs_b_full = utils.sgs_builder_traces_full(global_M,global_max_traces,global_Fm)
-            # n_traces = global_max_traces
-            # expanding_subgraphs_b_full = np.empty((0,global_M), int)
-            # user = global_M-1
-            # iteration = 0
-            # while True:
-            #     iteration += 1
-            #     trace_sample_b = np.zeros(global_M)
-            #     trace_sample_b = sgs_builder_trace(user,trace_sample_b,global_Fm)
-            #     expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
-            #     if len(expanding_subgraphs_b_full) >= n_traces or (iteration > 100*n_traces and len(expanding_subgraphs_b_full) > 20):
-            #         break
-            # trace_sample_b = np.ones(global_M)  # add full edge trace
-            # expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
+            expanding_subgraphs_b_full = sgs_builder_traces_full(global_M,global_max_traces,global_Fm)
             expanding_subgraphs_b_full_built = True
         
         expanding_subgraphs_b = np.empty((0,global_M), int)
@@ -209,7 +189,7 @@ def sbmp_o(params):
     global_max_sgs = params['max-sgs'] if 'max-sgs' in params else 1e6 # maximum number of subgraphs to consider in an optimization iteration
     global_max_traces = params['max-traces'] if 'max-traces' in params else 1024 # maximum number of traces to generate
     global_delay_decrease_stop_condition = params['delay_decrease_stop_condition'] if 'delay_decrease_stop_condition' in params else global_delay_decrease_target # delay decrease early stop
-    global_HPA_cpu_th = params['HPA_cpu_th'] if 'HPA_cpu_th' in params else None # CPU threshold for HPA
+    global_HPA_cpu_th = params['HPA-cpu-th'] if 'HPA_cpu_th' in params else None # CPU threshold for HPA
     
     
     global_S_cloud_old = np.ones(int(global_M)) # SBMP assumes all microservice instances run in the cloud
@@ -225,7 +205,7 @@ def sbmp_o(params):
         result_edge['S_edge_b'] = global_S_b_old[global_M:].astype(int)
         result_edge['to-apply'] = list()
         result_edge['to-delete'] = list()
-        result_edge['placement'] = utils.numpy_array_to_list(np.argwhere(global_S_b_old[global_M:]==1))
+        result_edge['placement'] = numpy_array_to_list(np.argwhere(global_S_b_old[global_M:]==1))
         result_edge['info'] = f"Result for offload - edge microservice ids: {result_edge['placement']}, Cost: {result_edge['Cost']}, delay decrease: {result_edge['delay_decrease']}, cost increase: {result_edge['cost_increase']}"
         return result_edge 
     
@@ -235,7 +215,7 @@ def sbmp_o(params):
     global_Fi_old = np.matrix(buildFi(global_S_b_old, global_Fm, global_M)) # (2*M,2*M) instance-set call frequency matrix
     global_N_old = computeN(global_Fi_old, global_M, 2)  # (2*M,) number of instance call per user request
     global_delay_old,_,_,global_rhonce_old = computeDTot(global_S_b_old, global_N_old, global_Fi_old, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))  # Total delay of the current configuration. It includes only network delays
-    global_Cost_old, global_Cost_old_edge,global_Cost_old_cloud,global_Cost_traffic_old = utils.computeCost(global_Ucpu_old, global_Umem_old, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, global_rhonce_old * global_B, global_Cost_network, global_HPA_cpu_th)
+    global_Cost_old, global_Cost_old_edge,global_Cost_old_cloud,global_Cost_traffic_old = computeCost(global_Ucpu_old, global_Umem_old, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, global_rhonce_old * global_B, global_Cost_network, global_HPA_cpu_th)
 
     ## variables initialization ##
     S_b_temp = np.copy(global_S_b_old) # S_b_temp is the temporary placement state used in a greedy round
@@ -292,7 +272,7 @@ def sbmp_o(params):
         np.copyto(Fi_new,Fi_opt)      # Fi_new is the new instance-set call frequency matrix, Fi_opt is the best instance-set call frequency matrix computed by the previos greedy round
         delay_new = delay_opt           # delay_new is the new delay. It includes only network delays
         rhoce_new = rhoce_opt           # rhoce_new is the new cloud-edge network utilization
-        Cost_new  = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_B, global_Cost_network,global_HPA_cpu_th)[0] # Total  cost of the new configuration
+        Cost_new  = computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_B, global_Cost_network,global_HPA_cpu_th)[0] # Total  cost of the new configuration
         logger.info(f'new state {np.argwhere(S_b_new[global_M:]==1).squeeze()}, cost {Cost_new}, delay decrease {1000*(global_delay_old-delay_new)} ms, cost increase {Cost_new-global_Cost_old}')
         
         # Check if the delay reduction and other constraints are reached
@@ -384,8 +364,8 @@ def sbmp_o(params):
         N_new = computeN(Fi_new, global_M, 2)
         S_b_new_a = np.array(S_b_new[global_M:]).reshape(global_M,1)
         delay_new,_,_,rhoce_new = computeDTot(S_b_new, N_new, Fi_new, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))
-        utils.computeResourceShift(Ucpu_new,Umem_new,N_new,global_Ucpu_old,global_Umem_old,global_N_old)
-        Cost_new = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge,global_Cost_cpu_cloud, global_Cost_mem_cloud,rhoce_new*global_B,global_Cost_network,global_HPA_cpu_th)[0]
+        computeResourceShift(Ucpu_new,Umem_new,N_new,global_Ucpu_old,global_Umem_old,global_N_old)
+        Cost_new = computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge,global_Cost_cpu_cloud, global_Cost_mem_cloud,rhoce_new*global_B,global_Cost_network,global_HPA_cpu_th)[0]
         edge_leaves = np.logical_and(np.sum(Fi_new[global_M:2*global_M-1,global_M:2*global_M-1], axis=1)==0, S_b_new_a[:global_M-1]==1) # edge microservice with no outgoing calls to other edge microservices
         edge_leaves = np.argwhere(edge_leaves)[:,0]
         edge_leaves = edge_leaves+global_M # index of the edge microservice in the full state
@@ -400,11 +380,11 @@ def sbmp_o(params):
             N_temp = computeN(Fi_temp, global_M, 2)
             delay_temp,_,_,rhoce_temp = computeDTot(S_b_temp, N_temp, Fi_temp, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))
             delay_increase_temp = max(delay_temp - delay_new,1e-3)
-            utils.computeResourceShift(Ucpu_temp,Umem_temp,N_temp,Ucpu_new,Umem_new,N_new)
-            Cost_temp = utils.computeCost(Ucpu_temp, Umem_temp, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud,rhoce_temp*global_B, global_Cost_network, global_HPA_cpu_th)[0]
+            computeResourceShift(Ucpu_temp,Umem_temp,N_temp,Ucpu_new,Umem_new,N_new)
+            Cost_temp = computeCost(Ucpu_temp, Umem_temp, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud,rhoce_temp*global_B, global_Cost_network, global_HPA_cpu_th)[0]
             cost_decrease = Cost_new - Cost_temp
             w = cost_decrease/delay_increase_temp
-            utils.computeResourceShift(Ucpu_temp,Umem_temp,N_temp,Ucpu_new,Umem_new,N_new)
+            computeResourceShift(Ucpu_temp,Umem_temp,N_temp,Ucpu_new,Umem_new,N_new)
             
             if w>w_opt and global_delay_old - delay_temp > global_delay_decrease_target:
                 # possible removal
@@ -422,8 +402,8 @@ def sbmp_o(params):
     N_new = computeN(Fi_new, global_M, 2)
     delay_new,di_new,dn_new,rhoce_new = computeDTot(S_b_new, N_new, Fi_new, global_Di, global_L, global_RTT, global_B, global_lambd, global_M, np.empty(0))
     delay_decrease_new = global_delay_old - delay_new
-    utils.computeResourceShift(Ucpu_new,Umem_new,N_new,global_Ucpu_old,global_Umem_old,global_N_old)
-    Cost_new, Cost_new_edge, Cost_new_cloud, Cost_traffic_new = utils.computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_B, global_Cost_network, global_HPA_cpu_th) # Total cost of new state
+    computeResourceShift(Ucpu_new,Umem_new,N_new,global_Ucpu_old,global_Umem_old,global_N_old)
+    Cost_new, Cost_new_edge, Cost_new_cloud, Cost_traffic_new = computeCost(Ucpu_new, Umem_new, global_Qcpu, global_Qmem, global_Cost_cpu_edge, global_Cost_mem_edge, global_Cost_cpu_cloud, global_Cost_mem_cloud, rhoce_new * global_B, global_Cost_network, global_HPA_cpu_th) # Total cost of new state
     cost_increase_new = Cost_new - global_Cost_old
 
     result_metrics = dict()
@@ -450,14 +430,13 @@ def sbmp_o(params):
     result_cloud = dict()
     result_cloud['to-apply'] = list()
     result_cloud['to-delete'] = list()
-    result_cloud['placement'] = utils.numpy_array_to_list(np.argwhere(S_b_new[:global_M]==1))
+    result_cloud['placement'] = numpy_array_to_list(np.argwhere(S_b_new[:global_M]==1))
     result_cloud['info'] = f"Result for offload - cloud microservice ids: {result_cloud['placement']}"
 
     result_edge = dict()
-    result_edge['to-apply'] = utils.numpy_array_to_list(np.argwhere(S_b_new[global_M:]-global_S_b_old[global_M:]>0))
-    result_edge['to-delete'] = utils.numpy_array_to_list(np.argwhere(global_S_b_old[global_M:]-S_b_new[global_M:]>0))
-    result_edge['placement'] = utils.numpy_array_to_list(np.argwhere(S_b_new[global_M:]==1))
-
+    result_edge['to-apply'] = numpy_array_to_list(np.argwhere(S_b_new[global_M:]-global_S_b_old[global_M:]>0))
+    result_edge['to-delete'] = numpy_array_to_list(np.argwhere(global_S_b_old[global_M:]-S_b_new[global_M:]>0))
+    result_edge['placement'] = numpy_array_to_list(np.argwhere(S_b_new[global_M:]==1))
     result_edge['info'] = f"Result for offload - edge microservice ids: {result_edge['placement']}"
 
     if result_metrics['delay_decrease'] < global_delay_decrease_target:

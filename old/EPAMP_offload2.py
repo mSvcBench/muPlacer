@@ -11,7 +11,7 @@ from numpy import inf
 from computeDTot import computeDTot
 import logging
 import sys
-import utils
+import strategies.utils as utils
 import random
 import S2id
 

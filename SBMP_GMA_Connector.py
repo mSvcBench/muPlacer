@@ -25,13 +25,15 @@ def Connector(GMA_params):
     else:
         Di = np.zeros(2*M)
     
+    HPA_cpu_th = GMA_params['hpa']['cloud-area']['cpu-threshold']
+    
     delay_decrease_target = (GMA_params['edge-user-delay']['value'] - GMA_params['edge-user-target-delay']['value'])/1000.0
-    delay_decrease_stop_condition = delay_decrease_target * 0.75 # 75% of the target, TODO export to config
     delay_increase_target = - delay_decrease_target
-    delay_increase_stop_condition = delay_increase_target * 0.75 # 75% of the target, TODO export to config
-
+   
     B = GMA_params['network']['cloud-edge-bps']['value']
-    RTT = GMA_params['network']['edge-cloud-rtt']['value']/1000.0
+    RTT = GMA_params['network']['edge-cloud-rtt-ms']['value']/1000.0
+    RTT = RTT * GMA_params['network']['edge-cloud-rtt-multiplier']['value']
+
     Cost_cpu_edge = GMA_params['cost']['edge-area']['cpu']['value']
     Cost_mem_edge = GMA_params['cost']['edge-area']['memory']['value']
     Cost_cpu_cloud = GMA_params['cost']['cloud-area']['cpu']['value']
@@ -54,14 +56,18 @@ def Connector(GMA_params):
         traces_b = GMA_params['optimizer']['sbmp']['traces-b']
     else:
         traces_b = None
-    if 'HPA_cpu_th' in GMA_params['optimizer']['sbmp']:
-        HPA_cpu_th = GMA_params['optimizer']['sbmp']['HPA_cpu_th']
-    else:
-        HPA_cpu_th = None
+
     if 'locked_b' in GMA_params['optimizer']:
         locked_b = GMA_params['optimizer']['locked']
     else:
         locked_b = np.zeros(M)
+    
+    if 'overshooting-avoidance-multiplier' in GMA_params['optimizer']['sbmp']:
+        delay_decrease_stop_condition = delay_decrease_target * GMA_params['optimizer']['sbmp']['overshooting-avoidance-multiplier']
+        delay_increase_stop_condition = delay_increase_target * GMA_params['optimizer']['sbmp']['overshooting-avoidance-multiplier']
+    else:
+        delay_decrease_stop_condition = delay_decrease_target
+        delay_increase_stop_condition = delay_increase_target
 
     params = {
         'S_edge_b': S_edge_b,
@@ -87,6 +93,9 @@ def Connector(GMA_params):
         'Qcpu': Qcpu,
         'Qmem': Qmem,
         'max-sgs': max_sgs,
-        'expanding-depth': expanding_depth
+        'expanding-depth': expanding_depth,
+        'max-traces': max_traces,
+        'traces-b': traces_b,
+        'HPA-cpu-th': HPA_cpu_th
     }
     return params
