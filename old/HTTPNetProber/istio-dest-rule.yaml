@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: httpnetprober-cloud
+spec:
+  host: httpnetprober-cloud
+  trafficPolicy:
+    connectionPool:
+      http:
+        idleTimeout: 3600s
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      baseEjectionTime: 30s
+      consecutive5xxErrors: 7
+      interval: 30s

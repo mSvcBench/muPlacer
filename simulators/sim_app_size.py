@@ -161,7 +161,7 @@ for M in range(11,M_max,10):
         
         ## SBMP ##
         a+=1
-        alg_type[a] = "SBMP - Traces"
+        alg_type[a] = "SBMP"
         params = {
             'S_edge_b': S_edge_b.copy(),
             'Ucpu': Ucpu.copy(),
@@ -242,7 +242,7 @@ for M in range(11,M_max,10):
         
         ## SBMP ##
         a+=1
-        alg_type[a] = "SBMP - SPA (PAMP)"
+        alg_type[a] = "CO-PAMP"
         params = {
             'S_edge_b': S_edge_b.copy(),
             'Ucpu': Ucpu.copy(),

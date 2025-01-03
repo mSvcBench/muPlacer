@@ -168,7 +168,7 @@ for k in range(trials):
         a=-1
         ## SBMP ##
         a+=1
-        alg_type[a] = "SBMP - Traces"
+        alg_type[a] = "SBMP"
         params = {
             'S_edge_b': S_edge_b.copy(),
             'Ucpu': Ucpu.copy(),

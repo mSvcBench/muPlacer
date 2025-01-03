@@ -162,7 +162,7 @@ a=-1
 a+=1
 for k in range(trials):
     ## SBMP ##
-    alg_type[a] = "SBMP - Traces"
+    alg_type[a] = "SBMP"
     S_b = S_b_void.copy()
     Ucpu = scenario['Ucpu_void'][k].copy()
     Umem = scenario['Umem_void'][k].copy()
@@ -223,8 +223,7 @@ for k in range(trials):
             'sgs-builder': 'sgs_builder_traces',
             'expanding-depth': 2,
             'max-sgs': 256,
-            'max-traces': 2048,
-            'input-binary-trace-file-npy': traces_b
+            'max-traces': 2048
         }
         tic = time.time()
         if mode == 'offload':
