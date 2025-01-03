@@ -46,7 +46,7 @@ def sbmp_u(params):
     Qcpu = params['Qcpu'] if 'Qcpu' in params else np.zeros(2*M) # CPU quota per microservice instance (Kubernetes Request)
     cache_ttl = params['cache-ttl'] if 'cache-ttl' in params else 10 # cache expiry in round
     expanding_depth = params['expanding-depth'] if 'expanding-depth' in params else M # maximum number of microservices upgrade to consider in the single path adding greedy iteraction (lower reduce optimality but increase computaiton speed)
-    traces_b = params['traces-b'] if 'traces-b' in params else None # flag to enable traces generation
+    traces_b = params['input-binary-trace-file-npy'] if 'input-binary-trace-file-npy' in params else None # flag to enable traces generation
     max_sgs = params['max-sgs'] if 'max-sgs' in params else 1e6 # maximum number of subgraphs to consider in an optimization iteration
     max_traces = params['max-traces'] if 'max-traces' in params else 1024 # maximum number of traces to generate
     HPA_cpu_th = params['HPA_cpu_th'] if 'HPA_cpu_th' in params else None # CPU threshold for HPA
@@ -107,7 +107,7 @@ def sbmp_u(params):
         'sgs-builder': 'sgs_builder_traces',
         'max-sgs': max_sgs,
         'max-traces': max_traces,
-        'traces-b': traces_b,
+        'input-binary-trace-file-npy': traces_b,
         'mode': 'unoffload',
         'HPA-cpu-th': HPA_cpu_th,
         'expanding_depth': expanding_depth,

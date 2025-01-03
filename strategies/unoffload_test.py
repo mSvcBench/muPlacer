@@ -142,7 +142,7 @@ if __name__ == "__main__":
                      help='Provide logging level. Example --loglevel debug, default=warning' )
 
     args = parser.parse_args()
-    logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
+    logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s SBMP offload %(levelname)s %(message)s')
     logging.info( 'Logging now setup.' )
 
     seed = 150271

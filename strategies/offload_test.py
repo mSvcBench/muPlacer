@@ -12,8 +12,6 @@ import networkx as nx
 import random
 import time
 
-
-
 # MAIN
 def main():
     # small simulation to test the offload function
@@ -83,7 +81,10 @@ def main():
     Fi_void = np.matrix(buildFi(S_b_void, Fm, M))    # instance-set call frequency matrix of the void state
     N_void = computeN(Fi_void, M, 2)    # number of instance call per user request of the void state
     
-
+    # set locked microservices
+    locked_b = np.zeros(M)
+    locked_b[4] = 1 # microservice 1 is locked, can not be offloaded
+    
     computeResourceShift(Ucpu_void,Umem_void,N_void,Ucpu_void,Umem_void,N_void)
     delay_old,_,_,rhoce_old = computeDTot(S_b_void, N_void, Fi_void, Di, np.tile(L, 2), RTT, B, lambda_val, M)
     Cost_old,Cost_edge_old,Cost_cloud_old,Cost_traffic_ce_old = computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce_old * B, Cost_network)
@@ -117,7 +118,11 @@ def main():
         'expanding-depth':2,
         'max-sgs': 128,
         'max-traces': 2048,
-        'sgs-builder': 'sgs_builder_traces'
+        'sgs-builder': 'sgs_builder_traces',
+        '_sgs-builder':'sgs_builder_COPAMP',
+        'output-binary-trace-file-npy': None,
+        'input-binary-trace-file-npy': None,
+        'locked_b': locked_b,
     }
 
     tic = time.time()    
@@ -137,7 +142,7 @@ if __name__ == "__main__":
                      help='Provide logging level. Example --loglevel debug, default=info' )
 
     args = parser.parse_args()
-    logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s EPAMP offload %(levelname)s %(message)s')
+    logging.basicConfig(stream=sys.stdout, level=args.loglevel.upper(),format='%(asctime)s SBMP offload %(levelname)s %(message)s')
 
     logging.info( 'Logging now setup.' )
     # Define the input variables

@@ -32,6 +32,7 @@ def Connector(GMA_params):
    
     B = GMA_params['network']['cloud-edge-bps']['value']
     RTT = GMA_params['network']['edge-cloud-rtt-ms']['value']/1000.0
+    
     RTT = RTT * GMA_params['network']['edge-cloud-rtt-multiplier']['value']
 
     Cost_cpu_edge = GMA_params['cost']['edge-area']['cpu']['value']
@@ -52,22 +53,26 @@ def Connector(GMA_params):
         max_traces = int(GMA_params['optimizer']['sbmp']['max-traces'])
     else:
         max_traces = 2048
-    if 'traces-b' in GMA_params['optimizer']['sbmp']:
-        traces_b = GMA_params['optimizer']['sbmp']['traces-b']
+    if 'input-binary-trace-file-npy' in GMA_params['optimizer']['sbmp']:
+        traces_b = GMA_params['optimizer']['sbmp']['input-binary-trace-file-npy']
     else:
         traces_b = None
 
-    if 'locked_b' in GMA_params['optimizer']:
+    if 'locked' in GMA_params['optimizer']:
+
         locked_b = GMA_params['optimizer']['locked']
     else:
         locked_b = np.zeros(M)
-    
     if 'overshooting-avoidance-multiplier' in GMA_params['optimizer']['sbmp']:
         delay_decrease_stop_condition = delay_decrease_target * GMA_params['optimizer']['sbmp']['overshooting-avoidance-multiplier']
         delay_increase_stop_condition = delay_increase_target * GMA_params['optimizer']['sbmp']['overshooting-avoidance-multiplier']
     else:
         delay_decrease_stop_condition = delay_decrease_target
         delay_increase_stop_condition = delay_increase_target
+    
+    if GMA_params['optimizer']['sbmp']['edge-cloud-rtt-multiplier']:
+        RTT = RTT * GMA_params['optimizer']['sbmp']['edge-cloud-rtt-multiplier']
+    
 
     params = {
         'S_edge_b': S_edge_b,
@@ -95,7 +100,7 @@ def Connector(GMA_params):
         'max-sgs': max_sgs,
         'expanding-depth': expanding_depth,
         'max-traces': max_traces,
-        'traces-b': traces_b,
+        'input-binary-trace-file-npy': traces_b,
         'HPA-cpu-th': HPA_cpu_th
     }
     return params

@@ -109,6 +109,7 @@ def sgs_builder_traces_full(M,max_traces,Fm):
     while True:
         iteration += 1
         trace_sample_b = np.zeros(M)
+        trace_sample_b[user] = 1
         trace_sample_b = sgs_builder_trace(user,trace_sample_b,Fm)
         expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full, trace_sample_b.reshape(1, -1), axis=0)
         if len(expanding_subgraphs_b_full) >= n_traces or (iteration > 100*n_traces and len(expanding_subgraphs_b_full) > 20):

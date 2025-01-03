@@ -142,8 +142,8 @@ def update_ingress_lambda():
             else:
                 lambda_tot = float(result["value"][1])
             if lambda_tot > 0:
-                resource_scaling = lambda_edge / lambda_tot   
-                status['service-metrics']['resource-scaling']['value'] = np.ones(M,dtype=float)*resource_scaling
+                me_resource_scaling = lambda_edge / lambda_tot   
+                status['service-metrics']['me-resource-scaling']['value'] = np.ones(M,dtype=float)*me_resource_scaling
             break
     return
 
@@ -188,45 +188,6 @@ def update_response_length():
                 status['service-metrics']['response-length']['value'][service['id']] = value
                 status['service-metrics']['response-length']['last-update'] = now
     return
-
-# def update_multi_edge_resource_scaling():
-#     global gma_config, prom_client, metrics, default_resource_scaling
-    
-#     logger.info(f"Update cloud to edge resource scaling")
-
-#     now = time.time()
-
-#     edge_workload_regex = status['global-regex']['edge-area']['workload']+f'|{edge_istio_ingress_app}'
-#     cloud_workload_regex = status['global-regex']['cloud-area']['workload']
-
-#     if status['service-metrics']['service-lambda']['value'][M-1] == 0:
-#         logger.info(f"Lambda value for the istio-ingress is 0, skipping resource scaling update")
-#         return
-
-#     # update resource scaling factor
-#     resource_scaling_query = f'sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}",source_workload=~"{edge_workload_regex}",reporter="destination"}}[{query_period_str}])) / sum by (destination_workload) (rate(istio_request_duration_milliseconds_count{{cluster="{cluster['cloud-area']}", namespace="{namespace}",destination_workload=~"{cloud_workload_regex}", reporter="destination"}}[{query_period_str}]))'
-#     try:
-#         r = prom_client.custom_query(query=resource_scaling_query)
-#     except PrometheusApiClientException as e:
-#         logger.error(f"Prometheus query exception for query {resource_scaling_query}: {str(e)}")
-    
-#     # clean rsource scaling values
-#     status['service-metrics']['resource-scaling']['value'] = np.ones(M,dtype=float)*default_resource_scaling
-#     status['service-metrics']['resource-scaling']['last-update'] = now
-#     services=status['service-info']
-#     for result in r:
-#         for service_name in services:
-#                     service=services[service_name]
-#                     if re.search(service['regex']['cloud-area']['workload']['regex'], result['metric']['destination_workload'], re.IGNORECASE):
-#                         if result["value"][1]=="NaN" or float(result["value"][1]) == 0:
-#                             value = default_resource_scaling
-#                         else:
-#                             value = float(result["value"][1])
-#                         if status['service-metrics']['resource-scaling']['value'][service['id']] != default_resource_scaling:
-#                             logger.critical(f"Multiple results for the resource scaling query and service {service_name}")
-#                             exit(1)
-#                         status['service-metrics']['resource-scaling']['value'][service['id']] = value
-#                         break
 
 def update_Fm_and_lambda():
     global gma_config, prom_client, metrics
@@ -379,53 +340,13 @@ def update_ingress_delay_quantile():
                 exit(1)
             status['service-metrics']['edge-user-delay-quantile']['value'] = value
 
-def update_ingress_delay_buckets():
-    global gma_config, prom_client, metrics
-
-    logger.info(f"Update delay bucket values from istio ingress in the edge area")
-
-    now = time.time()
-
-    # update the delay bucket value
-    destination_app_regex = "|".join(status['service-info'].keys())
-    query_bucket_delay = f'sum by (source_app,le) (rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200",le=~"10|25|50|100|250|500"}}[{query_period_str}])) / scalar(sum by (source_app) (rate(istio_request_duration_milliseconds_bucket{{cluster=~"{cluster['edge-area']}", namespace="{edge_istio_ingress_namespace}", source_app="{edge_istio_ingress_app}", destination_app=~"{destination_app_regex}", reporter="source", response_code="200", le="+Inf"}}[{query_period_str}])))'
-    try:
-        result_query = prom_client.custom_query(query=query_bucket_delay)
-    except PrometheusApiClientException as e:
-        logger.error(f"Prometheus query exception for query {query_bucket_delay}: {str(e)}")
-        return
-    
-    # clean the delay value
-    status['service-metrics']['edge-user-delay-bucket']['value']['10'] = 0
-    status['service-metrics']['edge-user-delay-bucket']['value']['25'] = 0
-    status['service-metrics']['edge-user-delay-bucket']['value']['50'] = 0
-    status['service-metrics']['edge-user-delay-bucket']['value']['100'] = 0
-    status['service-metrics']['edge-user-delay-bucket']['value']['250'] = 0
-    status['service-metrics']['edge-user-delay-bucket']['value']['500'] = 0
-    status['service-metrics']['edge-user-delay-bucket']['last-update'] = now
-    
-    if result_query:
-        for result in result_query:
-            if result["metric"]["le"]in status['service-metrics']['edge-user-delay-bucket']['value']:
-                le = result["metric"]["le"]
-                if result["value"][1]=="NaN":   # if the value is NaN, we set the value to 1 because NaN comes out from a division by 0 thus no delay
-                    value=1
-                else:
-                    value=float(result["value"][1])
-                if status['service-metrics']['edge-user-delay-bucket']['value'][le] != 0:
-                    logger.critical(f"Multiple results for the bucket delay query {query_bucket_delay}")
-                    exit(1)
-                status['service-metrics']['edge-user-delay-bucket']['value'][le] = value
-                status['service-metrics']['edge-user-delay-bucket']['last-update'] = now
-
+# Function that updates the HPA values
 def update_and_check_HPA():
     global gma_config, prom_client, status, k8s_apiclient
 
     logger.info(f"Update HPA values")
-
     now = time.time()
 
-    services=status['service-info']
     hpa_running = False
     
     # update the hpa values
@@ -464,6 +385,7 @@ def update_and_check_HPA():
                             break
     return hpa_running
 
+# Function that updates all metrics
 def update_full_metrics():
     update_ucpu()
     update_umem()
@@ -480,7 +402,6 @@ def apply_configuration(result_list):
     result_cloud_area = result_list[0] # result_list[0] contains cloud-area information
     result_edge_area = result_list[1] # result_list[1] contains edge-area information
     
-    
     # remove resources from edge area
     for service_id in result_edge_area['to-delete']:
         if service_id not in service_id_to_name:
@@ -492,7 +413,7 @@ def apply_configuration(result_list):
         workload_name = service['regex']['cloud-area']['workload']['regex']
         workload_type = service['regex']['cloud-area']['workload']['type']
         if workload_type != 'daemonset':
-            cloud_replicas_increase = np.ceil(status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]/status['service-metrics']['resource-scaling']['value'][service_id]) #-status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
+            cloud_replicas_increase = np.ceil(status['service-metrics']['hpa']['edge-area']['current-replicas'][service_id]/status['service-metrics']['me-resource-scaling']['value'][service_id]) #-status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
             cloud_replicas = status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id]+cloud_replicas_increase
             cloud_replicas = min(status['service-metrics']['hpa']['cloud-area']['max-replicas'][service_id],cloud_replicas)
             cloud_replicas = max(status['service-metrics']['hpa']['cloud-area']['min-replicas'][service_id],cloud_replicas)
@@ -536,7 +457,7 @@ def apply_configuration(result_list):
         workload_name = service['regex']['edge-area']['workload']['regex']
         workload_type = service['regex']['edge-area']['workload']['type']
         if workload_type != 'daemonset':
-            edge_replicas = np.ceil(status['service-metrics']['resource-scaling']['value'][service_id] * status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
+            edge_replicas = np.ceil(status['service-metrics']['me-resource-scaling']['value'][service_id] * status['service-metrics']['hpa']['cloud-area']['current-replicas'][service_id])
             edge_replicas = min(status['service-metrics']['hpa']['edge-area']['max-replicas'][service_id],edge_replicas)
             edge_replicas = max(status['service-metrics']['hpa']['edge-area']['min-replicas'][service_id],edge_replicas)
             command = f'kubectl --context {gma_config['spec']['edge-area']['context']} -n {namespace} scale {workload_type} {workload_name} --replicas {int(edge_replicas)}'
@@ -547,7 +468,6 @@ def apply_configuration(result_list):
                 output = e.output
                 # Handle the exception or log the error message
             logger.info(f"Scale deployment {service['regex']['edge-area']['workload']['regex']} in edge-area to {edge_replicas} replicas: {output}")
-
 
 def update_net_metrics():
     logger.info(f"Update net metrics")
@@ -679,7 +599,6 @@ def init():
     services=status['service-info']
     for s in gma_config['spec']['services']:
             services[s['name']]=dict()
-
             # Initialize the service id
             if gma_config['spec']['explicit-service-id']:
                 services[s['name']]['id'] = s['id']
@@ -713,11 +632,7 @@ def init():
     for service_name in status['service-info']:
         service_id_to_name[status['service-info'][service_name]['id']] = service_name
     
-    # Initialize global service metrics
-    # Metrics arranged as a vector/matrix
-    # value [i] is the metric of the service with id=i
-    # Last id of vector/matrix is istio-ingress. The overall delay is the delay of istio-ingress
-    
+
     status['global-regex'] = dict() # Global regex dictionary
     status['global-regex']['edge-area'] = dict()
     status['global-regex']['cloud-area'] = dict()
@@ -728,9 +643,11 @@ def init():
     status['global-regex']['cloud-area']['workload'] = ''
     status['global-regex']['cloud-area']['hpa'] = ''
     
+    # Initialize service metrics
+
     status['service-metrics'] = dict()
     status['service-metrics']['n-services']= mid+1 # number of microservices
-    M = status['service-metrics']['n-services'] 
+    M = status['service-metrics']['n-services']
 
     status['service-metrics']['fm'] = dict()
     status['service-metrics']['fm']['info'] = 'Call frequency matrix'
@@ -818,18 +735,6 @@ def init():
     status['service-metrics']['edge-user-delay-quantile']['info'] = 'Edge user delay quantile in ms'
     status['service-metrics']['edge-user-delay-quantile']['last-update'] = 0 # last update time
 
-    status['service-metrics']['edge-user-delay-bucket']=dict()
-    status['service-metrics']['edge-user-delay-bucket']['value'] = dict() 
-    status['service-metrics']['edge-user-delay-bucket']['value']['10'] = 0.0
-    status['service-metrics']['edge-user-delay-bucket']['value']['25'] = 0.0
-    status['service-metrics']['edge-user-delay-bucket']['value']['50'] = 0.0
-    status['service-metrics']['edge-user-delay-bucket']['value']['100'] = 0.0
-    status['service-metrics']['edge-user-delay-bucket']['value']['250'] = 0.0
-    status['service-metrics']['edge-user-delay-bucket']['value']['500'] = 0.0
-    status['service-metrics']['edge-user-delay-bucket']['info'] = 'Edge user delay bucket probability for delay 10,25,50,100,250,500 ms' # last update time
-    status['service-metrics']['edge-user-delay-bucket']['last-update'] = 0 # last update time
-
-    
     status['service-metrics']['edge-user-target-delay']=dict()
     status['service-metrics']['edge-user-target-delay']['value'] = 0.0 # last update time
     status['service-metrics']['edge-user-target-delay']['info'] = 'Average edge user target delay in ms' # last update time
@@ -840,10 +745,6 @@ def init():
     status['service-metrics']['network']['edge-cloud-rtt-ms']['value'] = time_to_ms_converter(gma_config['spec']['network']['edge-cloud-rtt-ms'])
     status['service-metrics']['network']['edge-cloud-rtt-ms']['info'] = 'Round trip time from edge area to cloud area in ms'
     status['service-metrics']['network']['edge-cloud-rtt-ms']['last-update'] = 0 # last update time
-    status['service-metrics']['network']['edge-cloud-rtt-multiplier'] = dict()
-    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['value'] = max(1,int(gma_config['spec']['network']['edge-cloud-rtt-multiplier']))
-    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['info'] = 'RTT multiplier from edge area to cloud area to account for the  HTTP RTT rather than network RTT'
-    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['last-update'] = 0 # last update time
     status['service-metrics']['network']['cloud-edge-bps'] = dict()
     status['service-metrics']['network']['cloud-edge-bps']['value'] = bitrate_to_bps_converter(gma_config['spec']['network']['cloud-edge-bps'])
     status['service-metrics']['network']['cloud-edge-bps']['info'] = 'Network capacity in bit per second from cloud area to edge area in bps'
@@ -876,11 +777,10 @@ def init():
     status['service-metrics']['cost']['cloud-area']['network']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
     status['service-metrics']['cost']['cloud-area']['network']['info'] = 'Cost of external network for the cloud area'
 
-    status['service-metrics']['resource-scaling'] = dict()
-    status['service-metrics']['resource-scaling']['info'] = 'Cloud-to-edge resource scaling factor'
-    status['service-metrics']['resource-scaling']['value'] = np.ones(M, dtype=float) * gma_config['spec']['edge-area']['default-resource-scaling']
-    status['service-metrics']['resource-scaling']['last-update'] = 0 # last update time
-
+    status['service-metrics']['me-resource-scaling'] = dict()
+    status['service-metrics']['me-resource-scaling']['info'] = 'Cloud-to-edge multi-edge resource scaling factor'
+    status['service-metrics']['me-resource-scaling']['value'] = np.ones(M, dtype=float) * gma_config['spec']['edge-area']['default-resource-scaling']
+    status['service-metrics']['me-resource-scaling']['last-update'] = 0 # last update time
 
     # Get the pod/deployment regex for each service
     parse_yaml()
@@ -957,12 +857,12 @@ def bitrate_to_bps_converter(cap_string):
     return value
 
 class GMAStataMachine():
-    # hpa_running: HPA is runnning
-    # camping: periodic monitoring of the system and no need to take action
-    # offload_alarm: offload delay threshold is reached; check if this state persist for a while
-    # unoffload_alarm: unoffload delay threshold is reached; check if this state persist for a while
-    # offloading: offload in progress
-    # unoffloading: unoffload in progress
+    # hpa_running: Camping with HPA is runnning
+    # Camping: periodic monitoring of the system and no need to take action. No HPA running.
+    # Offload_alarm: offload delay threshold is reached; check if this state persist for a while
+    # Unoffload_alarm: unoffload delay threshold is reached; check if this state persist for a while
+    # Offloading: offload action in progress
+    # Unoffloading: unoffload action in progress
 
     def __init__(self):
         self.run()
@@ -1111,8 +1011,8 @@ class GMAStataMachine():
             logger.info('quantile-driven offloading')
         
         offload_parameters = status['service-metrics'].copy()
-        offload_parameters['ucpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['ucpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
-        offload_parameters['umem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],offload_parameters['umem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
+        offload_parameters['ucpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['me-resource-scaling']['value'],offload_parameters['ucpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
+        offload_parameters['umem']['cloud-area']['value'] = np.multiply(status['service-metrics']['me-resource-scaling']['value'],offload_parameters['umem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
         
         if offload_type == 'avg-driven':
             target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
@@ -1153,8 +1053,8 @@ class GMAStataMachine():
             logger.info('quantile-driven unoffloading')
 
         unoffload_parameters = status['service-metrics'].copy()
-        unoffload_parameters['ucpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['ucpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
-        unoffload_parameters['umem']['cloud-area']['value'] = np.multiply(status['service-metrics']['resource-scaling']['value'],unoffload_parameters['umem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
+        unoffload_parameters['ucpu']['cloud-area']['value'] = np.multiply(status['service-metrics']['me-resource-scaling']['value'],unoffload_parameters['ucpu']['cloud-area']['value']) # scaling the cloud cpu resources used by requests from the edge area
+        unoffload_parameters['umem']['cloud-area']['value'] = np.multiply(status['service-metrics']['me-resource-scaling']['value'],unoffload_parameters['umem']['cloud-area']['value']) # scaling the cloud memory resources used by requests from the edge area
         if unoffload_type == 'avg-driven':
             target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
         else:
@@ -1180,7 +1080,7 @@ class GMAStataMachine():
         return
     
     def run(self):
-        self.next = self.camping
+        self.next = self.offloading
         while True:
             self.next()
 
@@ -1294,13 +1194,6 @@ if __name__ == "__main__":
     cluster=dict()
     for area in areas:
         cluster[area] = gma_config['spec'][area]['cluster']
-    
-    
-    # update_metrics()
-    # update_ingress_delay_quantile()
-    # update_and_check_HPA()
-    # update_ingress_lambda()
-    # update_multi_edge_resource_scaling()
     
     # Run the state machine
     sm = GMAStataMachine()

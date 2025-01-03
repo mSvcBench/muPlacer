@@ -224,7 +224,7 @@ for k in range(trials):
             'expanding-depth': 2,
             'max-sgs': 256,
             'max-traces': 2048,
-            'traces-b': traces_b
+            'input-binary-trace-file-npy': traces_b
         }
         tic = time.time()
         if mode == 'offload':
@@ -434,11 +434,11 @@ for k in range(trials):
             'Cost_cpu_cloud': Cost_cpu_cloud,
             'Cost_mem_cloud': Cost_mem_cloud,
             'Cost_network': Cost_network,
-            'sgs-builder': 'sgs_builder_with_single_path_adding',
+            'sgs-builder': 'sgs_builder_COPAMP',
             'expanding-depth': 2,
             'max-sgs': 256,
             'max-traces': 2048,
-            'traces-b': traces_b
+            'input-binary-trace-file-npy': traces_b
         }
         tic = time.time()
         if mode == 'offload':

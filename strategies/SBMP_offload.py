@@ -92,10 +92,10 @@ def sbmp_o(params):
                 del global_cache['Umem'][key]
                 del global_cache['expire'][key]
     
-    def sgs_builder_with_single_path_adding(S_b_init, Ucpu_init, Umem_init, N_init, round):
+    def sgs_builder_COPAMP(S_b_init, round):
         ## BUILDING OF EXPANDING SUBGRAPH WITH SINGLE PATH ADDING - CO-PAMP Algorithm ##
         
-        nonlocal expanding_subgraphs_b_full_built, expanding_subgraphs_b_full
+        nonlocal expanding_subgraphs_b_full, expanding_subgraphs_b_full_built
         if not expanding_subgraphs_b_full_built:
             for ms in range(global_M-1):
                 paths_n = list(nx.all_simple_paths(global_G, source=global_M-1, target=ms)) 
@@ -109,54 +109,103 @@ def sbmp_o(params):
                         path_b[0,path_n] = 1 # Binary-based (b) encoding of the expanding subgraph
                         expanding_subgraphs_b_full = np.append(expanding_subgraphs_b_full,path_b,axis=0)
             expanding_subgraphs_b_full_built = True
-        residual = np.sum(np.maximum(expanding_subgraphs_b_full-S_b_init[global_M:],0),axis=1)
-        rl = np.argwhere((residual > 0) & (residual <= global_expanding_depth)).flatten()
-        return expanding_subgraphs_b_full[rl]
-    
-    def sgs_builder_traces(S_b_init, Ucpu_init, Umem_init, N_init, round):
-        ## BUILDING OF EXPANDING SUBGRAPHS FROM TRACES#
-        nonlocal expanding_subgraphs_b_full_built, expanding_subgraphs_b_full
-        _,result = evaluate_perf(S_b_init, Ucpu_init, Umem_init, N_init, round)
-        Fi_init = result['Fi']
-        if not expanding_subgraphs_b_full_built:
-            expanding_subgraphs_b_full = sgs_builder_traces_full(global_M,global_max_traces,global_Fm)
-            expanding_subgraphs_b_full_built = True
+            if global_traces_output is not None:
+                np.save(global_traces_output, expanding_subgraphs_b_full)
         
-        expanding_subgraphs_b = np.empty((0,global_M), int)
+        expanding_subgraphs_b = np.copy(expanding_subgraphs_b_full)
+        
+        # search subgraph with at least a locked microservice
+        it = np.argwhere(np.sum(expanding_subgraphs_b[:,np.argwhere(global_locked_b>0)],axis=1).flatten()>0).flatten()
+        # remove microservice looked by the user
+        expanding_subgraphs_b[:,np.argwhere(global_locked_b>0)]=0
+
+        # traces fully in the edge or void traces (reduce processing of next control of unconnected traces)
+        residual = np.argwhere(np.sum(np.maximum(expanding_subgraphs_b-S_b_init[global_M:],0),axis=1)>0).flatten()
+        it = np.intersect1d(it,residual)
+
+        # remove possibly edge unconnected microservices due to removal of locked microservices
+        for t in it:
+            expanding_subgraph_b = expanding_subgraphs_b[t,:].flatten() # binary encoding of the expanding subgraph
+            edge_micros = np.argwhere(expanding_subgraph_b[0:global_M]==1).flatten() # edge microservices
+            Fm_edge = global_Fm[edge_micros][:,edge_micros] # edge microservices call frequency matrix
+            Gedge = nx.DiGraph(np.where(Fm_edge > 0, 1, 0)) # edge dependency graph
+            user = len(edge_micros)-1
+            for ms in range(len(edge_micros)):
+                if nx.has_path(Gedge,source=user,target=ms)==False:
+                    expanding_subgraphs_b[t,edge_micros[ms]]=0
+
+        # remove duplicate rows from expanding_subgraphs_b
+        expanding_subgraphs_b, _ = np.unique(expanding_subgraphs_b, axis=0,return_counts=True)
+        
+        # remove traces fully in the edge or void traces or traces with ore than expanding_depth microservices addedd        
+        residual = np.sum(np.maximum(expanding_subgraphs_b-S_b_init[global_M:],0),axis=1)
+        rl = np.argwhere((residual > 0) & (residual <= global_expanding_depth)).flatten()
+        expanding_subgraphs_b = expanding_subgraphs_b[rl]
+
+        return expanding_subgraphs_b
+    
+    def sgs_builder_traces(S_b_init, round):
+        ## BUILDING OF EXPANDING SUBGRAPHS FROM TRACES#
+        nonlocal expanding_subgraphs_b_full, expanding_subgraphs_b_full_built
+        
+        if not expanding_subgraphs_b_full_built:
+            expanding_subgraphs_b_full_built = True
+            expanding_subgraphs_b_full = sgs_builder_traces_full(global_M,global_max_traces,global_Fm)
+            if global_traces_output is not None:
+                np.save(global_traces_output, expanding_subgraphs_b_full)
+
+        _,result = evaluate_perf(S_b_new, Ucpu_new, Umem_new, N_new, round)
+        Fi_init = result['Fi']
+        
         # remove traces fully in the edge
         residual = np.argwhere(np.sum(np.maximum(expanding_subgraphs_b_full-S_b_init[global_M:],0),axis=1)>0).flatten()
-        expanding_subgraphs_b = expanding_subgraphs_b_full[residual]
+        expanding_subgraphs_b = np.copy(expanding_subgraphs_b_full[residual])
         
-        # clean from these traces the cloud microservices that are at a distance greather than expanding_depth from the edge gateways
+        # clean from traces the cloud microservices that are at a distance greather than expanding_depth from the edge gateways
         edge_leaves = np.unique(np.argwhere(Fi_init[global_M:2*global_M,0:global_M]>0)[:,0]) # list of edge graph leaves: microservices in the edge with at least one call from the cloud
         allowed_cloud_ms = np.empty((0), int)
         for edge_gw in edge_leaves:
             allowed_cloud_ms = np.append(allowed_cloud_ms, np.argwhere(global_ms_distances[edge_gw][:] <= global_expanding_depth).flatten())
         allowed_cloud_ms = np.unique(allowed_cloud_ms)
         not_allowed_ms = np.setdiff1d(np.arange(global_M), allowed_cloud_ms)
-        
         expanding_subgraphs_b[:,not_allowed_ms]=0
+
+        # remove duplicate rows from expanding_subgraphs_b
+        expanding_subgraphs_b, _ = np.unique(expanding_subgraphs_b, axis=0,return_counts=True)
         
+        # search subgraph with at least a locked microservice
+        it = np.argwhere(np.sum(expanding_subgraphs_b[:,np.argwhere(global_locked_b>0)],axis=1).flatten()>0).flatten()
         # remove microservice looked by the user
         expanding_subgraphs_b[:,np.argwhere(global_locked_b>0)]=0
 
-        # remove traces fully in the edge
+        # traces fully in the edge or void traces (reduce processing of next control of unconnected traces)
+        residual = np.argwhere(np.sum(np.maximum(expanding_subgraphs_b-S_b_init[global_M:],0),axis=1)>0).flatten()
+        it = np.intersect1d(it,residual)
+
+        # remove possibly edge unconnected microservices due to removal of locked microservices
+        for t in it:
+            expanding_subgraph_b = expanding_subgraphs_b[t,:].flatten() # binary encoding of the expanding subgraph
+            edge_micros = np.argwhere(expanding_subgraph_b[0:global_M]==1).flatten() # edge microservices
+            Fm_edge = global_Fm[edge_micros][:,edge_micros] # edge microservices call frequency matrix
+            Gedge = nx.DiGraph(np.where(Fm_edge > 0, 1, 0)) # edge dependency graph
+            user = len(edge_micros)-1
+            for ms in range(len(edge_micros)):
+                if nx.has_path(Gedge,source=user,target=ms)==False:
+                    expanding_subgraphs_b[t,edge_micros[ms]]=0
+
+        # remove duplicate rows from expanding_subgraphs_b
+        expanding_subgraphs_b, _ = np.unique(expanding_subgraphs_b, axis=0,return_counts=True)
+        
+        # remove traces fully in the edge or void traces
         residual = np.argwhere(np.sum(np.maximum(expanding_subgraphs_b-S_b_init[global_M:],0),axis=1)>0).flatten()
         expanding_subgraphs_b = expanding_subgraphs_b[residual]
 
         # compute the frequency of the expanding subgraph paths to return the most frequently used
         expanding_subgraphs_b, paths_freq = np.unique(expanding_subgraphs_b, axis=0,return_counts=True)
         mfu_expanding_subgraph_id = np.flip(np.argsort(paths_freq))
-
+        
         return expanding_subgraphs_b[mfu_expanding_subgraph_id[:min(global_max_sgs,len(mfu_expanding_subgraph_id))]]
 
-    # def sgs_builder_trace(node,trace,global_Fm):
-    #     children = np.argwhere(global_Fm[node,0:global_M]>0).flatten()
-    #     for child in children:
-    #         if np.random.random() < global_Fm[node,child]:
-    #             trace[child] = 1
-    #             trace = sgs_builder_trace(child,trace,global_Fm)
-    #     return trace
 
     ## INITIALIZE VARIABLES ##
 
@@ -185,7 +234,11 @@ def sbmp_o(params):
     global_locked_b = params['locked_b'] if 'locked_b' in params else np.zeros(global_M) # binary encoding of microservice that can not be moved at the edge
     global_sgs_builder = locals()[params['sgs-builder']] if 'sgs-builder' in params else locals()['sgs_builder_traces'] # expanding subgraph builder function
     global_expanding_depth = params['expanding-depth'] if 'expanding-depth' in params else global_M # maximum number of microservices upgrade to consider in the single path adding greedy iteraction (lower reduce optimality but increase computaiton speed)
-    global_traces_b = params['traces-b'] if 'traces-b' in params else None # flag to enable traces generation
+    if 'input-binary-trace-file-npy' in params and params['input-binary-trace-file-npy'] is not None:
+        global_traces_b = np.load(params['input-binary-trace-file-npy'])
+    else:
+        global_traces_b = None # binary traces. Syntethic traces generation if not defined
+    global_traces_output = params['output-binary-trace-file-npy'] if 'output-binary-trace-file-npy' in params else None # output traces file
     global_max_sgs = params['max-sgs'] if 'max-sgs' in params else 1e6 # maximum number of subgraphs to consider in an optimization iteration
     global_max_traces = params['max-traces'] if 'max-traces' in params else 1024 # maximum number of traces to generate
     global_delay_decrease_stop_condition = params['delay_decrease_stop_condition'] if 'delay_decrease_stop_condition' in params else global_delay_decrease_target # delay decrease early stop
@@ -250,7 +303,8 @@ def sbmp_o(params):
 
     skip_delay_increase = False    # skip delay increase states to accelerate computation wheter possible
     if global_traces_b is None:
-        expanding_subgraphs_b_full_built = False # flag to check if the full expanding subgraph set has been built
+        # create synthetic traces
+        expanding_subgraphs_b_full_built = False
         expanding_subgraphs_b_full = np.empty((0,global_M), int) # Storage of full set of binary-based (b) encoded expanding subraphs
     else:
         expanding_subgraphs_b_full_built = True
@@ -287,7 +341,7 @@ def sbmp_o(params):
 
         # BUILDING OF EXPANDING SUBGRAPH
         N_new = computeN(Fi_new, global_M, 2)
-        expanding_subgraphs_b = global_sgs_builder(S_b_new, Ucpu_new, Umem_new, N_new, round)
+        expanding_subgraphs_b = global_sgs_builder(S_b_new, round)
         
         if len(expanding_subgraphs_b) == 0:
             # All expanding subgraph considered no other way to reduce delay
@@ -351,8 +405,6 @@ def sbmp_o(params):
  
         # cache cleaning
         cache_cleaning(round)
-
-    
 
     # Remove leaves to reduce cost
     while True:

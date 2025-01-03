@@ -12,10 +12,10 @@ spec:
     query-period: 2m # Prometheus query period, no less than 1 minute since Istio refresh every 30s
     prometheus-url: http://160.80.223.232:30000 # Prometheus URL
   slo:
-    offload-delay-threshold: 250ms # average delay threshold for avg-driven offloading
+    offload-delay-threshold: 250ms # average delay threshold for avg-driven offloading.
     unoffload-delay-threshold: 150ms  # average delay threshold for avg-driven unoffloading
-    offload-delay-quantile-threshold: 1000s # delay quantile threshold for quantile-driven offloading
-    unoffload-delay-quantile-threshold: 1000s # delay quantile threshold threshold for quantile-driven unoffloading
+    offload-delay-quantile-threshold: 1000s # delay quantile threshold for quantile-driven offloading (EXPERIMENTAL). Use a high value to disable quantile-driven offloading
+    unoffload-delay-quantile-threshold: 1000s # delay quantile threshold threshold for quantile-driven unoffloading (EXPERIMENTAL). Use a high value to disable quantile-driven unoffloading
     delay-quantile: 0.90 # delay quantile used for quantile-driven offloading, e.g., 0.9 means 90% of the requests
   cloud-area:
     cluster: "" # cluster name used for prometheus query cloud area (must be different from any other area)
@@ -46,28 +46,33 @@ spec:
     default-resource-scaling: 1 # default resource scaling factor from the cloud to the edge. CPU and MEM used by a microservice in the cloud will be scaled of this factor when deployed in the edge and there is no available measurement
   network:
     netinfo-file: "/Users/detti/muPlacer/netinfo.yaml" #  local yaml file containing net data
-    net-prober-url: http://160.80.223.232:30010/get?server_ip=192.168.101.14&bandwidth_mps=200&duration=2
+    net-prober-url: http://160.80.223.232:30010/get?server_ip=192.168.101.14&bandwidth_mps=200&duration=2 # URL of the net prober server to which to transfer UDP traffic with bit rate bandwidth_mps Mbit/s for duration seconds 
     cloud-edge-bps: 1000Mbps  # default bandwidth between cloud and edge
     edge-cloud-bps: 1000Mbps  # default bandwidth between edge and cloud   
     edge-cloud-rtt-ms: 80ms # default RTT between edge and cloud
-    edge-cloud-rtt-multiplier: 2 # RTT multiplier to consider HTTP RTT in the network model rather than the physical RTT
   optimizer:
     sbmp:
       expanding-depth: 2  # expanding depth optimization paramenter of SBMP
       max-sgs: 256 # maximum number of expanding subgrapgh to consider in SBMP iteration
-      max-traces: 2048 # maximum number of traces to consider in SBMP iteration
-      overshooting-avoidance-multiplier: 0.3 # optimization algorithm stops when the predicted delay change is above the requested delay change multiplied by this factor. Lower values may require more iterations to achieve the desired delay but help avoid overshooting.
+      max-traces: 2048 # maximum number of syntethic traces to generate
+      # input-binary-trace-file-npy: None  # numpy file containing traces to load. Generation of synthetic traces if not defined
+      output-binary-trace-file-npy: traces.npy  # numpy file containing used traces. No output file if not defined
+      overshooting-avoidance-multiplier: 0.3 # The optimization algorithm stops when the expected delay change is greater than the required delay change multiplied by this factor. Lower values may require more iterations to achieve the desired delay, but they help avoid overshooting in case of any imperfections in the offloading algorithm 
+      edge-cloud-rtt-multiplier: 2 # RTT multiplier to consider HTTP RTT in the network model rather than the physical RTT. Depends on the application. Configure with offline measurements
+      # locked: #  list of service that should not be offloaded by the optimizer. Should be integer equal to the service id of the services list below
+      #   - 0
+      #   - 1
+      #   - 2
       
-    max-delay-reduction : 1000ms  # max requested delay reduction per placement action 
-    max-delay-increase : 1000ms # max requested delay increase per placement action
-    delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading
-    # locked: #  services that should not be offloaded by the optimizer 
+    max-delay-reduction : 1000ms  # max requested delay reduction per placement action. Use high values to disable any limitation
+    max-delay-increase : 1000ms # max requested delay increase per placement action. Use high values to disable any limitation
+    delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading.
 
-  explicit-service-id : true  # if true, the service id is explicitly defined in the yaml files and can help log understanding, otherwise the service id is computed automatically
+  explicit-service-id : true  # if true, the service id (integer value) is explicitly defined in this yaml file and can help log understanding, otherwise the service id is computed automatically
   services:
     - name: s0  # service name
-      id: 0 # service id internally used
-      instances:  # list of kubernetes resources running or to run in the edge and cloud area. Those in the cloud should be runned manually. Those in the edge are automatically deployed by the GMAPlacer
+      id: 0 # service id internally used. Should be an integer value
+      instances:  # list of kubernetes resources running or to run in the edge and cloud area. Those in the cloud should be run manually. Those in the edge are automatically deployed by GMA 
         cloud-yamls: 
           - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s0.yaml
           - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s0.yaml

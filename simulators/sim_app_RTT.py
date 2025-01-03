@@ -274,7 +274,7 @@ for k in range(trials):
             'Cost_cpu_cloud': Cost_cpu_cloud,
             'Cost_mem_cloud': Cost_mem_cloud,
             'Cost_network': Cost_network,
-            'sgs-builder': 'sgs_builder_with_single_path_adding',
+            'sgs-builder': 'sgs_builder_COPAMP',
             'expanding-depth': 2
         }
         tic = time.time()
