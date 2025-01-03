@@ -21,7 +21,7 @@ import time
 import strategies.utils as utils
 import random
 import logging
-from trace_builder import dp_builder_trace
+from old.trace_builder import dp_builder_trace
 
 def edges_reversal(graph):
     for edge in graph.get_edgelist():
@@ -156,7 +156,7 @@ for M in range(11,M_max,10):
         
         ## SBMP ##
         a+=1
-        alg_type[a] = "SBMP - Traces"
+        alg_type[a] = "SBMP"
         params = {
             'S_edge_b': S_edge_b.copy(),
             'Ucpu': Ucpu.copy(),
