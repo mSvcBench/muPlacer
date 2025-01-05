@@ -1,5 +1,2 @@
 __pycache__
-.vscode
-.venv
-res.mat
-._.DS_Store
+.*
