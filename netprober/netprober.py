@@ -52,7 +52,7 @@ def get_bandwidth_and_rtt():
         # Return results as JSON
         return jsonify({
             "cloud-edge-bps": int(measured_bandwidth_bps),
-            "edge-cloud-bps'": int(measured_bandwidth_bps),
+            "edge-cloud-bps": int(measured_bandwidth_bps),
             "edge-cloud-rtt": rtt_avg_ms
         })
 

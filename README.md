@@ -45,7 +45,7 @@ GMA is implemented as a state machine with the following states:
 
 ## GMA Strategy Connector
 
-GMA is agnostic to the offloading and unoffloading strategies that decide which microservices to add or remove from the edge cluster. These strategies are implemented in a separate component called `Strategy_Connector`, which is invoked by GMA during offload or unoffload actions. The description of the `Strategy_Connector` is available in this [document](Strategy_Connector.md).
+GMA is agnostic to the offloading and unoffloading strategies that decide which microservices to add or remove from the edge cluster. These strategies are implemented in a separate component called `Strategy_Connector`, which is invoked by GMA during offload or unoffload actions. The description of the `Strategy_Connector` is available in this [document](strategies/Strategy_Connector.md).
 
 ## GMA Configuration
 

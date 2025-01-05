@@ -491,9 +491,9 @@ def update_net_metrics():
         try:
             response = requests.get(net_prober_url)
             netinfop = response.json()
-            netinfo['spec']['edge-cloud-rtt'] = f'{int(netinfop['rtt'])}ms'
-            netinfo['spec']['cloud-edge-bps'] = f'{int(netinfop['bps']/1e6)}Mbps'
-            netinfo['spec']['edge-cloud-bps'] = f'{int(netinfop['bps']/1e6)}Mbps'
+            netinfo['spec']['edge-cloud-rtt'] = f'{int(netinfop['edge-cloud-rtt'])}ms'
+            netinfo['spec']['cloud-edge-bps'] = f'{int(netinfop['cloud-edge-bps']/1e6)}Mbps'
+            netinfo['spec']['edge-cloud-bps'] = f'{int(netinfop['edge-cloud-bps']/1e6)}Mbps'
             # write the netinfo to the file netinfo_file
             with open(netinfo_file, 'w') as f:
                 yaml.dump(netinfo, f)
@@ -1005,7 +1005,9 @@ class GMAStataMachine():
         logger.info('_________________________________________________________')
         logger.info('Entering Offloading')
         update_full_metrics()
-
+        logger.info(f'user delay: {status['service-metrics']['edge-user-delay']['value']} ms')
+        logger.info(f'user delay quantile {delay_quantile}: {status['service-metrics']['edge-user-delay-quantile']['value']} ms')
+            
         offload_type = '' # quantile-driven or avg-driven
 
         if status['service-metrics']['edge-user-delay']['value'] > offload_delay_threshold_ms:
