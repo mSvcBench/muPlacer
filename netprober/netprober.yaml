@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gma-netprober
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gma-netprober
+  template:
+    metadata:
+      labels:
+        app: gma-netprober
+    spec:
+      containers:
+      - name: gma-netprober
+        image: msvcbench/netprober:latest
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gma-netprober
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 5001
+    nodePort: 30123
+  selector:
+    app: gma-netprober

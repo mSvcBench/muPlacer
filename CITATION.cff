@@ -1,12 +1,12 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-  - family-names: Favale  
-    given-names: Alessandro
-    orcid: https://orcid.org/0009-0006-2325-4371
   - family-names: Detti
     given-names: Andrea 
-title: muPlacer
-version: 1.0.5
-repository-code: "https://github.com/alessandrofavale/muPlacer"
-date-released: "2024-04-04"
+  - family-names: Favale  
+    given-names: Alessandro
+
+title: Geographical Microservice Autoplacer
+version: 1.0.0
+repository-code: "https://github.com/mSvcBench/muPlacer.git"
+date-released: "2025-Jan-04"

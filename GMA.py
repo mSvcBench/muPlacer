@@ -16,12 +16,13 @@ import kubernetes
 import numpy as np
 import yaml
 
-import SBMP_offload as SBMP_offload
-import SBMP_unoffload as SBMP_unoffload
-import SBMP_GMA_Connector
+import importlib
+#import SBMP_GMA_Connector
 
 from os import environ
 from prometheus_api_client import PrometheusConnect,PrometheusApiClientException
+
+
 
 def update_ucpu():
     global gma_config, prom_client, metrics
@@ -491,8 +492,8 @@ def update_net_metrics():
             response = requests.get(net_prober_url)
             netinfop = response.json()
             netinfo['spec']['edge-cloud-rtt'] = f'{int(netinfop['rtt'])}ms'
-            netinfo['spec']['cloud-edge-bw'] = f'{int(netinfop['bps']/1e6)}Mbps'
-            netinfo['spec']['edge-cloud-bw'] = f'{int(netinfop['bps']/1e6)}Mbps'
+            netinfo['spec']['cloud-edge-bps'] = f'{int(netinfop['bps']/1e6)}Mbps'
+            netinfo['spec']['edge-cloud-bps'] = f'{int(netinfop['bps']/1e6)}Mbps'
             # write the netinfo to the file netinfo_file
             with open(netinfo_file, 'w') as f:
                 yaml.dump(netinfo, f)
@@ -503,11 +504,11 @@ def update_net_metrics():
         if 'edge-cloud-rtt' in netinfo['spec']:
             status['service-metrics']['network']['edge-cloud-rtt-ms']['value'] = time_to_ms_converter(netinfo['spec']['edge-cloud-rtt'])
             status['service-metrics']['network']['edge-cloud-rtt-ms']['last-update'] = time.time()
-        if 'cloud-edge-bw' in netinfo['spec']:
-            status['service-metrics']['network']['cloud-edge-bps']['value'] = bitrate_to_bps_converter(netinfo['spec']['cloud-edge-bw'])
+        if 'cloud-edge-bps' in netinfo['spec']:
+            status['service-metrics']['network']['cloud-edge-bps']['value'] = bitrate_to_bps_converter(netinfo['spec']['cloud-edge-bps'])
             status['service-metrics']['network']['cloud-edge-bps']['last-update'] = time.time()
-        if 'edge-cloud-bw' in netinfo['spec']:
-            status['service-metrics']['network']['edge-cloud-bps']['value'] = bitrate_to_bps_converter(netinfo['spec']['edge-cloud-bw'])
+        if 'edge-cloud-bps' in netinfo['spec']:
+            status['service-metrics']['network']['edge-cloud-bps']['value'] = bitrate_to_bps_converter(netinfo['spec']['edge-cloud-bps'])
             status['service-metrics']['network']['edge-cloud-bps']['last-update'] = time.time()
     return
 
@@ -519,7 +520,7 @@ def parse_yaml():
     # compute the pod/deployment regex for each service
 
     for area in areas:
-        for sc in gma_config['spec']['services']:
+        for sc in gma_config['spec']['app']['services']:
             # compute the pod regex for the edge area
             if area == 'edge-area':
                 items = sc['instances']['edge-yamls']
@@ -589,7 +590,7 @@ def parse_yaml():
 def init():
     global gma_config, status, service_id_to_name
 
-    logger.info(f"Init metrics dictionary")
+    logger.info(f"Init control dictionaries")
 
     status = dict() # Global Status dictionary
     status['service-info'] = dict() # Services status dictionary
@@ -597,10 +598,10 @@ def init():
     # Initialize the service information dictionary. It does not contain the metrics. The metrics are stored in the service_metrics dictionary
     mid = 0 # microservice id
     services=status['service-info']
-    for s in gma_config['spec']['services']:
+    for s in gma_config['spec']['app']['services']:
             services[s['name']]=dict()
             # Initialize the service id
-            if gma_config['spec']['explicit-service-id']:
+            if gma_config['spec']['app']['explicit-service-id']:
                 services[s['name']]['id'] = s['id']
                 if s['id'] > mid:
                     mid = s['id']+1 # needed for istio-ingress id
@@ -745,6 +746,10 @@ def init():
     status['service-metrics']['network']['edge-cloud-rtt-ms']['value'] = time_to_ms_converter(gma_config['spec']['network']['edge-cloud-rtt-ms'])
     status['service-metrics']['network']['edge-cloud-rtt-ms']['info'] = 'Round trip time from edge area to cloud area in ms'
     status['service-metrics']['network']['edge-cloud-rtt-ms']['last-update'] = 0 # last update time
+    status['service-metrics']['network']['edge-cloud-rtt-multiplier'] = dict()
+    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['value'] = gma_config['spec']['network']['edge-cloud-rtt-multiplier']
+    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['info'] = 'The RTT multiplier is applied to network RTT to obtain gRPC/HTTP-level round-trip time. Depends on the application. Configure with offline measurements'
+    status['service-metrics']['network']['edge-cloud-rtt-multiplier']['last-update'] = 0 # last update time
     status['service-metrics']['network']['cloud-edge-bps'] = dict()
     status['service-metrics']['network']['cloud-edge-bps']['value'] = bitrate_to_bps_converter(gma_config['spec']['network']['cloud-edge-bps'])
     status['service-metrics']['network']['cloud-edge-bps']['info'] = 'Network capacity in bit per second from cloud area to edge area in bps'
@@ -758,24 +763,24 @@ def init():
     status['service-metrics']['cost']['edge-area'] = dict()
     status['service-metrics']['cost']['edge-area']['cpu'] = dict()
     status['service-metrics']['cost']['edge-area']['cpu']['value'] = gma_config['spec']['edge-area']['cost']['cpu']
-    status['service-metrics']['cost']['edge-area']['cpu']['info'] = 'Cost of CPU in the edge area'
+    status['service-metrics']['cost']['edge-area']['cpu']['info'] = 'Cost of CPU in the edge area per hour'
     status['service-metrics']['cost']['edge-area']['memory'] = dict()
     status['service-metrics']['cost']['edge-area']['memory']['value'] = gma_config['spec']['edge-area']['cost']['memory']
-    status['service-metrics']['cost']['edge-area']['memory']['info'] = 'Cost of memory in the edge area'
+    status['service-metrics']['cost']['edge-area']['memory']['info'] = 'Cost of memory in the edge area per GB'
     status['service-metrics']['cost']['edge-area']['network'] = dict()
-    status['service-metrics']['cost']['edge-area']['network']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
-    status['service-metrics']['cost']['edge-area']['network']['info'] = 'Cost of external network for the edge area'
+    status['service-metrics']['cost']['edge-area']['network']['value'] = gma_config['spec']['edge-area']['cost']['memory']
+    status['service-metrics']['cost']['edge-area']['network']['info'] = 'Cost of external network traffic for the edge area per GB'
 
     status['service-metrics']['cost']['cloud-area'] = dict()
     status['service-metrics']['cost']['cloud-area']['cpu'] = dict()
     status['service-metrics']['cost']['cloud-area']['cpu']['value'] = gma_config['spec']['cloud-area']['cost']['cpu']
-    status['service-metrics']['cost']['cloud-area']['cpu']['info'] = 'Cost of CPU in the cloud area'
+    status['service-metrics']['cost']['cloud-area']['cpu']['info'] = 'Cost of CPU in the cloud area per hour'
     status['service-metrics']['cost']['cloud-area']['memory'] = dict()
     status['service-metrics']['cost']['cloud-area']['memory']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
-    status['service-metrics']['cost']['cloud-area']['memory']['info'] = 'Cost of memory in the cloud area'
+    status['service-metrics']['cost']['cloud-area']['memory']['info'] = 'Cost of memory bytes in the cloud area per GB'
     status['service-metrics']['cost']['cloud-area']['network'] = dict()
     status['service-metrics']['cost']['cloud-area']['network']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
-    status['service-metrics']['cost']['cloud-area']['network']['info'] = 'Cost of external network for the cloud area'
+    status['service-metrics']['cost']['cloud-area']['network']['info'] = 'Cost of external network traffic for the cloud area per GB'
 
     status['service-metrics']['me-resource-scaling'] = dict()
     status['service-metrics']['me-resource-scaling']['info'] = 'Cloud-to-edge multi-edge resource scaling factor'
@@ -1028,8 +1033,7 @@ class GMAStataMachine():
 
         logger.info(f"Offloading with target delay reduction {offload_parameters['edge-user-delay']['value']-offload_parameters['edge-user-target-delay']['value']} ms ")
         # offloading logic
-        params = SBMP_GMA_Connector.Connector(offload_parameters)
-        result_list = SBMP_offload.sbmp_o(params)
+        result_list = Strategy_Connector.Compute_Placement(offload_parameters,action='offloading')
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')
@@ -1069,8 +1073,7 @@ class GMAStataMachine():
         
         logger.info(f"Unoffloading with target delay increase {unoffload_parameters['edge-user-target-delay']['value']-unoffload_parameters['edge-user-delay']['value']}ms ")
         # unoffloading logic
-        params = SBMP_GMA_Connector.Connector(unoffload_parameters)
-        result_list = SBMP_unoffload.sbmp_u(params)
+        result_list = Strategy_Connector.Compute_Placement(unoffload_parameters,action='unoffloading')
         logger.info(f"{result_list[1]['info']}")
         apply_configuration(result_list)
         logger.info(f'sleeping for {stabilizaiton_window_sec} stabilization sec')
@@ -1080,7 +1083,7 @@ class GMAStataMachine():
         return
     
     def run(self):
-        self.next = self.offloading
+        self.next = self.camping
         while True:
             self.next()
 
@@ -1153,7 +1156,14 @@ if __name__ == "__main__":
         logger.critical(f"Error connecting to Prometheus server: {gma_config['spec']['prometheus-url']}")
         sys.exit(1)
 
-    # Initialize the microservice metrics dictionary
+    # LOad the optimizer connector
+    try:
+        Strategy_Connector = importlib.import_module(name=gma_config['spec']['optimizer']['connector'], package='strategies')
+    except Exception as e:
+        logger.critical(f"Error loading the optimizer Compute_Placement: {gma_config['spec']['optimizer']['connector']}")
+        sys.exit(1)
+
+    # Initialize the control dictionary
     areas = ['edge-area','cloud-area']  # set of areas, sequence matters for hpa check
     init()
 

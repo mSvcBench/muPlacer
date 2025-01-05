@@ -1,7 +1,9 @@
 import numpy as np
+import SBMP_offload as SBMP_offload
+import SBMP_unoffload as SBMP_unoffload
 
-def Connector(GMA_params):
-    # Take params from GMA and return sbmp params
+def Compute_Placement(GMA_params, action='offloading'):
+    # Take params from GMA and run sbmp for the specific action
     M = GMA_params['n-services']
     S_edge_b = np.minimum(GMA_params['hpa']['edge-area']['current-replicas'],1)
     S_edge_b[M-1]=1 # Last service is always on the edge since it represent the istio-ingress/user
@@ -103,4 +105,10 @@ def Connector(GMA_params):
         'input-binary-trace-file-npy': traces_b,
         'HPA-cpu-th': HPA_cpu_th
     }
-    return params
+    if action == 'offloading':
+        result_dict = SBMP_offload.sbmp_o(params)
+    elif action == 'unoffloading':
+        result_dict = SBMP_unoffload.sbmp_u(params)
+    else:
+        return None
+    return result_dict

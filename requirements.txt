@@ -6,13 +6,11 @@ click==8.1.7
 contourpy==1.2.1
 cycler==0.12.1
 dateparser==1.2.0
-Flask==3.1.0
 fonttools==4.51.0
 google-auth==2.29.0
 httmock==1.4.0
 idna==3.7
 igraph==0.11.4
-iperf3==0.1.11
 itsdangerous==2.2.0
 Jinja2==3.1.4
 kiwisolver==1.4.5
