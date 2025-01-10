@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: s1
+  name: s1
+  namespace: fluidosmesh
+spec:
+  ports:
+  - name: http-mubserviceport
+    nodePort: null
+    port: 80
+    targetPort: 8080
+  - name: grpc-mubserviceport
+    port: 51313
+    targetPort: 51313
+  selector:
+    app: s1
+  type: NodePort

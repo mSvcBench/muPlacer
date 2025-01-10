@@ -1,0 +1,12 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: s0
+  namespace: fluidosmesh
+spec:
+  host: s0
+  trafficPolicy:
+    outlierDetection:
+      baseEjectionTime: 30s
+      consecutive5xxErrors: 7
+      interval: 30s

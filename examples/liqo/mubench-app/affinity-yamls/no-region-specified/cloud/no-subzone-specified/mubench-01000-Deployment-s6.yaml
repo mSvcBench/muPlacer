@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    something: something
+  labels:
+    app: s6
+    version: '1.0'
+    zone: default
+  name: s6-local
+  namespace: fluidosmesh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: s6
+      app-t: s6-local
+  template:
+    metadata:
+      annotations:
+        prometheus.io/port: '8080'
+        prometheus.io/scrape: 'true'
+      labels:
+        app: s6
+        app-t: s6-local
+        prometheus.io/scrape: 'true'
+        version: '1.0'
+        zone: default
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values:
+                - local
+      containers:
+      - env:
+        - name: APP
+          value: s6
+        - name: ZONE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['zone']
+        - name: K8S_APP
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['app']
+        - name: PN
+          value: '4'
+        - name: TN
+          value: '16'
+        image: msvcbench/microservice_v5-screen:latest
+        name: s6
+        ports:
+        - containerPort: 8080
+          name: http-mubpodport
+        resources:
+          limits:
+            cpu: 1000m
+          requests:
+            cpu: 1000m
+        volumeMounts:
+        - mountPath: /etc/podinfo
+          name: podinfo
+        - mountPath: /app/MSConfig
+          name: microservice-workmodel
+        - mountPath: /app/MSConfig/InternalServiceFunctions
+          name: microservice-internal-services
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: 3
+      volumes:
+      - downwardAPI:
+          items:
+          - fieldRef:
+              fieldPath: metadata.labels
+            path: labels
+          - fieldRef:
+              fieldPath: metadata.annotations
+            path: annotations
+        name: podinfo
+      - configMap:
+          name: workmodel
+        name: microservice-workmodel
+      - configMap:
+          name: internal-services
+        name: microservice-internal-services
