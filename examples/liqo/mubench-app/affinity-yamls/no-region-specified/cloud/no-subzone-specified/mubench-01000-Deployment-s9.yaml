@@ -7,14 +7,14 @@ metadata:
     app: s9
     version: '1.0'
     zone: default
-  name: s9-local
+  name: s9-cloud
   namespace: fluidosmesh
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: s9
-      app-t: s9-local
+      app-t: s9-cloud
   template:
     metadata:
       annotations:
@@ -22,7 +22,7 @@ spec:
         prometheus.io/scrape: 'true'
       labels:
         app: s9
-        app-t: s9-local
+        app-t: s9-cloud
         prometheus.io/scrape: 'true'
         version: '1.0'
         zone: default
@@ -35,7 +35,7 @@ spec:
               - key: topology.kubernetes.io/zone
                 operator: In
                 values:
-                - local
+                - cloud
       containers:
       - env:
         - name: APP

@@ -20,21 +20,21 @@ kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=ski
 
 To **install Liqo** (v1.0.0-rc.3) on the cloud cluster, run the following commands from the master node:
 ```bash
-    curl --fail -LS "https://github.com/liqotech/liqo/releases/download/v1.0.0-rc.3/liqoctl-linux-amd64.tar.gz" | tar -xz
-    sudo install -o root -g root -m 0755 liqoctl /usr/local/bin/liqoctl
-    liqoctl install kubeadm --cluster-labels topology.kubernetes.io/zone=cloud --cluster-id cloud
+curl --fail -LS "https://github.com/liqotech/liqo/releases/download/v1.0.0-rc.3/liqoctl-linux-amd64.tar.gz" | tar -xz
+sudo install -o root -g root -m 0755 liqoctl /usr/local/bin/liqoctl
+liqoctl install kubeadm --cluster-labels topology.kubernetes.io/zone=cloud --cluster-id cloud
 ```
 And on the edge cluster, from the edge master node:
 ```bash
-    curl --fail -LS "https://github.com/liqotech/liqo/releases/download/v1.0.0-rc.3/liqoctl-linux-amd64.tar.gz" | tar -xz
-    sudo install -o root -g root -m 0755 liqoctl /usr/local/bin/liqoctl
-    liqoctl install kubeadm --cluster-labels topology.kubernetes.io/zone=edge1 --cluster-id edge1
+curl --fail -LS "https://github.com/liqotech/liqo/releases/download/v1.0.0-rc.3/liqoctl-linux-amd64.tar.gz" | tar -xz
+sudo install -o root -g root -m 0755 liqoctl /usr/local/bin/liqoctl
+liqoctl install kubeadm --cluster-labels topology.kubernetes.io/zone=edge1 --cluster-id edge1
 ```
 
 ### Cluster peering
 To peer the two clusters, run the following command on the cloud cluster, where `.kube/edge-config` is the kubeconfig file of the edge cluster:
 ```bash
-    liqoctl peer --remote-kubeconfig .kube/edge-config --server-service-type NodePort
+liqoctl peer --remote-kubeconfig .kube/edge-config --server-service-type NodePort
 ```
 
 ### Node topology labeling
@@ -52,18 +52,18 @@ kubectl label nodes <edge-node-name> topology.kubernetes.io/zone=edge1
 
 First, we need to prepare Istio offloading in the cloud cluster only as it follows from the cloud master:
 ```bash
-    kubectl create namespace istio-system
-    liqoctl offload namespace istio-system  --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Local
+kubectl create namespace istio-system
+liqoctl offload namespace istio-system  --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Local
 ```
 
 Then install Istio control plane with the following commands on the cloud cluster:
 
 ```bash
-    helm repo add istio https://istio-release.storage.googleapis.com/charts
-    helm repo update
-    kubectl create namespace istio-system
-    helm install istio-base istio/base -n istio-system
-    helm install istiod istio/istiod -n istio-system --wait
+helm repo add istio https://istio-release.storage.googleapis.com/charts
+helm repo update
+kubectl create namespace istio-system
+helm install istio-base istio/base -n istio-system
+helm install istiod istio/istiod -n istio-system --wait
 ```
 
 #### Install Istio-ingress on edge cluster
@@ -71,16 +71,51 @@ To install istio-ingress in a specific edge cluster we creade a dedicated namesp
 
 First, we prepare istio-ingress offloading in the edge cluster as it follows from the cloud master:
 ```bash
-    kubectl create namespace istio-ingress-edge1
-    liqoctl offload namespace istio-ingress-edge1  --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Remote
+kubectl create namespace istio-ingress-edge1
+liqoctl offload namespace istio-ingress-edge1  --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Remote
 ```
 
-The install istio-ingress on the edge cluster as it follows from the cloud master: 
+Then install istio-ingress on the edge cluster as it follows from the cloud master: 
 ```bash
-    helm install istio-ingressgateway istio/gateway -n istio-ingress-edge1
+helm install istio-ingressgateway istio/gateway -n istio-ingress-edge1
 ```
 
 To access istio-ingress is necessary to retrieve the NodePort and (possibly) LoadBalancer IP of the istio-ingressgateway service. To do this, run the following command from the cloud master:
 ```bash
-    k get svc -n istio-ingress-edge1 --kubeconfig .kube/edge-config
+kubectl get svc -n istio-ingress-edge1 --kubeconfig .kube/edge-config
 ``` 
+### Install Prometheus on cloud cluster
+Install Prometheus and monitoring tools on cloud cluster as it follows from the cloud master: 
+```bash
+cd examples/liqo/mubench-app/prometheus
+sh monitoring.sh
+cd ../../../..
+```
+The script install monitoring tools in the `monitoring`namespace and expose the following NodePorts:
+- 30000 for Prometheus
+- 30001 for Grafana (admin:prom-operator)
+- 30002 for Jaeger
+- 30003 for Kiali
+
+## Install sample application
+We use a [µBench](https://github.com/mSvcBench/muBench) sample application made of 10 microservices. All next commands run from the cloud master.
+
+### Application namespace offloading
+The application run in the `fluidosmesh`namespace that need to be offloaded as follow:
+```bash
+liqoctl offload namespace fluidosmesh  --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy LocalAndRemote
+```
+
+### Application deployment
+Deploy whole application with HPA in the cloud cluster with:
+```bash
+kubectl apply -f '/home/ubuntu/muPlacer/examples/liqo/mubench-app/affinity-yamls/no-region-specified/cloud/no-subzone-specified'
+kubectl apply -f '/home/ubuntu/muPlacer/examples/liqo/mubench-app/hpa/cloud'
+```
+
+Allow istio-ingress access to microservice s0 and locality load balancing with:
+```bash
+kubectl apply -f k apply -f '/home/ubuntu/muPlacer/examples/liqo/mubench-app/dest-rule-yamls-least-request'
+```
+
+### GMA deployment

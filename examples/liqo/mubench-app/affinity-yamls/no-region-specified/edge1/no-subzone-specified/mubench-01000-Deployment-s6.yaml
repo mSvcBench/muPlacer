@@ -7,14 +7,14 @@ metadata:
     app: s6
     version: '1.0'
     zone: default
-  name: s6-remote1
+  name: s6-edge1
   namespace: fluidosmesh
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: s6
-      app-t: s6-remote1
+      app-t: s6-edge1
   template:
     metadata:
       annotations:
@@ -22,7 +22,7 @@ spec:
         prometheus.io/scrape: 'true'
       labels:
         app: s6
-        app-t: s6-remote1
+        app-t: s6-edge1
         prometheus.io/scrape: 'true'
         version: '1.0'
         zone: default

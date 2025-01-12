@@ -1,0 +1,479 @@
+apiVersion: v1
+data:
+  workmodel.json: |
+    {
+      "s0": {
+        "external_services": [
+          {
+            "seq_len": 100,
+            "services": [
+              "s1",
+              "s2",
+              "s3",
+              "s9"
+            ],
+            "probabilities": {
+              "s1": 0.3,
+              "s2": 0.3,
+              "s3": 0.3,
+              "s9": 0.3
+            }
+          }
+        ],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 100
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s0.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s1": {
+        "external_services": [
+          {
+            "seq_len": 100,
+            "services": [
+              "s5"
+            ],
+            "probabilities": {
+              "s5": 0.3
+            }
+          }
+        ],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s1.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s2": {
+        "external_services": [],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s2.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s3": {
+        "external_services": [
+          {
+            "seq_len": 100,
+            "services": [
+              "s4",
+              "s8"
+            ],
+            "probabilities": {
+              "s4": 0.3,
+              "s8": 0.3
+            }
+          }
+        ],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s3.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s4": {
+        "external_services": [],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s4.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s5": {
+        "external_services": [
+          {
+            "seq_len": 100,
+            "services": [
+              "s6",
+              "s7"
+            ],
+            "probabilities": {
+              "s6": 0.3,
+              "s7": 0.3
+            }
+          }
+        ],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s5.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s6": {
+        "external_services": [],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s6.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s7": {
+        "external_services": [],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s7.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s8": {
+        "external_services": [],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s8.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      },
+      "s9": {
+        "external_services": [],
+        "internal_service": {
+          "loader": {
+            "cpu_stress": {
+              "run": true,
+              "range_complexity": [
+                10,
+                10
+              ],
+              "thread_pool_size": 1,
+              "trials": 1
+            },
+            "memory_stress": {
+              "run": false,
+              "memory_size": 10000,
+              "memory_io": 1000
+            },
+            "disk_stress": {
+              "run": false,
+              "tmp_file_name": "mubtestfile.txt",
+              "disk_write_block_count": 1000,
+              "disk_write_block_size": 1024
+            },
+            "sleep_stress": {
+              "run": false,
+              "sleep_time": 0.01
+            },
+            "mean_response_size": 10
+          }
+        },
+        "request_method": "rest",
+        "workers": 4,
+        "threads": 16,
+        "replicas": 1,
+        "cpu-limits": "1000m",
+        "cpu-requests": "1000m",
+        "url": "s9.fluidosmesh.svc.cluster.local",
+        "path": "/api/v1",
+        "image": "msvcbench/microservice_v5-screen:latest",
+        "namespace": "fluidosmesh"
+      }
+    }
+kind: ConfigMap
+metadata:
+  name: workmodel
+  namespace: fluidosmesh

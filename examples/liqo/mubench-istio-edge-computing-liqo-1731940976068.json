@@ -413,14 +413,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-local-*\",reporter=\"destination\",response_code=\"200\"}[$delta]))",
+          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-cloud-*\",reporter=\"destination\",response_code=\"200\"}[$delta]))",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "request rate - local",
+      "title": "request rate - cloud",
       "type": "timeseries"
     },
     {
@@ -535,7 +535,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-remote1.*\",reporter=\"destination\",response_code=\"200\"}[$delta]))",
+          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-edge1.*\",reporter=\"destination\",response_code=\"200\"}[$delta]))",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
@@ -632,7 +632,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(istio_response_bytes_sum{source_workload=~\"istio-ingress|s[0-9*]-remote1\",destination_workload=~\"s[0-9*]-local\",reporter=\"destination\",response_code=\"200\"}[$delta])*8/1e6)",
+          "expr": "sum(rate(istio_response_bytes_sum{source_workload=~\"istio-ingress|s[0-9*]-edge1\",destination_workload=~\"s[0-9*]-cloud\",reporter=\"destination\",response_code=\"200\"}[$delta])*8/1e6)",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
@@ -729,14 +729,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(istio_response_bytes_sum{source_workload=~\"s[0-9*]-local\",destination_workload=~\"s[0-9*]-remote1\",reporter=\"destination\",response_code=\"200\"}[$delta])*8/1e6)",
+          "expr": "sum(rate(istio_response_bytes_sum{source_workload=~\"s[0-9*]-cloud\",destination_workload=~\"s[0-9*]-edge1\",reporter=\"destination\",response_code=\"200\"}[$delta])*8/1e6)",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "remote-local network traffic",
+      "title": "remote-cloud network traffic",
       "type": "timeseries"
     },
     {
@@ -801,14 +801,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-local-.*\",container!=\"istio-proxy\",container!=\"\"}))",
+          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "memory usage - local",
+      "title": "memory usage - cloud",
       "type": "bargauge"
     },
     {
@@ -873,7 +873,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-remote1-.*\",container!=\"istio-proxy\",container!=\"\"}))",
+          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-edge1-.*\",container!=\"istio-proxy\",container!=\"\"}))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -945,14 +945,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-local-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "CPU usage - local",
+      "title": "CPU usage - cloud",
       "type": "bargauge"
     },
     {
@@ -1017,7 +1017,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-remote1-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-edge1-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1089,14 +1089,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"fluidosmesh\",deployment=~\"s[0-9].*-local.*\",container!=\"istio-proxy\",container!=\"\"})",
+          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"fluidosmesh\",deployment=~\"s[0-9].*-cloud.*\",container!=\"istio-proxy\",container!=\"\"})",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Service replicas - local",
+      "title": "Service replicas - cloud",
       "type": "bargauge"
     },
     {
@@ -1161,7 +1161,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"fluidosmesh\",deployment=~\"s[0-9].*-remote1.*\",container!=\"istio-proxy\",container!=\"\"})",
+          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"fluidosmesh\",deployment=~\"s[0-9].*-edge1.*\",container!=\"istio-proxy\",container!=\"\"})",
           "instant": false,
           "legendFormat": "{{deployment}}",
           "range": true,
@@ -1233,14 +1233,14 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-local.*\",reporter=\"destination\",response_code=\"200\"}[$delta])) / scalar(sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s0.*\",reporter=\"destination\",response_code=\"200\"}[$delta])))",
+          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-cloud.*\",reporter=\"destination\",response_code=\"200\"}[$delta])) / scalar(sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s0.*\",reporter=\"destination\",response_code=\"200\"}[$delta])))",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "call frequency per user request - local",
+      "title": "call frequency per user request - cloud",
       "type": "bargauge"
     },
     {
@@ -1305,7 +1305,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-remote1\",reporter=\"destination\",response_code=\"200\"}[$delta])) / scalar(sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s0.*\",reporter=\"destination\",response_code=\"200\"}[$delta])))",
+          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-edge1\",reporter=\"destination\",response_code=\"200\"}[$delta])) / scalar(sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s0.*\",reporter=\"destination\",response_code=\"200\"}[$delta])))",
           "instant": false,
           "legendFormat": "{{destination_service_name}}",
           "range": true,

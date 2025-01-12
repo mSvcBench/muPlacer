@@ -1,0 +1,163 @@
+apiVersion: gma/v0
+kind: GMAPlacerConfig
+metadata:
+  name: test-config
+  namespace: fluidosmesh
+spec:
+  telemetry:
+    sync-period: 30s # camping period
+    stabilization-window: 2m # stabilization window
+    query-period: 2m # Prometheus query period, no less than 1 minute since Istio refresh every 30s
+    prometheus-url: http://160.80.223.232:30000 # Prometheus URL
+  slo:
+    offload-delay-threshold: 250ms # average delay threshold for avg-driven offloading.
+    unoffload-delay-threshold: 150ms  # average delay threshold for avg-driven unoffloading
+    offload-delay-quantile-threshold: 1000s # delay quantile threshold for quantile-driven offloading (EXPERIMENTAL). Use a high value to disable quantile-driven offloading
+    unoffload-delay-quantile-threshold: 1000s # delay quantile threshold threshold for quantile-driven unoffloading (EXPERIMENTAL). Use a high value to disable quantile-driven unoffloading
+    delay-quantile: 0.90 # delay quantile used for quantile-driven offloading, e.g., 0.9 means 90% of the requests
+  cloud-area:
+    cluster: "" # cluster name used for prometheus query cloud area (must be different from any other area)
+    context: liqo-admin@kubernetes  # kubernetec context used to control cloud area
+    pod-cidr-regex: ^10.244.* # regex to match the pod cidr of the cloud area
+    cost:
+      cpu:  0.0208  # cost of cpu unit in  the cloud area
+      memory:  0.0104 # cost of mem unit (GB) in  the cloud area
+      network: 0.02 # cost of  network unit (GB) in the cloud area
+    istio:
+      istio-ingress-source-app: istio-ingress # source app label of the istio-ingress in the edge area
+      istio-ingress-namespace: istio-ingress  # namespace of the istio-ingress in the edge area
+      istio-eastwest-source-app: istio-eastwestgateway # source app label of the istio eastwestgateway in the edge area
+      istio-eastwest-namespace: istio-system  # namespace of the istio eastwestgateway in the edge area
+  edge-area:
+    cluster: "" # cluster name used for prometheus query edge area
+    context: liqo-admin@kubernetes # kubernetec context used to control edge area
+    pod-cidr-regex: ^11.244.* # regex to match the pod cidr of the edge area (must be different from any other area)
+    cost:
+      cpu: 0.028 # cost of cpu unit in  the edge area
+      memory: 0.014 # cost of mem unit (GB) in  the edge area
+      network: 0.02 # cost of  network unit (GB) in the cloud area
+    istio:
+      istio-ingress-source-app: istio-ingress # source app label of the istio-ingress in the edge area
+      istio-ingress-namespace: istio-ingress  # namespace of the istio-ingress in the edge area
+      istio-eastwest-source-app: istio-eastwestgateway # source app label of the istio eastwestgateway in the edge area
+      istio-eastwest-namespace: istio-system  # namespace of the istio eastwestgateway in the edge area
+    default-resource-scaling: 1 # default resource scaling factor from the cloud to the edge. CPU and MEM used by a microservice in the cloud will be scaled of this factor when deployed in the edge and there is no available measurement
+  network:
+    netinfo-file: "/Users/detti/muPlacer/netinfo.yaml" #  local yaml file containing net data
+    net-prober-url: http://160.80.223.232:30123/get?server_ip=192.168.101.14&server_port=5201&bandwidth_mps=200&duration=2 # URL of the net prober server used to update the netinfo-file
+    cloud-edge-bps: 1000Mbps  # default bitrate between cloud and edge
+    edge-cloud-bps: 1000Mbps  # default bitrate between edge and cloud   
+    edge-cloud-rtt-ms: 80ms # default RTT between edge and cloud
+    edge-cloud-rtt-multiplier: 2 # The RTT multiplier is applied to network RTT to obtain gRPC/HTTP-level round-trip time. Depends on the application. Configure with offline measurements
+  optimizer:
+    connector: "SBMP_GMA_Connector" # connector of the optimization algorithm
+    sbmp: # parameters of the sbmp optimization algorithm
+      expanding-depth: 2  # expanding depth optimization paramenter of SBMP
+      max-sgs: 256 # maximum number of expanding subgrapgh to consider in SBMP iteration
+      max-traces: 2048 # maximum number of syntethic traces to generate
+      # input-trace-file-npy: None  # numpy file containing traces to load. Generation of synthetic traces if not defined
+      # output-trace-file-npy: ./traces.npy  # numpy file containing used traces. No output file if not defined
+      overshooting-avoidance-multiplier: 0.3 # The optimization algorithm stops when the expected delay change is greater than the required delay change multiplied by this factor. Lower values may require more iterations to achieve the desired delay, but they help avoid overshooting in case of any imperfections in the offloading algorithm 
+      edge-cloud-rtt-multiplier: 2 # RTT multiplier to consider HTTP RTT in the network model rather than the physical RTT. Depends on the application. Configure with offline measurements
+      # locked: #  list of service that should not be offloaded by the optimizer. Should be integer equal to the service id of the services list below
+      #   - 0
+      #   - 1
+      #   - 2
+      
+    max-delay-reduction : 1000ms  # max requested delay reduction per placement action. Use high values to disable any limitation
+    max-delay-increase : 1000ms # max requested delay increase per placement action. Use high values to disable any limitation
+    delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading. (EXPERIMENTAL)
+  app:
+    namespace: fluidosmesh # namespace of the application
+    explicit-service-id : true  # if true, the service id (integer value) is explicitly defined in this yaml file and can help log understanding, otherwise the service id is computed automatically
+    services:
+      - name: s0  # service name
+        id: 0 # service id internally used. Should be an integer value
+        instances:  # list of kubernetes resources running or to run in the edge and cloud area. Those in the cloud should be run manually. Those in the edge are automatically deployed by GMA 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s0.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s0.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s0.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s0.yaml
+      - name: s1
+        id: 1
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s1.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s1.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s1.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s1.yaml
+      - name: s2
+        id: 2
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s2.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s2.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s2.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s2.yaml
+      - name: s3
+        id: 3
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s3.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s3.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s3.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s3.yaml
+      - name: s4
+        id: 4
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s4.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s4.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s4.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s4.yaml
+      - name: s5
+        id: 5
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s5.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s5.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s5.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s5.yaml
+      - name: s6
+        id: 6
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s6.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s6.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s6.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s6.yaml
+      - name: s7
+        id: 7
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s7.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s7.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s7.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s7.yaml
+      - name: s8 
+        id: 8
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s8.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s8.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s8.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s8.yaml
+      - name: s9
+        id: 9
+        instances: 
+          cloud-yamls: 
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/cloud/no-subzone-specified/mubench-01000-Deployment-s9.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/cloud/hpa-mubench-01000-Deployment-s9.yaml
+          edge-yamls:
+            - /Users/detti/muBench/SimulationWorkspace/liqo/affinity-yamls/no-region-specified/edge1/no-subzone-specified/mubench-01000-Deployment-s9.yaml
+            - /Users/detti/muBench/SimulationWorkspace/liqo/hpa/edge1/hpa-mubench-01000-Deployment-s9.yaml
