@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gma-netprober
+  namespace: gma-netprober
 spec:
   replicas: 1
   selector:
@@ -21,11 +22,14 @@ apiVersion: v1
 kind: Service
 metadata:
   name: gma-netprober
+  namespace: gma-netprober
 spec:
   type: NodePort
   ports:
-  - port: 80
+  - name: http-netrpober
+    port: 80
     targetPort: 5001
     nodePort: 30123
+    protocol: TCP
   selector:
     app: gma-netprober

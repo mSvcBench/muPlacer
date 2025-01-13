@@ -18,9 +18,8 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 29,
+  "id": 30,
   "links": [],
-  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
@@ -52,6 +51,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -91,8 +91,7 @@
               }
             ]
           },
-          "unit": "ms",
-          "unitScale": true
+          "unit": "ms"
         },
         "overrides": [
           {
@@ -140,6 +139,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -147,7 +147,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum by (destination_service_name) (rate(istio_request_duration_milliseconds_sum{namespace=~\"istio-ingress|edge\",destination_service_name=~\"s[0-9]*\",reporter=\"source\",response_code=\"200\"}[$delta]))) / (sum by (destination_service_name) (rate(istio_requests_total{namespace=~\"istio-ingress|edge\",destination_service_name=~\"s[0-9]*\",reporter=\"source\",response_code=\"200\"}[$delta])))",
+          "expr": "(sum by (destination_service_name) (rate(istio_request_duration_milliseconds_sum{namespace=~\"$istio_ingress_namespace|$app_namespace\",destination_service_name=~\"s[0-9]*\",reporter=\"source\",response_code=\"200\"}[$delta]))) / (sum by (destination_service_name) (rate(istio_requests_total{namespace=~\"$istio_ingress_namespace|$app_namespace\",destination_service_name=~\"s[0-9]*\",reporter=\"source\",response_code=\"200\"}[$delta])))",
+          "hide": false,
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -185,6 +186,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -224,8 +226,7 @@
               }
             ]
           },
-          "unit": "none",
-          "unitScale": true
+          "unit": "none"
         },
         "overrides": [
           {
@@ -273,6 +274,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -280,7 +282,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by (destination_app,le) (rate(istio_request_duration_milliseconds_bucket{namespace=~\"istio-ingress|edge\", reporter=\"source\"}[$delta])))",
+          "expr": "histogram_quantile(0.90, sum by (destination_app,le) (rate(istio_request_duration_milliseconds_bucket{namespace=~\"$istio_ingress_namespace|$app_namespace\", reporter=\"source\"}[$delta])))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -318,6 +320,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -357,8 +360,7 @@
               }
             ]
           },
-          "unit": "reqps",
-          "unitScale": true
+          "unit": "reqps"
         },
         "overrides": [
           {
@@ -406,6 +408,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -440,6 +443,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -479,8 +483,7 @@
               }
             ]
           },
-          "unit": "reqps",
-          "unitScale": true
+          "unit": "reqps"
         },
         "overrides": [
           {
@@ -528,6 +531,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -542,7 +546,7 @@
           "refId": "A"
         }
       ],
-      "title": "request rate - remote",
+      "title": "request rate - edge1",
       "type": "timeseries"
     },
     {
@@ -562,6 +566,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -601,8 +606,7 @@
               }
             ]
           },
-          "unit": "Mbits",
-          "unitScale": true
+          "unit": "Mbits"
         },
         "overrides": []
       },
@@ -625,6 +629,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -639,7 +644,7 @@
           "refId": "A"
         }
       ],
-      "title": "local-remote network traffic",
+      "title": "cloud-edge1 network traffic",
       "type": "timeseries"
     },
     {
@@ -659,6 +664,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -698,8 +704,7 @@
               }
             ]
           },
-          "unit": "Mbits",
-          "unitScale": true
+          "unit": "Mbits"
         },
         "overrides": []
       },
@@ -722,6 +727,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -736,7 +742,7 @@
           "refId": "A"
         }
       ],
-      "title": "remote-cloud network traffic",
+      "title": "edge1-cloud network traffic",
       "type": "timeseries"
     },
     {
@@ -763,8 +769,7 @@
               }
             ]
           },
-          "unit": "decbytes",
-          "unitScale": true
+          "unit": "decbytes"
         },
         "overrides": []
       },
@@ -777,6 +782,12 @@
       "id": 13,
       "options": {
         "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -793,7 +804,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -801,7 +812,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}))",
+          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"$app_namespace\",pod=~\"s[0-9].*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -835,8 +846,7 @@
               }
             ]
           },
-          "unit": "decbytes",
-          "unitScale": true
+          "unit": "decbytes"
         },
         "overrides": []
       },
@@ -849,6 +859,12 @@
       "id": 14,
       "options": {
         "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -865,7 +881,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -880,7 +896,7 @@
           "refId": "A"
         }
       ],
-      "title": "memory usage - remote",
+      "title": "memory usage - edge1",
       "type": "bargauge"
     },
     {
@@ -907,8 +923,7 @@
               }
             ]
           },
-          "unit": "percent",
-          "unitScale": true
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -921,6 +936,12 @@
       "id": 12,
       "options": {
         "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -937,7 +958,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -945,7 +966,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"$app_namespace\",pod=~\"s[0-9].*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -979,8 +1000,7 @@
               }
             ]
           },
-          "unit": "percent",
-          "unitScale": true
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -993,6 +1013,12 @@
       "id": 16,
       "options": {
         "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -1009,7 +1035,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -1024,7 +1050,7 @@
           "refId": "A"
         }
       ],
-      "title": "CPU usage - remote",
+      "title": "CPU usage - edge1",
       "type": "bargauge"
     },
     {
@@ -1051,8 +1077,7 @@
               }
             ]
           },
-          "unit": "none",
-          "unitScale": true
+          "unit": "none"
         },
         "overrides": []
       },
@@ -1065,6 +1090,12 @@
       "id": 17,
       "options": {
         "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -1081,7 +1112,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -1089,7 +1120,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"fluidosmesh\",deployment=~\"s[0-9].*-cloud.*\",container!=\"istio-proxy\",container!=\"\"})",
+          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"$app_namespace\",deployment=~\"s[0-9].*-cloud.*\",container!=\"istio-proxy\",container!=\"\"})",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1123,8 +1154,7 @@
               }
             ]
           },
-          "unit": "none",
-          "unitScale": true
+          "unit": "none"
         },
         "overrides": []
       },
@@ -1137,6 +1167,12 @@
       "id": 15,
       "options": {
         "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -1153,7 +1189,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -1168,7 +1204,7 @@
           "refId": "A"
         }
       ],
-      "title": "Service replicas - remote",
+      "title": "Service replicas - edge1",
       "type": "bargauge"
     },
     {
@@ -1195,8 +1231,7 @@
               }
             ]
           },
-          "unit": "none",
-          "unitScale": true
+          "unit": "none"
         },
         "overrides": []
       },
@@ -1209,6 +1244,12 @@
       "id": 8,
       "options": {
         "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -1225,7 +1266,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -1267,8 +1308,7 @@
               }
             ]
           },
-          "unit": "none",
-          "unitScale": true
+          "unit": "none"
         },
         "overrides": []
       },
@@ -1281,6 +1321,12 @@
       "id": 20,
       "options": {
         "displayMode": "gradient",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
         "maxVizHeight": 300,
         "minVizHeight": 16,
         "minVizWidth": 8,
@@ -1297,7 +1343,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
-      "pluginVersion": "10.3.1",
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -1312,7 +1358,7 @@
           "refId": "A"
         }
       ],
-      "title": "call frequency per user request - remote",
+      "title": "call frequency per user request - edge1",
       "type": "bargauge"
     },
     {
@@ -1332,6 +1378,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -1371,8 +1418,7 @@
               }
             ]
           },
-          "unit": "ms",
-          "unitScale": true
+          "unit": "ms"
         },
         "overrides": [
           {
@@ -1420,6 +1466,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -1454,6 +1501,7 @@
             "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
             "gradientMode": "none",
@@ -1493,8 +1541,7 @@
               }
             ]
           },
-          "unit": "ms",
-          "unitScale": true
+          "unit": "ms"
         },
         "overrides": [
           {
@@ -1542,6 +1589,7 @@
           "sort": "none"
         }
       },
+      "pluginVersion": "11.4.0",
       "targets": [
         {
           "datasource": {
@@ -1560,16 +1608,45 @@
       "type": "timeseries"
     }
   ],
+  "preload": false,
   "refresh": "10s",
-  "schemaVersion": 39,
+  "schemaVersion": 40,
   "tags": [],
   "templating": {
     "list": [
       {
+        "current": {
+          "text": "1m",
+          "value": "1m"
+        },
         "hide": 2,
         "name": "delta",
         "query": "1m",
-        "skipUrlSync": false,
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "text": "istio-ingress-edge1",
+          "value": "istio-ingress-edge1"
+        },
+        "description": "Namespace of the Istio ingress on edge cluster",
+        "hide": 2,
+        "name": "istio_ingress_namespace",
+        "query": "istio-ingress-edge1",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "text": "fluidosmesh",
+          "value": "fluidosmesh"
+        },
+        "description": "Namespace of the application",
+        "hide": 2,
+        "name": "app_namespace",
+        "query": "fluidosmesh",
+        "skipUrlSync": true,
         "type": "constant"
       }
     ]
@@ -1580,8 +1657,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "mubench-istio-edge-computing-liqo",
+  "title": "edge-computing-liqo",
   "uid": "ce5cd08c-9e00-493f-9fb6-3baa37bf3d2a",
-  "version": 38,
+  "version": 5,
   "weekStart": ""
 }

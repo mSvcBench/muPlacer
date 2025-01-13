@@ -17,7 +17,6 @@ With calico CNI it is necessary to disable BGP on liqo interfaces on clusters. T
 kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=skip-interface=liqo.*
 ```
 
-
 To **install Liqo** (v1.0.0-rc.3) on the cloud cluster, run the following commands from the master node:
 ```bash
 curl --fail -LS "https://github.com/liqotech/liqo/releases/download/v1.0.0-rc.3/liqoctl-linux-amd64.tar.gz" | tar -xz
@@ -35,6 +34,11 @@ liqoctl install kubeadm --cluster-labels topology.kubernetes.io/zone=edge1 --clu
 To peer the two clusters, run the following command on the cloud cluster, where `.kube/edge-config` is the kubeconfig file of the edge cluster:
 ```bash
 liqoctl peer --remote-kubeconfig .kube/edge-config --server-service-type NodePort
+```
+
+Revise the quota of resources that can be used on edge cluster, e.g., with:
+```bash
+liqoctl create resourceslice edge1 --remote-cluster-id edge1 --cpu 20 --memory 20Gi
 ```
 
 ### Node topology labeling
@@ -97,6 +101,17 @@ The script install monitoring tools in the `monitoring`namespace and expose the 
 - 30002 for Jaeger
 - 30003 for Kiali
 
+### Install iperf3 server and netprober
+Iperf3 and netprober are used for network testing by GMA. Install as it follows from the cloud master:
+```bash
+kubectl create namespace iperf-edge1
+liqoctl offload namespace iperf-edge1  --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Remote
+kubectl apply -f 'examples/liqo/iperf3/iperf3.yaml'
+
+kubectl create namespace gma-netprober
+kubectl apply -f 'netprober/netprober.yaml'
+```
+
 ## Install sample application
 We use a [µBench](https://github.com/mSvcBench/muBench) sample application made of 10 microservices. All next commands run from the cloud master.
 
@@ -118,4 +133,39 @@ Allow istio-ingress access to microservice s0 and locality load balancing with:
 kubectl apply -f k apply -f '/home/ubuntu/muPlacer/examples/liqo/mubench-app/dest-rule-yamls-least-request'
 ```
 
-### GMA deployment
+### GMA deployment 
+#### Revise GMA configuration
+GMA run as a Python process from which has kubectl and kubernetes contexts of cloud and edge1 clusters. Carefully revise the GMA configuration file `gma-config.yaml` where with your parameters. Critical value to revise are: 
+ - ip address of a node in the cloud cluster providing NodePort access **192.168.100.142**, chage this value accordingly in `prometheus-url`and `netprober-url` fields.
+ - kubernetes context of the cloud cluster that (with liqo) should be used also to control the edge cluster: kubernetes-admin@cluster.local
+ - regex to match the pod cidr of the cloud area (must be different from any other area) : ^10.234.*
+ - regex to match the pod cidr of the edge area (must be different from any other area) : ^10.236.*, **
+
+#### Deploy GMA
+It is necessary to create the Python environment with:
+```bash
+git clone https://github.com/mSvcBench/muPlacer.git
+cd muPlacer
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Then, run GMA with:
+```bash
+python3 GMA.py --config examples/liqo/GMAConfig.yaml --loglevel INFO
+```
+
+The GMA will start to monitor the application and the network, and it will offload the microservices to the edge cluster when the average user delay is above the offload threshold and will bring them back when the average user delay is below the unoffload threshold. Related states and actions are logged in the console.
+
+#### Load testing
+To test the application, we should a stream of send requests to the istio-ingressgateway service in the edge cluster. We used [Jmeter](https://jmeter.apache.org) tool with the configuration file `examples/jmeter/GMATest.jmx`, which can be used by any user host with access to the IP address and NodePort of the Istio ingress gateway of the edge cluster. The related command to run from the host is:
+```bash
+jmeter -Jserver=<edge-node-ip> -Jport=<istio-ingress-node-port> -Jthroughput=10 -n -t examples/jmeter/GMATest.jmx
+```
+The throughput parameter is the number of requests per second that the Jmeter will send to the edge cluster.
+
+### Monitoring
+To monitor the application behaviour, we use a Grafana dashboard that can be accessed at the address `http://<cloud-node-ip>:30001` with the credentials `admin:prom-operator`. The dashboard is available at `examples/liqo/grafana/edge-computing-liqo.json`. The dashboard has some variables that need to be set to the correct values. The variables are:
+- istio_ingress_namespace : istio-ingress-edge1
+- app_namespace: fluidosmesh
