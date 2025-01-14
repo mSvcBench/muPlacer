@@ -14,10 +14,11 @@ The `GMA_params` contains various metrics and configurations for microservices d
 
 Metrics can be scalar, vector and matrix values. For vector, the element *i* stores the metric for the microservice *i*. For matrix, the element *i,j* stores the metric for the couple of microservice *i,j*. 
 
-The snippets report initialization values that are updated by GMA during the execution by using Istio and Kubernetes metrics.
+
+Hereafter, we report all dictionary keys. The reported snippets show initialization values that are updated by GMA during execution using Istio and Kubernetes metrics.
 
 
-### Number of Microservices
+### Number of Microservices - ['n-services'] 
 
 The number of microservices *M* is set using the `n-services` key within the `service-metrics` dictionary. This value includes the user, who is virtually represented as the last microservice.
 
@@ -26,7 +27,7 @@ The number of microservices *M* is set using the `n-services` key within the `se
 GMA_params['n-services'] 
 ```
 
-### Call Frequency Matrix
+### Call Frequency Matrix - ['fm']
 
 The call frequency matrix is a square MxM numpy matrix that records the frequency of calls between microservices. The element (*i,j*) represent the average number of times microservice *i* calls microservice *j* per request received by *i*. It is initialized as follows:
 
@@ -38,7 +39,7 @@ GMA_params['fm'] = {
 }
 ```
 
-### Response Length Vector
+### Response Length Vector - ['response-length']
 
 The response length vector records the size of responses in bytes for each microservice:
 
@@ -50,7 +51,7 @@ GMA_params['response-length'] = {
 }
 ```
 
-### Horizontal Pod Autoscaler (HPA) Metrics Vector
+### Horizontal Pod Autoscaler (HPA) Metrics Vector - ['hpa']
 
 HPA metrics include replica counts and CPU thresholds for both cloud and edge areas:
 
@@ -79,7 +80,7 @@ GMA_params['hpa'] = {
 }
 ```
 
-### Cumulative CPU and Memory Utilization Vector
+### Cumulative CPU and Memory Utilization Vector - ['ucpu']['umem']
 
 CPU and memory utilization metrics are recorded for both cloud and edge areas. CPU utilization is measured in seconds per second, while memory utilization is measured in bytes. Their values include all running Pod of a microservice:
 
@@ -111,7 +112,7 @@ GMA_params['umem'] = {
 }
 ```
 
-### CPU and Memory Request Vector
+### CPU and Memory Request Vector - ['qcpu']['qmem']
 
 Requested CPU and memory per pod are recorded for both cloud and edge areas:
 
@@ -143,7 +144,7 @@ GMA_params['qmem'] = {
 }
 ```
 
-### Request Rate Vector
+### Request Rate Vector - ['service-lambda']
 
 The request rate vector records the request rate in requests per second for each microservice. The user request rate is included in the last element of the vector and is measured through the Istio Ingress Gateway of the edge data center:
 
@@ -155,7 +156,7 @@ GMA_params['service-lambda'] = {
 }
 ```
 
-### Edge User Delay Metrics
+### Edge User Delay Metrics - ['edge-user-delay']['edge-user-delay-quantile']['edge-user-target-delay']
 
 Edge user delay metrics include average delay, delay quantile, and target delay. Delays are measured at the Istio Ingress Gateway of the edge data center:
 
@@ -179,7 +180,7 @@ GMA_params['edge-user-target-delay'] = {
 }
 ```
 
-### Network Metrics
+### Network Metrics - ['network']
 
 Network metrics include network round-trip time and bitrate between edge and cloud areas. The RTT multiplier is applied to network RTT to obtain gRPC/HTTP-level round-trip time:
 
@@ -208,7 +209,7 @@ GMA_params['network'] = {
 }
 ```
 
-### Cost Metrics
+### Cost Metrics - ['cost']
 
 Cost metrics include the cost of CPU, memory, and network for both edge and cloud areas:
 
@@ -245,7 +246,7 @@ GMA_params['cost'] = {
 }
 ```
 
-### Multi-Edge Resource Scaling
+### Multi-Edge Resource Scaling Factor - ['me-resource-scaling']
 
 The multi-edge resource scaling factor is a vector that scales resources between cloud and edge areas. It should be equal to the ratio between request rate received by the edge data center associated to the GMA and the cumulative request rate from all edge data centers. It is initialized as follows:
 
@@ -257,7 +258,7 @@ GMA_params['me-resource-scaling'] = {
 }
 ```
 
-### Optimizer information
+### Optimizer information - ['optimizer']
 
 GMA_params includes the optimizer information of the GMA configuration `gma_config['spec']['optimizer']`:    
     
@@ -288,3 +289,8 @@ The `result_dict` is a `list` of dictionaries that contains the result of the pl
     result_dict.append(result_edge)
 
 ```
+Specifically, the `result_dict[0]` is a dictionary for the cloud area and `result_dict[1]` is a dictionary for the edge area. Each dictionary contains the following keys:
+- `to-apply`: list of microservice ids to apply in the area
+- `to-delete`: list of microservice ids to delete in the area
+- `placement`: list of microservice ids in the area
+- `info`: string that describes the result of the placement strategy for the area
