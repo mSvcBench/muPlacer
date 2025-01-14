@@ -75,12 +75,11 @@ kubectl create namespace istio-system
 liqoctl offload namespace istio-system --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Local
 ```
 
-Then install the Istio control plane, we use Helm with the following commands from the cloud master node:
+Then install the Istio control plane. We use Helm with the following commands from the cloud master node:
 
 ```bash
 helm repo add istio https://istio-release.storage.googleapis.com/charts
 helm repo update
-kubectl create namespace istio-system
 helm install istio-base istio/base -n istio-system
 helm install istiod istio/istiod -n istio-system --wait
 ```
