@@ -54,6 +54,7 @@ spec:
   - name: udp-iperf
     port: 5201
     targetPort: 5201
+    protocol: UDP
   selector:
     app: iperf-edge1
   type: ClusterIP

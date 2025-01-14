@@ -12,7 +12,7 @@ def get_bandwidth_and_rtt():
         server_port = request.args.get('server_port', default=5201, type=int)
         bandwidth_mbps = request.args.get('bandwidth_mbps', default=None, type=float)
         duration = request.args.get('duration', default=3, type=int)
-        blksize = request.args.get('blksize', default=1340, type=int)
+        blksize = request.args.get('blksize', default=1200, type=int)
         # Create iperf3 client object
         client = iperf3.Client()
         client.server_hostname = server_ip
@@ -34,7 +34,7 @@ def get_bandwidth_and_rtt():
             return jsonify({"error": result.error}), 500
         # Parse iperf3 results
         resultj = result.json
-        measured_bandwidth_bps = resultj['end']['sum']['bits_per_second']*(1-resultj['end']['sum']['lost_percent']/100)
+        measured_bandwidth_bps = resultj['end']['sum_received']['bits_per_second']
         # Measure RTT using bash ping
         ping_result = subprocess.run(["ping", "-c", "1", server_ip], capture_output=True, text=True)
         if ping_result.returncode != 0:

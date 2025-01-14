@@ -132,6 +132,7 @@ kubectl create namespace iperf-edge1
 liqoctl offload namespace iperf-edge1 --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Remote
 kubectl apply -f 'examples/liqo/iperf3/iperf3.yaml'
 
+liqoctl offload namespace gma-netprober --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Local
 kubectl create namespace gma-netprober
 kubectl apply -f 'netprober/netprober.yaml'
 ```
@@ -168,7 +169,9 @@ kubectl apply -f 'examples/liqo/mubench-app/dest-rule-yamls-least-request'
 #### Revise GMA Configuration
 
 GMA runs as a Python process with kubectl and Kubernetes contexts of the cloud and edge clusters. Carefully revise the GMA configuration file [GMAConfig.yaml](GMAConfig.yaml) with your parameters. Critical values to revise are:
-- The IP address of a node in the cloud cluster providing NodePort access (e.g., 192.168.100.142). Change this value accordingly in the `prometheus-url` and `netprober-url` fields.
+- The URL of the prometheus server (`prometheus-url`) that can be contacted by GMA, e.g., 192.168.100.142:30000. Change this value accordingly in the  and `netprober-url` fields.
+- The URL of the netprober server (`netprober-url`) that can be contacted by GMA, e.g., http://192.168.100.142:30123
+- The IP address of the <u>Pod</u> that run the iperf3 server in the edge cluster to be inserted in `server_ip` of `netprober-url`, e.g., 10.236.149.25. IP address of the Pod is necessary to support RTT estimation via ICMP. 
 - The Kubernetes context of the <u>cloud cluster</u>, e.g. `kubernetes-admin@cluster.local`. Copy this value both in the `cloud-area.context` and `edge-area.context` fields.
 - The regex to match the Pod CIDR of the cloud area (must be different from any other area): `^10.234.*`.
 - The regex to match the Pod CIDR of the edge area (must be different from any other area): `^10.236.*`.
