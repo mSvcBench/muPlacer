@@ -141,12 +141,18 @@ kubectl apply -f 'netprober/netprober.yaml'
 
 We use a [µBench](https://github.com/mSvcBench/muBench) sample application made of [10 microservices](mubench-app/servicegraph.png). All subsequent commands run from the cloud master.
 
-### Application Namespace Offloading
+### Application Namespace Offloading and Istio injection
 
 The application runs in the `fluidosmesh` namespace, which needs to be offloaded as follows:
 
 ```bash
 liqoctl offload namespace fluidosmesh --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy LocalAndRemote
+```
+
+Then, inject Istio sidecars in the `fluidosmesh` namespace:
+
+```bash
+kubectl label namespace fluidosmesh istio-injection=enabled
 ```
 
 ### Application Deployment
