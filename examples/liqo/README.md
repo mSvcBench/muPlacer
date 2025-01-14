@@ -166,19 +166,9 @@ kubectl apply -f 'examples/liqo/mubench-app/dest-rule-yamls-least-request'
 
 ### GMA Deployment
 
-#### Revise GMA Configuration
+#### Download GMA
 
-GMA runs as a Python process with kubectl and Kubernetes contexts of the cloud and edge clusters. Carefully revise the GMA configuration file [GMAConfig.yaml](GMAConfig.yaml) with your parameters. Critical values to revise are:
-- The URL of the prometheus server (`prometheus-url`) that can be contacted by GMA, e.g., 192.168.100.142:30000. Change this value accordingly in the  and `netprober-url` fields.
-- The URL of the netprober server (`netprober-url`) that can be contacted by GMA, e.g., http://192.168.100.142:30123
-- The IP address of the <u>Pod</u> that run the iperf3 server in the edge cluster to be inserted in `server_ip` of `netprober-url`, e.g., 10.236.149.25. IP address of the Pod is necessary to support RTT estimation via ICMP. 
-- The Kubernetes context of the <u>cloud cluster</u>, e.g. `kubernetes-admin@cluster.local`. Copy this value both in the `cloud-area.context` and `edge-area.context` fields.
-- The regex to match the Pod CIDR of the cloud area (must be different from any other area): `^10.234.*`.
-- The regex to match the Pod CIDR of the edge area (must be different from any other area): `^10.236.*`.
-
-#### Deploy GMA
-
-Create the Python environment with:
+Download GMA (e.g., on cloud master) and create the Python environment with:
 
 ```bash
 git clone https://github.com/mSvcBench/muPlacer.git
@@ -188,7 +178,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Then, run GMA with:
+#### Revise GMA Configuration
+GMA runs as a Python process with kubectl and Kubernetes contexts of the cloud and edge clusters. Carefully revise the GMA configuration file [GMAConfig.yaml](GMAConfig.yaml) in `examples/liqo/`with your parameters. Critical values to revise are:
+- The URL of the prometheus server (`prometheus-url`) that can be contacted by GMA, e.g., 192.168.100.142:30000. Change this value accordingly in the  and `netprober-url` fields.
+- The URL of the netprober server (`netprober-url`) that can be contacted by GMA, e.g., http://192.168.100.142:30123
+- The IP address of the <u>Pod</u> that run the iperf3 server in the edge cluster to be inserted in `server_ip` of `netprober-url`, e.g., 10.236.149.25. IP address of the Pod is necessary to support RTT estimation via ICMP. 
+- The Kubernetes context of the <u>cloud cluster</u>, e.g. `kubernetes-admin@cluster.local`. Copy this value both in the `cloud-area.context` and `edge-area.context` fields.
+- The regex to match the Pod CIDR of the cloud area (must be different from any other area): `^10.234.*`.
+- The regex to match the Pod CIDR of the edge area (must be different from any other area): `^10.236.*`.
+
+
+#### Run GMA
+Run GMA with:
 
 ```bash
 python3 GMA.py --config examples/liqo/GMAConfig.yaml --loglevel INFO
