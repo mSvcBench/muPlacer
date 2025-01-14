@@ -11,7 +11,8 @@ To prepare the cloud and edge clusters, follow the instructions in the [Liqo doc
 Below is an example of how to install Liqo on a cloud and edge cluster using the Calico network plugin with VXLAN tunneling and exposing external services through NodePort (i.e., no LoadBalancer is available).
 
 > **Note:** Liqo uses port 6443 for peering establishment and Kubernetes NodePorts 30000-32767 for gateway traffic. Ensure these ports are open between the two clusters.
-> **Note:** GMA requires the use of different POD CIDR per clusters. Please, configure the nnetwork plugin accordingly.
+
+> **Note:** GMA requires the use of different POD CIDR per clusters. Please, configure the network plugin accordingly.
 
 ### Install Liqo
 
