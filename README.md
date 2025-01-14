@@ -48,9 +48,11 @@ GMA is implemented as a state machine with the following states:
 ## GMA Strategy Connector
 
 GMA is agnostic to the offloading and unoffloading strategies that decide which microservices to add or remove from the edge cluster. These strategies are implemented in a separate component called `Strategy_Connector`, which is invoked by GMA during offload or unoffload actions. The description of the `Strategy_Connector` is available in this [document](strategies/Strategy_Connector.md).
+The `Strategy_Connector` is implemented as a Python class that should be included in the `strategies` folder. The available strategy connectors are:
+
+- SBMP_GMA_Connector: A strategy connector that uses the [SBMP](https://www.techrxiv.org/users/748014/articles/1256305-cost-effective-cloud-edge-elasticity-for-microservice-applications) algorithm to decide which microservices to offload or unoffload.
 
 ## GMA Configuration
-
 GMA is configured using a [GMAConfig.yaml](GMAConfig.yaml) file that contains information about:
 
 - **Service Level Objective**: The `slo` section defines offload and unoffload delay thresholds.
@@ -117,3 +119,11 @@ python3 GMA.py --configfile <path-to-GMAConfig.yaml> --loglevel INFO
 ## Examples
 Examples of GMA configurations and Kubernetes YAML files are available in the [examples](examples) folder for the following scenarios:
 - [Multi-cluster Liqo](examples/liqo)
+
+## Acknowledgments
+This work was supported by 
+- the European Union's Horizon Europe research project [FLUIDOS](https://fluidos.eu) within the subproject FLUIDOSMESH of 1st Open Call.
+- The European Union under the Italian National Recovery and Resilience Plan (NRRP) of NextGenerationEU, partnership on “Telecommunications of the Future” (PE00000001 - program "[RESTART](https://www.fondazione-restart.it)").
+
+## Reference paper
+Andrea Detti, Alessandro Favale: "Cost-Effective Cloud-Edge Elasticity for Microservice Applications", TechRxiv. January 07, 2025, DOI: 10.36227/techrxiv.173626716.63354758/v1 [pdf](https://www.techrxiv.org/users/748014/articles/1256305-cost-effective-cloud-edge-elasticity-for-microservice-applications)

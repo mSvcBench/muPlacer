@@ -44,7 +44,7 @@ spec:
     default-resource-scaling: 1 # default resource scaling factor from the cloud to the edge. CPU and MEM used by a microservice in the cloud will be scaled of this factor when deployed in the edge and there is no available measurement
   network:
     netinfo-file: netinfo.yaml #  local yaml file containing net data
-    net-prober-url: http://192.168.100.142:30123/get?server_ip=10.236.149.25&server_port=5201&bandwidth_mps=200&duration=2 # URL of the net prober server used to update the netinfo-file
+    net-prober-url: http://192.168.100.142:30123/get?server_ip=10.236.149.25&server_port=5201&bandwidth_mbps=200&duration=2 # URL of the net prober server used to update the netinfo-file
     cloud-edge-bps: 1000Mbps  # default bitrate between cloud and edge
     edge-cloud-bps: 1000Mbps  # default bitrate between edge and cloud   
     edge-cloud-rtt-ms: 80ms # default RTT between edge and cloud
