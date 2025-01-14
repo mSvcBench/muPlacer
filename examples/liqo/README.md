@@ -92,7 +92,7 @@ First, prepare Istio-Ingress offloading in the edge cluster as follows from the 
 
 ```bash
 kubectl create namespace istio-ingress-edge1
-liqoctl offload namespace istio-ingress-edge1 --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Remote
+liqoctl offload namespace istio-ingress-edge1 --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy LocalAndRemote --selector 'topology.kubernetes.io/zone=edge1'
 ```
 
 Then install Istio-Ingress on the edge cluster as follows from the cloud master:
