@@ -81,7 +81,7 @@ Then install the Istio control plane. We use Helm with the following commands fr
 helm repo add istio https://istio-release.storage.googleapis.com/charts
 helm repo update
 helm install istio-base istio/base -n istio-system
-helm install istiod istio/istiod -n istio-system --wait
+helm install istiod istio/istiod -n istio-system --set global.proxy.tracer="zipkin" --wait
 ```
 
 #### Install Istio-Ingress on the Edge Cluster
