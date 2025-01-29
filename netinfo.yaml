@@ -1,6 +1,6 @@
 apiVersion: gma/v0
 kind: NetInfo
 spec:
-  cloud-edge-bps: 87Mbps
-  edge-cloud-bps: 87Mbps
-  edge-cloud-rtt: 101ms
+  cloud-edge-bps: 91Mbps
+  edge-cloud-bps: 91Mbps
+  edge-cloud-rtt: 161ms

@@ -107,14 +107,14 @@ To access Istio-Ingress, retrieve the NodePort and (possibly) LoadBalancer IP of
 kubectl get svc -n istio-ingress-edge1 --kubeconfig .kube/edge-config
 ```
 
-### Install Prometheus on the Cloud Cluster
+### Install Prometheus and Telemetry tools on the Cloud Cluster
 
 Install Prometheus and monitoring tools on the cloud cluster as follows from the cloud master:
 
 ```bash
-cd examples/liqo/mubench-app/prometheus
+cd examples/liqo/telemetry
 sh monitoring.sh
-cd ../../../..
+cd ../../..
 ```
 
 The script installs monitoring tools in the `monitoring` namespace and exposes the following NodePorts:
@@ -132,14 +132,18 @@ kubectl create namespace iperf-edge1
 liqoctl offload namespace iperf-edge1 --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Remote
 kubectl apply -f 'examples/liqo/iperf3/iperf3.yaml'
 
-liqoctl offload namespace gma-netprober --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Local
 kubectl create namespace gma-netprober
+liqoctl offload namespace gma-netprober --namespace-mapping-strategy EnforceSameName --pod-offloading-strategy Local
 kubectl apply -f 'netprober/netprober.yaml'
 ```
 
 ## Install Sample Application
 
-We use a [µBench](https://github.com/mSvcBench/muBench) sample application made of [10 microservices](mubench-app/servicegraph.png). All subsequent commands run from the cloud master.
+We use the following sample applications:
+- a [µBench](https://github.com/mSvcBench/muBench) sample application made of [10 microservices](mubench-app/servicegraph.png). 
+- the onlinebutique [Google microservices demo](https://github.com/GoogleCloudPlatform/microservices-demo).
+
+All subsequent commands run from the cloud master.
 
 ### Application Namespace Offloading and Istio injection
 
@@ -155,9 +159,9 @@ Then, inject Istio sidecars in the `fluidosmesh` namespace:
 kubectl label namespace fluidosmesh istio-injection=enabled
 ```
 
-### Application Deployment
+### µBench Application Deployment
 
-Deploy the entire application with HPAs in the cloud cluster with:
+Deploy the entire µBench application with HPAs in the cloud cluster with:
 
 ```bash
 kubectl apply -f 'examples/liqo/mubench-app/affinity-yamls/no-region-specified/cloud/no-subzone-specified'
@@ -170,9 +174,9 @@ Allow Istio-Ingress access to microservice `s0` and locality load balancing for 
 kubectl apply -f 'examples/liqo/mubench-app/dest-rule-yamls-least-request'
 ```
 
-### GMA Deployment
+#### GMA Deployment
 
-#### Download GMA
+##### Download GMA
 
 Download GMA (e.g., on cloud master) and create the Python environment with:
 
@@ -184,8 +188,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-#### Revise GMA Configuration
-GMA runs as a Python process with kubectl and Kubernetes contexts of the cloud and edge clusters. Carefully revise the GMA configuration file [GMAConfig.yaml](GMAConfig.yaml) in `examples/liqo/`with your parameters. Critical values to revise are:
+##### Revise GMA Configuration
+GMA runs as a Python process with kubectl and Kubernetes contexts of the cloud and edge clusters. Carefully revise the GMA configuration file [GMAConfig.yaml](examples/liqo/mubench-app/GMAConfig.yaml) in `examples/liqo/mubench-app`with your parameters. Critical values to revise are:
 - The URL of the prometheus server (`prometheus-url`) that can be contacted by GMA, e.g., 192.168.100.142:30000. Change this value accordingly in the  and `netprober-url` fields.
 - The URL of the netprober server (`netprober-url`) that can be contacted by GMA, e.g., http://192.168.100.142:30123
 - The IP address of the <u>Pod</u> that run the iperf3 server in the edge cluster to be inserted in `server_ip` of `netprober-url`, e.g., 10.236.149.25. IP address of the Pod is necessary to support RTT estimation via ICMP. 
@@ -193,25 +197,27 @@ GMA runs as a Python process with kubectl and Kubernetes contexts of the cloud a
 - The regex to match the Pod CIDR of the cloud area (must be different from any other area): `^10.234.*`.
 - The regex to match the Pod CIDR of the edge area (must be different from any other area): `^10.236.*`.
 
-
-#### Run GMA
+##### Run GMA
 Run GMA with:
 
 ```bash
-python3 GMA.py --config examples/liqo/GMAConfig.yaml --loglevel INFO
+python3 GMA.py --config examples/liqo/mubench-app/GMAConfig.yaml --loglevel INFO
 ```
 
 GMA will start monitoring the application and the network, and it will offload the microservices to the edge cluster when the average user delay is above the offload threshold. It will bring them back when the average user delay is below the unoffload threshold. Related states and actions are logged in the console.
 
 #### Load Testing
 
-To test the application, send a stream of requests to the Istio-Ingressgateway service in the edge cluster. We used the [JMeter](https://jmeter.apache.org) tool with the configuration file `examples/jmeter/GMATest.jmx`, which can be used by any user host with access to the IP address and NodePort of the Istio Ingress gateway of the edge cluster. The related command to run from the host is:
+To test the µBench application, send a stream of requests to the Istio-Ingressgateway service in the edge cluster. We used the [JMeter](https://jmeter.apache.org) tool with the configuration file `examples/liqo/mubench-app/jmeter/GMATest.jmx`, which can be used by any user host with access to the IP address and NodePort of the Istio Ingress gateway of the edge cluster. The related command to run from the host is:
 
 ```bash
 jmeter -Jserver=<edge-node-ip> -Jport=<istio-ingress-node-port> -Jthroughput=10 -n -t examples/jmeter/GMATest.jmx
 ```
 
 The `throughput` parameter is the number of requests per second that JMeter will send to the edge cluster.
+
+### Online Boutique Application Deployment
+TODO
 
 ### Monitoring
 

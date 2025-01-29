@@ -22,7 +22,7 @@ GMA assumes the presence of an infrastructure made up of:
 
 GMA assumes that a microservice application is made of a group of microservices, each implemented as a set of Kubernetes Pods controlled by a Kubernetes Deployment (or StatefulSet). Different clusters should use different Deployments per microservice. For example, in the figure, the microservice *s0* is implemented as a Deployment *s0-cloud* in the cloud cluster and as a Deployment *s0-edge1* in the edge cluster.
 
-The Pods of these Deployments may differ in names, labels, and topology affinity rules, but they all run the same container image of the microservice. The Pods should share a common label, such as `app`, to be targeted by a global Service (e.g., `s0`), and have a local topology label, such as `app-t`, to be targeted by the specific local Deployment.
+The Pods of these Deployments may differ in names, labels, and topology affinity rules, but they all run the same container image of the microservice. The Pods should share a common label, <u> exactly equal to `app` </u>, to be targeted by a global Service (e.g., `s0`) and properly scraped by Istio, and have a local topology label, such as `app-t`, to be targeted by the specific local Deployment.
 
 Replication of the Pods of cloud and edge Deployments should be controlled by independent HPAs per cluster based on CPU utilization metrics. GMA takes placement action on edge microservice only if the edge and cloud HPAs are not active and delay objectives are not met.
 

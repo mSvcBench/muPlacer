@@ -766,10 +766,10 @@ def init():
     status['service-metrics']['cost']['edge-area']['cpu']['info'] = 'Cost of CPU in the edge area per hour'
     status['service-metrics']['cost']['edge-area']['memory'] = dict()
     status['service-metrics']['cost']['edge-area']['memory']['value'] = gma_config['spec']['edge-area']['cost']['memory']
-    status['service-metrics']['cost']['edge-area']['memory']['info'] = 'Cost of memory in the edge area per GB'
+    status['service-metrics']['cost']['edge-area']['memory']['info'] = 'Cost of memory in the edge area per GB per hour'
     status['service-metrics']['cost']['edge-area']['network'] = dict()
     status['service-metrics']['cost']['edge-area']['network']['value'] = gma_config['spec']['edge-area']['cost']['memory']
-    status['service-metrics']['cost']['edge-area']['network']['info'] = 'Cost of external network traffic for the edge area per GB'
+    status['service-metrics']['cost']['edge-area']['network']['info'] = 'Cost of edge-to-cloud network traffic per GB'
 
     status['service-metrics']['cost']['cloud-area'] = dict()
     status['service-metrics']['cost']['cloud-area']['cpu'] = dict()
@@ -777,10 +777,10 @@ def init():
     status['service-metrics']['cost']['cloud-area']['cpu']['info'] = 'Cost of CPU in the cloud area per hour'
     status['service-metrics']['cost']['cloud-area']['memory'] = dict()
     status['service-metrics']['cost']['cloud-area']['memory']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
-    status['service-metrics']['cost']['cloud-area']['memory']['info'] = 'Cost of memory bytes in the cloud area per GB'
+    status['service-metrics']['cost']['cloud-area']['memory']['info'] = 'Cost of memory bytes in the cloud area per GB per hour'
     status['service-metrics']['cost']['cloud-area']['network'] = dict()
     status['service-metrics']['cost']['cloud-area']['network']['value'] = gma_config['spec']['cloud-area']['cost']['memory']
-    status['service-metrics']['cost']['cloud-area']['network']['info'] = 'Cost of external network traffic for the cloud area per GB'
+    status['service-metrics']['cost']['cloud-area']['network']['info'] = 'Cost of cloud-to-edge network traffic per GB'
 
     status['service-metrics']['me-resource-scaling'] = dict()
     status['service-metrics']['me-resource-scaling']['info'] = 'Cloud-to-edge multi-edge resource scaling factor'
@@ -827,8 +827,18 @@ def cpu_to_sec(cpu_string):
 
 def mem_to_byte(mem_string):
     mem_string = str(mem_string)
-    if mem_string.endswith("m"):
+    if mem_string.endswith("M"):
         value = float(mem_string.split("M")[0])*1e6
+    elif mem_string.endswith("k"):
+        value = float(mem_string.split("k")[0])*1000
+    elif mem_string.endswith("Ki"):
+        value = float(mem_string.split("Ki")[0])*1024
+    elif mem_string.endswith("Mi"):
+        value = float(mem_string.split("Mi")[0])*1024*1024
+    elif mem_string.endswith("G"):
+        value = float(mem_string.split("G")[0])*1e9
+    elif mem_string.endswith("Gi"):
+        value = float(mem_string.split("Gi")[0])*1024*1024*1024
     else:
         value = float(mem_string)
     return value
@@ -899,6 +909,7 @@ class GMAStataMachine():
         logger.info(f'user delay quantile {delay_quantile}: {status['service-metrics']['edge-user-delay-quantile']['value']} ms')
         
         if status['service-metrics']['edge-user-delay']['value'] > offload_delay_threshold_ms:
+            logger.info('Delay above offload threshold')
             if np.all(status['service-metrics']['hpa']['edge-area']['current-replicas'][:-1] > 0):
                 logger.warning('All microservice in the edge area, can not offload more')
                 self.next = self.camping
@@ -911,7 +922,7 @@ class GMAStataMachine():
         
         # check quantile delay violation for offloading
         if status['service-metrics']['edge-user-delay-quantile']['value'] > offload_delay_quantile_threshold_ms:
-            logger.info('Delay below offload quantile threshold')
+            logger.info('Delay above offload quantile threshold')
             if np.all(status['service-metrics']['hpa']['edge-area']['current-replicas'][:-1] > 0):
                 logger.warning('All microservice in the edge area, can not offload more')
                 self.next = self.camping
@@ -1024,7 +1035,9 @@ class GMAStataMachine():
         if offload_type == 'avg-driven':
             target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
         else:
-            target_delay_ms = offload_parameters['edge-user-delay']['value'] * delay_quantile_multiplier
+            target_quantile_delay_ms = unoffload_delay_quantile_threshold_ms + (offload_delay_quantile_threshold_ms-unoffload_delay_quantile_threshold_ms)/2.0
+            quantile_reduction = status['service-metrics']['edge-user-delay-quantile']['value'] - target_quantile_delay_ms
+            target_delay_ms = max(0,status['service-metrics']['edge-user-delay']['value'] - quantile_reduction) # assumption that delay distribution tail shift with the avg value
         
         target_delay_ms = max(target_delay_ms, status['service-metrics']['edge-user-delay']['value']-max_delay_reduction_ms)
         offload_parameters['edge-user-target-delay']['value'] = target_delay_ms
@@ -1064,8 +1077,10 @@ class GMAStataMachine():
         if unoffload_type == 'avg-driven':
             target_delay_ms = unoffload_delay_threshold_ms + (offload_delay_threshold_ms-unoffload_delay_threshold_ms)/2.0
         else:
-            target_delay_ms = unoffload_parameters['edge-user-delay']['value'] / delay_quantile_multiplier
-        
+            target_quantile_delay_ms = unoffload_delay_quantile_threshold_ms + (offload_delay_quantile_threshold_ms-unoffload_delay_quantile_threshold_ms)/2.0
+            quantile_increase = max(0,target_quantile_delay_ms - status['service-metrics']['edge-user-delay-quantile']['value'])
+            target_delay_ms = status['service-metrics']['edge-user-delay']['value'] + quantile_increase # assumption that delay distribution tail shift with the avg value
+  
         target_delay_ms = min(target_delay_ms, status['service-metrics']['edge-user-delay']['value']+max_delay_increase_ms)
         unoffload_parameters['edge-user-target-delay']['value'] = target_delay_ms
 
@@ -1201,11 +1216,11 @@ if __name__ == "__main__":
     # optimizer
     max_delay_reduction_ms = time_to_ms_converter(gma_config['spec']['optimizer']['max-delay-reduction'])
     max_delay_increase_ms = time_to_ms_converter(gma_config['spec']['optimizer']['max-delay-increase'])
-    delay_quantile_multiplier = float(gma_config['spec']['optimizer']['delay-quantile-multiplier'])
     
     cluster=dict()
     for area in areas:
         cluster[area] = gma_config['spec'][area]['cluster']
     
     # Run the state machine
+    update_ingress_lambda()
     sm = GMAStataMachine()

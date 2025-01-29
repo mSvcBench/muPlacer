@@ -185,8 +185,11 @@ def computeDnTot(S, N, Fi, L, RTT, B, lambd, M, Ld = np.empty(0)):
         Dn = np.repeat(np.minimum(((L * 8 / B)*(load_spread)),max_delay).reshape(1,2*M),2*M,axis=0)+RTT
     else:
         Dn[M:,:M]=np.repeat(Ld.reshape(1,M),M,axis=0)
-    Dn = np.repeat(np.minimum(((L * 8 / B)*(load_spread)),max_delay).reshape(1,2*M),2*M,axis=0)+RTT
-    Dn_tot = np.sum(np.multiply((N[M:].reshape(M,1)),(np.sum(np.multiply(Fi[M:,:M],Dn[M:,:M]),axis=1))))
+    if lambd == 0:
+        Dn_tot = 0
+    else:
+        Dn = np.repeat(np.minimum(((L * 8 / B)*(load_spread)),max_delay).reshape(1,2*M),2*M,axis=0)+RTT
+        Dn_tot = np.sum(np.multiply((N[M:].reshape(M,1)),(np.sum(np.multiply(Fi[M:,:M],Dn[M:,:M]),axis=1))))
 
     return Dn_tot, rhonce 
 

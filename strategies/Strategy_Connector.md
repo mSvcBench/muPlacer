@@ -222,11 +222,11 @@ GMA_params['cost'] = {
         },
         'memory': {
             'value': gma_config['spec']['edge-area']['cost']['memory'],
-            'info': 'Cost of memory in the edge area per GB'
+            'info': 'Cost of memory in the edge area per GB per hour'
         },
         'network': {
             'value': gma_config['spec']['edge-area']['cost']['memory'],
-            'info': 'Cost of external network traffic for the edge area per GB'
+            'info': 'Cost of edge-to-cloud network traffic per GB'
         }
     },
     'cloud-area': {
@@ -236,11 +236,11 @@ GMA_params['cost'] = {
         },
         'memory': {
             'value': gma_config['spec']['cloud-area']['cost']['memory'],
-            'info': 'Cost of memory in the cloud area per GB'
+            'info': 'Cost of memory in the cloud area per GB per hour'
         },
         'network': {
             'value': gma_config['spec']['cloud-area']['cost']['memory'],
-            'info': 'Cost of external network traffic for the cloud area per GB'
+            'info': 'Cost of cloud-to-edge network traffic per GB'
         }
     }
 }

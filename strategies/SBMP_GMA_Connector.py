@@ -38,9 +38,9 @@ def Compute_Placement(GMA_params, action='offloading'):
     RTT = RTT * GMA_params['network']['edge-cloud-rtt-multiplier']['value']
 
     Cost_cpu_edge = GMA_params['cost']['edge-area']['cpu']['value']
-    Cost_mem_edge = GMA_params['cost']['edge-area']['memory']['value']
+    Cost_mem_edge = GMA_params['cost']['edge-area']['memory']['value']/1e9
     Cost_cpu_cloud = GMA_params['cost']['cloud-area']['cpu']['value']
-    Cost_mem_cloud = GMA_params['cost']['cloud-area']['memory']['value']
+    Cost_mem_cloud = GMA_params['cost']['cloud-area']['memory']['value']/1e9
     Cost_network = GMA_params['cost']['cloud-area']['network']['value']
 
     if 'expanding-depth' in GMA_params['optimizer']['sbmp']:

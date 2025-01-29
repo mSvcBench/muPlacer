@@ -1,0 +1,15 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cart-consumer
+  labels:
+    app-t: redis-cart-consumer
+spec:
+  type: ClusterIP
+  selector:
+    app-t: redis-cart-consumer
+  ports:
+  - name: tcp-redis
+    port: 6379
+    targetPort: 6379
