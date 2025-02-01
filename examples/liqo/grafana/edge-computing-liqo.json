@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 30,
+  "id": 34,
   "links": [],
   "panels": [
     {
@@ -147,7 +147,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum by (destination_service_name) (rate(istio_request_duration_milliseconds_sum{namespace=~\"$istio_ingress_namespace|$app_namespace\",destination_service_name=~\"s[0-9]*\",reporter=\"source\",response_code=\"200\"}[$delta]))) / (sum by (destination_service_name) (rate(istio_requests_total{namespace=~\"$istio_ingress_namespace|$app_namespace\",destination_service_name=~\"s[0-9]*\",reporter=\"source\",response_code=\"200\"}[$delta])))",
+          "expr": "(sum by (destination_service_name) (rate(istio_request_duration_milliseconds_sum{destination_service_namespace=~\"$app_namespace\",destination_service_name=~\".*\",reporter=\"source\",response_code=\"200\"}[$delta]))) / (sum by (destination_service_name) (rate(istio_requests_total{destination_service_namespace=~\"$app_namespace\",destination_service_name=~\"s[0-9]*\",reporter=\"source\",response_code=\"200\"}[$delta])))",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -282,7 +282,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.90, sum by (destination_app,le) (rate(istio_request_duration_milliseconds_bucket{namespace=~\"$istio_ingress_namespace|$app_namespace\", reporter=\"source\"}[$delta])))",
+          "expr": "histogram_quantile(0.90, sum by (destination_app,le) (rate(istio_request_duration_milliseconds_bucket{destination_service_namespace=~\"$app_namespace\", reporter=\"source\"}[$delta])))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -416,7 +416,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-cloud-*\",reporter=\"destination\",response_code=\"200\"}[$delta]))",
+          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_service_namespace=~\"$app_namespace\",destination_workload=~\".*-cloud-*\",reporter=\"destination\",response_code=\"200\"}[$delta]))",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
@@ -539,7 +539,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-edge1.*\",reporter=\"destination\",response_code=\"200\"}[$delta]))",
+          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_service_namespace=~\"$app_namespace\",destination_workload=~\".*-edge1.*\",reporter=\"destination\",response_code=\"200\"}[$delta]))",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
@@ -637,7 +637,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(istio_response_bytes_sum{source_workload=~\"istio-ingress|s[0-9*]-edge1\",destination_workload=~\"s[0-9*]-cloud\",reporter=\"destination\",response_code=\"200\"}[$delta])*8/1e6)",
+          "expr": "sum(rate(istio_response_bytes_sum{destination_service_namespace=~\"$app_namespace\",source_workload=~\"$istio_ingress_workload|.*-edge1\",destination_workload=~\".*-cloud\",reporter=\"destination\",response_code=\"200\"}[$delta])*8/1e6)",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
@@ -735,7 +735,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(istio_response_bytes_sum{source_workload=~\"s[0-9*]-cloud\",destination_workload=~\"s[0-9*]-edge1\",reporter=\"destination\",response_code=\"200\"}[$delta])*8/1e6)",
+          "expr": "sum(rate(istio_response_bytes_sum{destination_service_namespace=~\"$app_namespace\",source_workload=~\".*-cloud\",destination_workload=~\".*-edge1\",reporter=\"destination\",response_code=\"200\"}[$delta])*8/1e6)",
           "instant": false,
           "legendFormat": "{{label_name}}",
           "range": true,
@@ -812,7 +812,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"$app_namespace\",pod=~\"s[0-9].*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}))",
+          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"$app_namespace\",pod=~\".*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -889,7 +889,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-edge1-.*\",container!=\"istio-proxy\",container!=\"\"}))",
+          "expr": "sum by (container) (sum by (container) (container_memory_usage_bytes{namespace=\"$app_namespace\",pod=~\".*-edge1-.*\",container!=\"istio-proxy\",container!=\"\"}))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -966,7 +966,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"$app_namespace\",pod=~\"s[0-9].*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"$app_namespace\",pod=~\".*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1043,7 +1043,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\"s[0-9].*-edge1-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\".*-edge1-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1120,7 +1120,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"$app_namespace\",deployment=~\"s[0-9].*-cloud.*\",container!=\"istio-proxy\",container!=\"\"})",
+          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"$app_namespace\",deployment=~\".*-cloud.*\",container!=\"istio-proxy\",container!=\"\"})",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1197,7 +1197,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"fluidosmesh\",deployment=~\"s[0-9].*-edge1.*\",container!=\"istio-proxy\",container!=\"\"})",
+          "expr": "sum by (deployment) (kube_deployment_status_replicas{namespace=\"fluidosmesh\",deployment=~\".*-edge1.*\",container!=\"istio-proxy\",container!=\"\"})",
           "instant": false,
           "legendFormat": "{{deployment}}",
           "range": true,
@@ -1206,406 +1206,6 @@
       ],
       "title": "Service replicas - edge1",
       "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 49
-      },
-      "id": 8,
-      "options": {
-        "displayMode": "gradient",
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "maxVizHeight": 300,
-        "minVizHeight": 16,
-        "minVizWidth": 8,
-        "namePlacement": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-cloud.*\",reporter=\"destination\",response_code=\"200\"}[$delta])) / scalar(sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s0.*\",reporter=\"destination\",response_code=\"200\"}[$delta])))",
-          "instant": false,
-          "legendFormat": "{{label_name}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "call frequency per user request - cloud",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 49
-      },
-      "id": 20,
-      "options": {
-        "displayMode": "gradient",
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
-        },
-        "maxVizHeight": 300,
-        "minVizHeight": 16,
-        "minVizWidth": 8,
-        "namePlacement": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s[0-9].*-edge1\",reporter=\"destination\",response_code=\"200\"}[$delta])) / scalar(sum by (destination_service_name) (rate(istio_response_bytes_count{destination_workload=~\"s0.*\",reporter=\"destination\",response_code=\"200\"}[$delta])))",
-          "instant": false,
-          "legendFormat": "{{destination_service_name}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "call frequency per user request - edge1",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "s0"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 57
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum by (app_name) (increase(mub_internal_processing_latency_milliseconds_sum{}[2m])) / sum by (app_name) (increase(mub_internal_processing_latency_milliseconds_count{}[2m]))",
-          "instant": false,
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "µbench internal delay",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "ms"
-        },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "s1"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 57
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum by (app_name) (increase(mub_external_processing_latency_milliseconds_sum{}[2m])) / sum by (app_name) (increase(mub_external_processing_latency_milliseconds_count{}[2m]))",
-          "instant": false,
-          "legendFormat": "__auto",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "µbench external delay",
-      "type": "timeseries"
     }
   ],
   "preload": false,
@@ -1648,6 +1248,18 @@
         "query": "fluidosmesh",
         "skipUrlSync": true,
         "type": "constant"
+      },
+      {
+        "current": {
+          "text": "istio-ingressgateway",
+          "value": "istio-ingressgateway"
+        },
+        "description": "istio ingress workload label exposed by prometheus",
+        "hide": 2,
+        "name": "istio_ingress_workload",
+        "query": "istio-ingressgateway",
+        "skipUrlSync": true,
+        "type": "constant"
       }
     ]
   },
@@ -1659,6 +1271,6 @@
   "timezone": "",
   "title": "edge-computing-liqo",
   "uid": "ce5cd08c-9e00-493f-9fb6-3baa37bf3d2a",
-  "version": 5,
+  "version": 12,
   "weekStart": ""
 }
