@@ -3,3 +3,4 @@ __pycache__
 .venv
 ._.DS_Store
 .DS_Store
+netinfo.yaml
