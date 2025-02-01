@@ -8,7 +8,7 @@ spec:
     sync-period: 30s # camping period
     stabilization-window: 2m # stabilization window
     query-period: 2m # Prometheus query period, no less than 1 minute since Istio refresh every 30s
-    prometheus-url: http://160.80.223.233:30000 # Prometheus URL
+    prometheus-url: http://192.168.100.142:30000 # Prometheus URL
   slo:
     offload-delay-threshold: 250ms # average delay threshold for avg-driven offloading.
     unoffload-delay-threshold: 150ms  # average delay threshold for avg-driven unoffloading
@@ -22,7 +22,7 @@ spec:
     cost:
       cpu:  0.0208  # cost of cpu unit in  the cloud area per hour
       memory:  0.0104 # cost of mem unit (GB) in  the cloud area per hour
-      network: 0.02 # cost of  network unit (GB) in the cloud area
+      network: 0.02 # cost of cloud-to-edge network traffic per GB
     istio:
       istio-ingress-source-app: istio-ingress # source app label of the istio-ingress in the edge area
       istio-ingress-namespace: istio-ingress  # namespace of the istio-ingress in the edge area
@@ -35,16 +35,16 @@ spec:
     cost:
       cpu: 0.028 # cost of cpu unit in  the edge area per hour
       memory: 0.014 # cost of mem unit (GB) in  the edge area  per hour
-      network: 0.02 # cost of  network unit (GB) in the edge area
+      network: 0.02 # cost of edge-to-cloud network traffic per GB
     istio:
       istio-ingress-source-app: istio-ingressgateway # source app label of the istio-ingress in the edge area
-      istio-ingress-namespace: istio-ingress-provider1  # namespace of the istio-ingress in the edge area
+      istio-ingress-namespace: istio-ingress-edge1  # namespace of the istio-ingress in the edge area
       istio-eastwest-source-app: none # source app label of the istio eastwestgateway in the edge area
       istio-eastwest-namespace: none  # namespace of the istio eastwestgateway in the edge area
     default-resource-scaling: 1 # default resource scaling factor from the cloud to the edge. CPU and MEM used by a microservice in the cloud will be scaled of this factor when deployed in the edge and there is no available measurement
   network:
     netinfo-file: netinfo.yaml #  local yaml file containing net data
-    net-prober-url: http://160.80.223.233:30123/get?server_ip=10.236.97.76&server_port=5201&bandwidth_mbps=200&duration=2 # URL of the net prober server used to update the netinfo-file
+    net-prober-url: http://192.168.100.142:30123/get?server_ip=10.236.97.76&server_port=5201&bandwidth_mbps=200&duration=2 # URL of the net prober server used to update the netinfo-file
     cloud-edge-bps: 1000Mbps  # default bitrate between cloud and edge
     edge-cloud-bps: 1000Mbps  # default bitrate between edge and cloud   
     edge-cloud-rtt-ms: 80ms # default RTT between edge and cloud
@@ -74,89 +74,89 @@ spec:
         id: 0 # service id internally used. Should be an integer value
         instances:  # list of kubernetes resources running or to run in the edge and cloud area. Those in the cloud should be run manually. Those in the edge are automatically deployed by GMA 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-adservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-adservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-adservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-adservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-adservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-adservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-adservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-adservice.yaml
       - name: cartservice
         id: 1
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-cartservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-cartservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-cartservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-cartservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-cartservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-cartservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-cartservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-cartservice.yaml
       - name: checkoutservice
         id: 2
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-checkoutservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-checkoutservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-checkoutservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-checkoutservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-checkoutservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-checkoutservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-checkoutservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-checkoutservice.yaml
       - name: currencyservice
         id: 3
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-currencyservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-currencyservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-currencyservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-currencyservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-currencyservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-currencyservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-currencyservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-currencyservice.yaml
       - name: emailservice
         id: 4
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-emailservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-emailservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-emailservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-emailservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-emailservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-emailservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-emailservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-emailservice.yaml
       - name: frontend
         id: 5
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-frontend.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-frontend.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-frontend.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-frontend.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-frontend.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-frontend.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-frontend.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-frontend.yaml
       - name: paymentservice
         id: 6
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-paymentservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-paymentservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-paymentservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-paymentservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-paymentservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-paymentservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-paymentservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-paymentservice.yaml
       - name: productcatalogservice
         id: 7
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-productcatalogservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-productcatalogservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-productcatalogservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-productcatalogservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-productcatalogservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-productcatalogservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-productcatalogservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-productcatalogservice.yaml
       - name: recommendationservice
         id: 8
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-recommendationservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-recommendationservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-recommendationservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-recommendationservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-recommendationservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-recommendationservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-recommendationservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-recommendationservice.yaml
       - name: shippingservice
         id: 9
         instances: 
           cloud-yamls: 
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/consumer/no-subzone-specified/Deployment-shippingservice.yaml
-            - examples/liqo/onlinebutique/hpa/consumer/hpa-Deployment-shippingservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified/Deployment-shippingservice.yaml
+            - examples/liqo/onlinebutique/hpa/cloud/hpa-Deployment-shippingservice.yaml
           edge-yamls:
-            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/provider1/no-subzone-specified/Deployment-shippingservice.yaml
-            - examples/liqo/onlinebutique/hpa/provider1/hpa-Deployment-shippingservice.yaml
+            - examples/liqo/onlinebutique/affinity-yamls/no-region-specified/edge1/no-subzone-specified/Deployment-shippingservice.yaml
+            - examples/liqo/onlinebutique/hpa/edge1/hpa-Deployment-shippingservice.yaml

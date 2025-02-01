@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: productcatalogservice
+  name: productcatalogservice-cloud
+spec:
+  selector:
+    matchLabels:
+      app: productcatalogservice
+      app-t: productcatalogservice-cloud
+  template:
+    metadata:
+      labels:
+        app: productcatalogservice
+        app-t: productcatalogservice-cloud
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values:
+                - cloud
+      containers:
+      - env:
+        - name: PORT
+          value: '3550'
+        - name: DISABLE_PROFILER
+          value: '1'
+        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/productcatalogservice:v0.10.2
+        livenessProbe:
+          grpc:
+            port: 3550
+        name: productcatalogservice
+        ports:
+        - containerPort: 3550
+        readinessProbe:
+          grpc:
+            port: 3550
+        resources:
+          limits:
+            cpu: 200m
+            memory: 128Mi
+          requests:
+            cpu: 200m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 5

@@ -2,7 +2,7 @@ apiVersion: gma/v0
 kind: GMAPlacerConfig
 metadata:
   name: test-config
-  namespace: fluidosmesh
+  
 spec:
   telemetry:
     sync-period: 30s # camping period
@@ -44,7 +44,7 @@ spec:
     default-resource-scaling: 1 # default resource scaling factor from the cloud to the edge. CPU and MEM used by a microservice in the cloud will be scaled of this factor when deployed in the edge and there is no available measurement
   network:
     netinfo-file: netinfo.yaml #  local yaml file containing net data
-    net-prober-url: http://192.168.100.142:30123/get?server_ip=10.236.149.25&server_port=5201&bandwidth_mbps=200&duration=2 # URL of the net prober server used to update the netinfo-file
+    net-prober-url: http://192.168.100.142:30123/get?server_ip=10.236.97.125&server_port=5201&bandwidth_mbps=200&duration=2 # URL of the net prober server used to update the netinfo-file
     cloud-edge-bps: 1000Mbps  # default bitrate between cloud and edge
     edge-cloud-bps: 1000Mbps  # default bitrate between edge and cloud   
     edge-cloud-rtt-ms: 80ms # default RTT between edge and cloud
@@ -68,7 +68,7 @@ spec:
     max-delay-increase : 1000ms # max requested delay increase per placement action. Use high values to disable any limitation
     delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading. (EXPERIMENTAL)
   app:
-    namespace: fluidosmesh # namespace of the application
+    namespace: fluidomesh # namespace of the application
     explicit-service-id : true  # if true, the service id (integer value) is explicitly defined in this yaml file and can help log understanding, otherwise the service id is computed automatically
     services:
       - name: s0  # service name

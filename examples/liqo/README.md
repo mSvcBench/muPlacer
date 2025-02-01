@@ -40,10 +40,10 @@ liqoctl install kubeadm --cluster-labels topology.kubernetes.io/zone=edge1 --clu
 
 ### Cluster Peering
 
-To peer the two clusters, run the following command on the cloud cluster, where `.kube/edge-config` is the kubeconfig file of the edge cluster:
+To peer the two clusters, run the following command on the cloud cluster, where `~/.kube/edge-config` is the kubeconfig file of the edge cluster:
 
 ```bash
-liqoctl peer --remote-kubeconfig .kube/edge-config --server-service-type NodePort
+liqoctl peer --remote-kubeconfig ~/.kube/edge-config --server-service-type NodePort
 ```
 
 Revise the quota of resources that can be used on the edge cluster, for example:
@@ -104,7 +104,7 @@ helm install istio-ingressgateway istio/gateway -n istio-ingress-edge1
 To access Istio-Ingress, retrieve the NodePort and (possibly) LoadBalancer IP of the `istio-ingressgateway` service. To do this, run the following command from the cloud master:
 
 ```bash
-kubectl get svc -n istio-ingress-edge1 --kubeconfig .kube/edge-config
+kubectl get svc -n istio-ingress-edge1 --kubeconfig ~/.kube/edge-config
 ```
 
 ### Install Prometheus and Telemetry tools on the Cloud Cluster
@@ -164,14 +164,14 @@ kubectl label namespace fluidosmesh istio-injection=enabled
 Deploy the entire µBench application with HPAs in the cloud cluster with:
 
 ```bash
-kubectl apply -f 'examples/liqo/mubench-app/affinity-yamls/no-region-specified/cloud/no-subzone-specified'
-kubectl apply -f 'examples/liqo/mubench-app/hpa/cloud'
+kubectl apply -n fluidosmesh -f 'examples/liqo/mubench-app/affinity-yamls/no-region-specified/cloud/no-subzone-specified'
+kubectl apply -n fluidosmesh -f 'examples/liqo/mubench-app/hpa/cloud'
 ```
 
 Allow Istio-Ingress access to microservice `s0` and locality load balancing for any microservice with:
 
 ```bash
-kubectl apply -f 'examples/liqo/mubench-app/dest-rule-yamls-least-request'
+kubectl apply -n fluidosmesh -f 'examples/liqo/mubench-app/dest-rule-yamls-least-request'
 ```
 
 #### GMA Deployment

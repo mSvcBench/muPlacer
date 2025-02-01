@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: adservice
+  name: adservice-edge1
+spec:
+  selector:
+    matchLabels:
+      app: adservice
+      app-t: adservice-edge1
+  template:
+    metadata:
+      labels:
+        app: adservice
+        app-t: adservice-edge1
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values:
+                - edge1
+      containers:
+      - env:
+        - name: PORT
+          value: '9555'
+        image: us-central1-docker.pkg.dev/google-samples/microservices-demo/adservice:v0.10.2
+        livenessProbe:
+          grpc:
+            port: 9555
+          initialDelaySeconds: 20
+          periodSeconds: 15
+        name: adservice
+        ports:
+        - containerPort: 9555
+        readinessProbe:
+          grpc:
+            port: 9555
+          initialDelaySeconds: 20
+          periodSeconds: 15
+        resources:
+          limits:
+            cpu: 300m
+            memory: 300Mi
+          requests:
+            cpu: 300m
+            memory: 180Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 5

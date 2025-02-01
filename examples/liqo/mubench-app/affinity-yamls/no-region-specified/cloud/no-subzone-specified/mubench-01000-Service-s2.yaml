@@ -4,7 +4,7 @@ metadata:
   labels:
     app: s2
   name: s2
-  namespace: fluidosmesh
+  
 spec:
   ports:
   - name: http-mubserviceport

@@ -2,7 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: s0-edge1
-  namespace: fluidosmesh
+  
 spec:
   maxReplicas: 10
   metrics:

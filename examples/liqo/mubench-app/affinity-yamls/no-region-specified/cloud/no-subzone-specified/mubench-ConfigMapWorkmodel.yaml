@@ -476,4 +476,4 @@ data:
 kind: ConfigMap
 metadata:
   name: workmodel
-  namespace: fluidosmesh
+  

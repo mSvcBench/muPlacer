@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: s2
-  namespace: fluidosmesh
+  
   labels:
     app: s2
 spec:

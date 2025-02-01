@@ -2,7 +2,7 @@ apiVersion: networking.istio.io/v1alpha3
 kind: DestinationRule
 metadata:
   name: s8
-  namespace: fluidosmesh
+  
 spec:
   host: s8
   trafficPolicy:

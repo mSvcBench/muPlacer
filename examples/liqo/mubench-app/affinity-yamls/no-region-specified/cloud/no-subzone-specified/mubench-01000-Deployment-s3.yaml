@@ -8,7 +8,7 @@ metadata:
     version: '1.0'
     zone: default
   name: s3-cloud
-  namespace: fluidosmesh
+  
 spec:
   replicas: 1
   selector:
