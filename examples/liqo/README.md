@@ -208,13 +208,23 @@ GMA will start monitoring the application and the network, and it will offload t
 
 #### Load Testing
 
-To test the µBench application, send a stream of requests to the Istio-Ingressgateway service in the edge cluster. We used the [JMeter](https://jmeter.apache.org) tool with the configuration file `examples/liqo/mubench-app/jmeter/GMATest.jmx`, which can be used by any user host with access to the IP address and NodePort of the Istio Ingress gateway of the edge cluster. The related command to run from the host is:
+To test the µBench application, send a stream of requests to the Istio-Ingressgateway service in the edge cluster. 
+##### JMeter
+We used the [JMeter](https://jmeter.apache.org) tool with the configuration file `examples/liqo/mubench-app/jmeter/GMATest.jmx`, which can be used by any user host with access to the IP address and NodePort of the Istio Ingress gateway of the edge cluster. The related command to run from the host is:
 
 ```bash
 jmeter -Jserver=<edge-node-ip> -Jport=<istio-ingress-node-port> -Jthroughput=10 -n -t examples/jmeter/GMATest.jmx
 ```
 
 The `throughput` parameter is the number of requests per second that JMeter will send to the edge cluster.
+
+##### Locust
+Alternatively, we used the [Locust](https://locust.io) tool with the configuration file `examples/liqo/mubench-app/locust/locustfile.py`, which can be used by any user host with access to the IP address and NodePort of the Istio Ingress gateway of the edge cluster. The related command to run from the host is:
+
+```bash
+locust -f examples/liqo/mubench-app/locust/locustfile.py --host=http://<edge-node-ip>:<istio-ingress-node-port> --headless -u <n_users> -r <rate_per_user>
+```
+The `n_users` parameter is the number of users that Locust will simulate, and the `rate_per_user` parameter is the rate of requests per second that each user will send to the edge cluster. 
 
 ### Online Boutique Application Deployment
 TODO
