@@ -35,9 +35,13 @@ def get_bandwidth_and_rtt():
         # Parse iperf3 results
         resultj = result.json
         sent_bits_per_second = resultj['end']['sum_sent']['bits_per_second']
+        print(f"Sent bandwidth: {sent_bits_per_second} bps")
         sent_lost_percent = resultj['end']['sum_sent']['lost_percent']
-        recv_lost_percent = resultj['end']['sum_received']['lost_percent'] 
+        print(f"Sent lost percent: {sent_lost_percent}")
+        recv_lost_percent = resultj['end']['sum_received']['lost_percent']
+        print(f"Received lost percent: {recv_lost_percent}") 
         measured_bandwidth_bps = sent_bits_per_second * (1 - sent_lost_percent / 100) * (1 - recv_lost_percent / 100)
+        print(f"Measured bandwidth: {measured_bandwidth_bps} bps")
         # Measure RTT using bash ping
         ping_result = subprocess.run(["ping", "-c", "1", server_ip], capture_output=True, text=True)
         if ping_result.returncode != 0:
