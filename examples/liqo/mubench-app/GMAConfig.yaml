@@ -57,7 +57,7 @@ spec:
       max-traces: 2048 # maximum number of syntethic traces to generate
       # input-trace-file-npy: None  # numpy file containing traces to load. Generation of synthetic traces if not defined
       # output-trace-file-npy: ./traces.npy  # numpy file containing used traces. No output file if not defined
-      overshooting-avoidance-multiplier: 0.3 # The optimization algorithm stops when the expected delay change is greater than the required delay change multiplied by this factor. Lower values may require more iterations to achieve the desired delay, but they help avoid overshooting in case of any imperfections in the offloading algorithm 
+      overshooting-avoidance-multiplier: 0.4 # The optimization algorithm stops when the expected delay change is greater than the required delay change multiplied by this factor. Lower values may require more iterations to achieve the desired delay, but they help avoid overshooting in case of any imperfections in the offloading algorithm 
       edge-cloud-rtt-multiplier: 2 # RTT multiplier to consider HTTP RTT in the network model rather than the physical RTT. Depends on the application. Configure with offline measurements
       # locked: #  list of service that should not be offloaded by the optimizer. Should be integer equal to the service id of the services list below
       #   - 0
@@ -66,9 +66,8 @@ spec:
       
     max-delay-reduction : 1000ms  # max requested delay reduction per placement action. Use high values to disable any limitation
     max-delay-increase : 1000ms # max requested delay increase per placement action. Use high values to disable any limitation
-    delay-quantile-multiplier: 0.8  # target average delay reduction ratio for quantile-driven offloading. The inverse is used for quantile-driven unoffloading. (EXPERIMENTAL)
   app:
-    namespace: fluidomesh # namespace of the application
+    namespace: fluidosmesh # namespace of the application
     explicit-service-id : true  # if true, the service id (integer value) is explicitly defined in this yaml file and can help log understanding, otherwise the service id is computed automatically
     services:
       - name: s0  # service name

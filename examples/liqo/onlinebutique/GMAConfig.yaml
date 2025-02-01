@@ -63,7 +63,6 @@ spec:
       #   - 0
       #   - 1
       #   - 2
-      
     max-delay-reduction : 1000ms  # max requested delay reduction per placement action. Use high values to disable any limitation
     max-delay-increase : 1000ms # max requested delay increase per placement action. Use high values to disable any limitation
   app:

@@ -1100,7 +1100,7 @@ class GMAStataMachine():
         return
     
     def run(self):
-        self.next = self.camping
+        self.next = self.offloading
         while True:
             self.next()
 
