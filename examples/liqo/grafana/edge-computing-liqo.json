@@ -147,7 +147,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum by (destination_service_name) (rate(istio_request_duration_milliseconds_sum{destination_service_namespace=~\"$app_namespace\",destination_service_name=~\".*\",reporter=\"source\",response_code=\"200\"}[$delta]))) / (sum by (destination_service_name) (rate(istio_requests_total{destination_service_namespace=~\"$app_namespace\",destination_service_name=~\"s[0-9]*\",reporter=\"source\",response_code=\"200\"}[$delta])))",
+          "expr": "(sum by (destination_service_name) (rate(istio_request_duration_milliseconds_sum{destination_service_namespace=~\"$app_namespace\",destination_service_name=~\".*\",reporter=\"source\",response_code=\"200\"}[$delta]))) / (sum by (destination_service_name) (rate(istio_requests_total{destination_service_namespace=~\"$app_namespace\",destination_service_name=~\".*\",reporter=\"source\",response_code=\"200\"}[$delta])))",
           "hide": false,
           "instant": false,
           "legendFormat": "__auto",
@@ -966,7 +966,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"$app_namespace\",pod=~\".*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"$app_namespace\",pod=~\".*-cloud-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))*100",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1043,7 +1043,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\".*-edge1-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))",
+          "expr": "sum by (container) (rate(container_cpu_usage_seconds_total{namespace=\"fluidosmesh\",pod=~\".*-edge1-.*\",container!=\"istio-proxy\",container!=\"\"}[2m]))*100",
           "instant": false,
           "legendFormat": "__auto",
           "range": true,
@@ -1271,6 +1271,6 @@
   "timezone": "",
   "title": "edge-computing-liqo",
   "uid": "ce5cd08c-9e00-493f-9fb6-3baa37bf3d2a",
-  "version": 12,
+  "version": 13,
   "weekStart": ""
 }

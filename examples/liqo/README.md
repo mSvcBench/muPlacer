@@ -166,12 +166,13 @@ Deploy the entire µBench application with HPAs in the cloud cluster with:
 ```bash
 kubectl apply -n fluidosmesh -f 'examples/liqo/mubench-app/affinity-yamls/no-region-specified/cloud/no-subzone-specified'
 kubectl apply -n fluidosmesh -f 'examples/liqo/mubench-app/hpa/cloud'
+kubectl apply -n fluidosmesh -f 'examples/liqo/mubench-app/services'
 ```
 
 Allow Istio-Ingress access to microservice `s0` and locality load balancing for any microservice with:
 
 ```bash
-kubectl apply -n fluidosmesh -f 'examples/liqo/mubench-app/dest-rule-yamls-least-request'
+kubectl apply -n fluidosmesh -f '/home/ubuntu/muPlacer/examples/liqo/mubench-app/istio-resources'
 ```
 
 #### GMA Deployment
@@ -227,9 +228,53 @@ locust -f examples/liqo/mubench-app/locust/locustfile.py --host=http://<edge-nod
 The `n_users` parameter is the number of users that Locust will simulate, and the `rate_per_user` parameter is the rate of requests per second that each user will send to the edge cluster. 
 
 ### Online Boutique Application Deployment
-TODO
+Onlinebutique is a Google microservices demo that we use to test the GMA with LIQO. The application is composed of 10 microservices and is deployed in the `fluidosmesh` namespace.
 
-### Monitoring
+The original application uses a single Redis database. We modified the application to use a Redis database per cluster to avoid the need for a shared database across clusters. Specifically, we use a 'master' Redis database in the cloud cluster and a 'replica' Redis database in the edge cluster. In so doing, we avoid the need to reach cloud cluster when the application is deployed at the edge
+
+To deploy the couple of Redis databases, run the following commands from the cloud master:
+
+```bash
+kubectl apply -n fluidosmesh -f 'examples/liqo/onlinebutique/redis'
+```
+
+Deploy the entire onlinebutique application with HPAs in the cloud cluster with:
+
+```bash
+kubectl apply -n fluidosmesh -f 'examples/liqo/onlinebutique/affinity-yamls/no-region-specified/cloud/no-subzone-specified'
+kubectl apply -n fluidosmesh -f 'examples/liqo/onlinebutique/hpa/cloud'
+kubectl apply -n fluidosmesh -f 'examples/liqo/onlinebutique/services'
+```
+
+Allow Istio-Ingress access to microservice `frontend` and locality load balancing for any microservice with:
+
+```bash
+kubectl apply -n fluidosmesh -f 'examples/liqo/onlinebutique/istio_resources'
+```
+
+#### GMA Run
+Download and revise the GMA configuration file as described in the previous section. Run GMA with:
+
+```bash
+python3 GMA.py --config examples/liqo/onlinebutique/GMAConfig.yaml --loglevel INFO
+```
+
+
+
+#### Load Testing
+
+To test the µBench application, send a stream of requests to the Istio-Ingressgateway service in the edge cluster. 
+
+##### Locust
+We used the [Locust](https://locust.io) tool with the configuration file `examples/liqo/onlinebutique/locust/locustfile.py`, which can be used by any user host with access to the IP address and NodePort of the Istio Ingress gateway of the edge cluster. The related command to run from the host is:
+
+```bash
+locust -f examples/liqo/mubench-app/locust/locustfile.py --host=http://<edge-node-ip>:<istio-ingress-node-port> --headless -u <n_users> -r <rate_per_user>
+```
+The `n_users` parameter is the number of users that Locust will simulate, and the `rate_per_user` parameter is the rate of requests per second that each user will send to the edge cluster.
+
+
+## Monitoring
 
 To monitor the application's behavior, use a Grafana dashboard that can be accessed at `http://<cloud-node-ip>:30001` with the credentials `admin:prom-operator`. The dashboard is available at `examples/liqo/grafana/edge-computing-liqo.json`. The dashboard has some variables that need to be set to the correct values. The variables are:
 - `istio_ingress_namespace`: `istio-ingress-edge1`

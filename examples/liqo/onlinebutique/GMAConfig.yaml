@@ -12,8 +12,8 @@ spec:
   slo:
     offload-delay-threshold: 250ms # average delay threshold for avg-driven offloading.
     unoffload-delay-threshold: 150ms  # average delay threshold for avg-driven unoffloading
-    offload-delay-quantile-threshold: 250ms # delay quantile threshold for quantile-driven offloading (EXPERIMENTAL). Use a high value to disable quantile-driven offloading
-    unoffload-delay-quantile-threshold: 150ms # delay quantile threshold threshold for quantile-driven unoffloading (EXPERIMENTAL). Use a high value to disable quantile-driven unoffloading
+    offload-delay-quantile-threshold: 1000ms # delay quantile threshold for quantile-driven offloading (EXPERIMENTAL). Use a high value to disable quantile-driven offloading
+    unoffload-delay-quantile-threshold: 1000ms # delay quantile threshold threshold for quantile-driven unoffloading (EXPERIMENTAL). Use a high value to disable quantile-driven unoffloading
     delay-quantile: 0.90 # delay quantile used for quantile-driven offloading, e.g., 0.9 means 90% of the requests
   cloud-area:
     cluster: "" # cluster name used for prometheus query cloud area (must be different from any other area)
@@ -48,7 +48,7 @@ spec:
     cloud-edge-bps: 1000Mbps  # default bitrate between cloud and edge
     edge-cloud-bps: 1000Mbps  # default bitrate between edge and cloud   
     edge-cloud-rtt-ms: 80ms # default RTT between edge and cloud
-    edge-cloud-rtt-multiplier: 1 # The RTT multiplier is applied to network RTT to obtain gRPC/HTTP-level round-trip time. Depends on the application. Configure with offline measurements
+    edge-cloud-rtt-multiplier: 2 # The RTT multiplier is applied to network RTT to obtain gRPC/HTTP-level round-trip time. Depends on the application. Configure with offline measurements
   optimizer:
     connector: "SBMP_GMA_Connector" # connector of the optimization algorithm
     sbmp: # parameters of the sbmp optimization algorithm
@@ -57,8 +57,8 @@ spec:
       max-traces: 2048 # maximum number of syntethic traces to generate
       # input-trace-file-npy: None  # numpy file containing traces to load. Generation of synthetic traces if not defined
       # output-trace-file-npy: ./traces.npy  # numpy file containing used traces. No output file if not defined
-      overshooting-avoidance-multiplier: 0.5 # The optimization algorithm stops when the expected delay change is greater than the required delay change multiplied by this factor. Lower values may require more iterations to achieve the desired delay, but they help avoid overshooting in case of any imperfections in the offloading algorithm 
-      edge-cloud-rtt-multiplier: 2 # RTT multiplier to consider HTTP RTT in the network model rather than the physical RTT. Depends on the application. Configure with offline measurements
+      overshooting-avoidance-multiplier: 0.3 # The optimization algorithm stops when the expected delay change is greater than the required delay change multiplied by this factor. Lower values may require more iterations to achieve the desired delay, but they help avoid overshooting in case of any imperfections in the offloading algorithm 
+      edge-cloud-rtt-multiplier: 1 # RTT multiplier to consider HTTP RTT in the network model rather than the physical RTT. Depends on the application. Configure with offline measurements
       # locked: #  list of service that should not be offloaded by the optimizer. Should be integer equal to the service id of the services list below
       #   - 0
       #   - 1

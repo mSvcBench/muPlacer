@@ -489,7 +489,7 @@ def update_net_metrics():
     if net_prober_url != '':
         logger.info(f"Net probing through {net_prober_url} ")
         try:
-            response = requests.get(net_prober_url)
+            response = requests.get(net_prober_url,timeout=10)
             netinfop = response.json()
             netinfo['spec']['edge-cloud-rtt'] = f'{int(netinfop['edge-cloud-rtt'])}ms'
             netinfo['spec']['cloud-edge-bps'] = f'{int(netinfop['cloud-edge-bps']/1e6)}Mbps'
