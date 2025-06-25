@@ -10,6 +10,7 @@ from SBMP_offload import sbmp_o
 from SBMP_unoffload import sbmp_u
 from MFU import mfu
 from IA import IA_heuristic
+from Kahn import Kahn_heuristic
 from igraph import *
 from utils import buildFi, computeN, computeDTot, computeCost, computeResourceShift
 from scipy.io import savemat
@@ -306,6 +307,44 @@ for M in range(11,M_max,10):
         }
         tic = time.time()
         result = IA_heuristic(params)[2]
+        toc = time.time()
+        print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+        print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+        cost_v[k,Mi,a] = result['Cost']
+        cost_v_edge[k,Mi,a] = result['Cost_edge']
+        cost_v_cloud[k,Mi,a] = result['Cost_cloud']
+        delay_v[k,Mi,a] = result['delay']
+        rhoce_v[k,Mi,a] = result['rhoce']
+        cost_v_traffic[k,Mi,a] = result['Cost_traffic']
+        delta_cost_v[k,Mi,a] = result['cost_increase']
+        p_time_v[k,Mi,a] = toc-tic
+        edge_ms_v[k,Mi,a] = np.sum(result['S_edge_b'])-1
+
+        # Kahn ##
+        a+=1
+        alg_type[a] = "Kahn"
+        params = {
+            'S_edge_b': S_edge_b.copy(),
+            'Ucpu': Ucpu.copy(),
+            'Umem': Umem.copy(),
+            'Qcpu': Qcpu.copy(),
+            'Qmem': Qmem.copy(),
+            'Fm': Fm.copy(),
+            'M': M,
+            'lambd': lambda_val,
+            'L': L,
+            'Di': Di,
+            'delay_decrease_target': delay_decrease_target,
+            'RTT': RTT,
+            'B': B,
+            'Cost_cpu_edge': Cost_cpu_edge,
+            'Cost_mem_edge': Cost_mem_edge,
+            'Cost_cpu_cloud': Cost_cpu_cloud,
+            'Cost_mem_cloud': Cost_mem_cloud,
+            'Cost_network': Cost_network
+        }
+        tic = time.time()
+        result = Kahn_heuristic(params)[2]
         toc = time.time()
         print(f'processing time {alg_type[a]} {(toc-tic)} sec')
         print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
