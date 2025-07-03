@@ -10,6 +10,8 @@ from SBMP_offload import sbmp_o
 from SBMP_unoffload import sbmp_u
 from MFU import mfu
 from IA import IA_heuristic
+from Kahn import Kahn_heuristic
+from TA import TA_heuristic  # Importing the modified TA heuristic
 from igraph import *
 from utils import buildFi, computeN, computeDTot, computeCost, computeResourceShift
 from scipy.io import savemat
@@ -336,7 +338,88 @@ for k in range(trials):
         lambda_v[k,Ti,a] = lambda_val
         target_delay_v[k,Ti,a] = target_delay
         n_microservices_v[k,Ti,a] = M
-    
+        
+        # Kahn ##
+        a+=1
+        alg_type[a] = "Khan"
+        params = {
+            'S_edge_b': S_edge_b.copy(),
+            'Ucpu': Ucpu.copy(),
+            'Umem': Umem.copy(),
+            'Qcpu': Qcpu.copy(),
+            'Qmem': Qmem.copy(),
+            'Fm': Fm.copy(),
+            'M': M,
+            'lambd': lambda_val,
+            'L': L,
+            'Di': Di,
+            'delay_decrease_target': delay_decrease_target,
+            'RTT': RTT,
+            'B': B,
+            'Cost_cpu_edge': Cost_cpu_edge,
+            'Cost_mem_edge': Cost_mem_edge,
+            'Cost_cpu_cloud': Cost_cpu_cloud,
+            'Cost_mem_cloud': Cost_mem_cloud,
+            'Cost_network': Cost_network,
+        }
+        tic = time.time()
+        result = Kahn_heuristic(params)[2]
+        toc = time.time()
+        print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+        print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+        cost_v[k,Ti,a] = result['Cost']
+        cost_v_edge[k,Ti,a] = result['Cost_edge']
+        cost_v_cloud[k,Ti,a] = result['Cost_cloud']
+        delay_v[k,Ti,a] = result['delay']
+        rhoce_v[k,Ti,a] = result['rhoce']
+        cost_v_traffic[k,Ti,a] = result['Cost_traffic']
+        delta_cost_v[k,Ti,a] = result['cost_increase']
+        p_time_v[k,Ti,a] = toc-tic
+        edge_ms_v[k,Ti,a] = np.sum(result['S_edge_b'])-1
+        lambda_v[k,Ti,a] = lambda_val
+        target_delay_v[k,Ti,a] = target_delay
+        n_microservices_v[k,Ti,a] = M
+        
+        # TA ##
+        a+=1
+        alg_type[a] = "TA"
+        params = {
+            'S_edge_b': S_edge_b.copy(),
+            'Ucpu': Ucpu.copy(),
+            'Umem': Umem.copy(),
+            'Qcpu': Qcpu.copy(),
+            'Qmem': Qmem.copy(),
+            'Fm': Fm.copy(),
+            'M': M,
+            'lambd': lambda_val,
+            'L': L,
+            'Di': Di,
+            'delay_decrease_target': delay_decrease_target,
+            'RTT': RTT,
+            'B': B,
+            'Cost_cpu_edge': Cost_cpu_edge,
+            'Cost_mem_edge': Cost_mem_edge,
+            'Cost_cpu_cloud': Cost_cpu_cloud,
+            'Cost_mem_cloud': Cost_mem_cloud,
+            'Cost_network': Cost_network,
+        }
+        tic = time.time()
+        result = TA_heuristic(params)[2]
+        toc = time.time()
+        print(f'processing time {alg_type[a]} {(toc-tic)} sec')
+        print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, delay decrease: {result['delay_decrease']}, cost increase: {result['cost_increase']}")
+        cost_v[k,Ti,a] = result['Cost']
+        cost_v_edge[k,Ti,a] = result['Cost_edge']
+        cost_v_cloud[k,Ti,a] = result['Cost_cloud']
+        delay_v[k,Ti,a] = result['delay']
+        rhoce_v[k,Ti,a] = result['rhoce']
+        cost_v_traffic[k,Ti,a] = result['Cost_traffic']
+        delta_cost_v[k,Ti,a] = result['cost_increase']
+        p_time_v[k,Ti,a] = toc-tic
+        edge_ms_v[k,Ti,a] = np.sum(result['S_edge_b'])-1
+        lambda_v[k,Ti,a] = lambda_val
+        target_delay_v[k,Ti,a] = target_delay
+        n_microservices_v[k,Ti,a] = M
     if show_plot:
         markers = ['o', 's', 'D', '^', 'v', 'p', '*', 'h', 'x', '+']
         for i in range(a+1):

@@ -7,14 +7,20 @@ from collections import deque
 from utils import buildFi, computeDTot, computeN, computeCost, computeResourceShift, numpy_array_to_list
 
 
+# Adapted policy from Kim, E., Lee, K., & Yoo, C. (2023). Network SLO-aware container scheduling in Kubernetes. The Journal of Supercomputing, 79(10), 11478-11494.
+# Original policy deploy a microservice on the node where there are microservices with which the microservice has the greatest traffic exchange
+# Our modified policy, for offloading, chose as candidate microservice to move to the edge the one that exchange more traffic with those microservice already at the edge; for unoffloading, remove all micro from the edge and re-add them one at a time as long as the delay increase is below a target value. 
+# 
+
 # Set up logger
-logger = logging.getLogger('Kahn_logger')
+logger = logging.getLogger('TA_logger')
 logger_stream_handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(logger_stream_handler)
 logger_stream_handler.setFormatter(logging.Formatter('%(asctime)s SBMP offload %(levelname)s %(message)s'))
 logger.propagate = False
 
-def Kahn_heuristic(params):
+def TA_heuristic(params):
+
     S_edge_old = params['S_edge_b']
     Ucpu_old = params['Ucpu']
     Umem_old = params['Umem']
@@ -52,32 +58,34 @@ def Kahn_heuristic(params):
     S_b_new = S_b_old.copy()
 
 
-    # Create Kahn's sorting
-    n = Fm.shape[0]
-    in_degree = np.count_nonzero(Fm, axis=0)
-    queue = deque([i for i in range(n) if in_degree[i] == 0])
-    kahn_topo_order = []
-    kahan_value = np.zeros(M)
-    k=0
-    while queue:
-        u = queue.popleft()
-        kahn_topo_order.append(u)
-        kahan_value[u] = k
-        k += 1
-        for v in range(n):
-            if Fm[u][v] > 0:
-                in_degree[v] -= 1
-                if in_degree[v] == 0:
-                    queue.append(v)
+    # DEFINE DICTIONARY FOR INTERACTION AWARE MATRIX ##
+    best = {
+        "ms_i": 0,
+        "ms_j": 0,
+        "interaction_freq": -1
+    }
 
     if delay_decrease_target > 0:
         ## OFFLOAD ##
         while delay_decrease_target > delay_decrease_new:
-            ## find the first microservice of topo_order not present in the edge ##
             ms_candidates = np.argwhere(S_b_new[M:]==0).flatten() # ms not at the edge are candidates for offloading
-            best_ms_idx = np.argmin(kahan_value[ms_candidates])  # find the microservice with the lowest Kahn's value
-            best_ms = ms_candidates[best_ms_idx]  # get the microservice id
-            S_b_new[best_ms+M] = 1
+            ms_edge = np.argwhere(S_b_new[M:]==1).flatten()
+            candidate_ms = None
+            max_traffic = 0
+            for msne in ms_candidates:
+                traffic_msne_mse_recv = np.multiply(N[msne]*(Fm[msne, ms_edge].flatten()),L[ms_edge])
+                traffic_msne_mse_recv = np.sum(traffic_msne_mse_recv)
+                traffic_msne_mse_snt = np.multiply(N[ms_edge],(Fm[ms_edge, msne].flatten()))
+                traffic_msne_mse_snt = traffic_msne_mse_snt*L[msne]
+                traffic_msne_mse_snt = np.sum(traffic_msne_mse_snt)
+                traffic_msne_mse = traffic_msne_mse_recv + traffic_msne_mse_snt
+               
+                if traffic_msne_mse > max_traffic:
+                    max_traffic = traffic_msne_mse
+                    candidate_ms = msne
+                
+            S_b_new[candidate_ms+M] = 1
+            
             Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
             N_new = computeN(Fi_new, M, 2)
             delay_new = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0] 
@@ -85,19 +93,6 @@ def Kahn_heuristic(params):
             if np.all(S_b_new[M:] == 1):
                 # all instances at the edge
                 break
-
-            # S_b_edge_kahn_sorted = S_b_new[M + np.array(kahn_topo_order)]  # S edge placement vector sorted by Kahn's topo order
-            # idxs = np.where(S_b_edge_kahn_sorted == 0)[0] # first element of S not at the edge
-            # first_idx = idxs[0] if idxs.size > 0 else None
-            # candidate_ms = kahn_topo_order[first_idx]           
-            # S_b_new[candidate_ms+M] = 1
-            # Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
-            # N_new = computeN(Fi_new, M, 2)
-            # delay_new = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0] 
-            # delay_decrease_new = delay_old - delay_new
-            # if np.all(S_b_new[M:] == 1):
-            #     # all instances at the edge
-            #     break
     
     ## UNOFFLOAD  ##
     else:
@@ -110,19 +105,30 @@ def Kahn_heuristic(params):
         delay_target = delay_old + delay_increase_target
         delay_new = delay_void
         while delay_new > delay_target:
+            # extract the microservices not at the edge
             ms_edge = np.argwhere(S_b_new[M:]==1).flatten()
             ms_candidates = np.setdiff1d(ms_origin_edge, ms_edge)
-            best_ms_idx = np.argmin(kahan_value[ms_candidates])  # find the microservice with the lowest Kahn's value
-            best_ms = ms_candidates[best_ms_idx]  # get the microservice id
-            S_b_new[best_ms+M] = 1
+            max_traffic = 0
+            for msne in ms_candidates:
+                traffic_msne_mse_recv = np.multiply(N[msne]*(Fm[msne, ms_edge].flatten()),L[ms_edge])
+                traffic_msne_mse_recv = np.sum(traffic_msne_mse_recv)
+                traffic_msne_mse_snt = np.multiply(N[ms_edge],(Fm[ms_edge, msne].flatten()))
+                traffic_msne_mse_snt = traffic_msne_mse_snt*L[msne]
+                traffic_msne_mse_snt = np.sum(traffic_msne_mse_snt)
+                traffic_msne_mse = traffic_msne_mse_recv + traffic_msne_mse_snt
+               
+                if traffic_msne_mse > max_traffic:
+                    max_traffic = traffic_msne_mse
+                    candidate_ms = msne
+                
+            S_b_new[candidate_ms+M] = 1
+            
             Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
             N_new = computeN(Fi_new, M, 2)
             delay_new = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0] 
-            delay_decrease_new = delay_old - delay_new
-            if np.all(S_b_new[M:] == 0):
-                # no instances at the edge
+            if np.all(S_b_new[M:] == 1):
+                # all instances at the edge
                 break
-
     # compute final values
     Ucpu_new = np.zeros(2*M)
     Umem_new = np.zeros(2*M)

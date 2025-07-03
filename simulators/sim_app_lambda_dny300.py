@@ -31,7 +31,7 @@ def edges_reversal(graph):
 
 logging.basicConfig(stream=sys.stdout, level='ERROR',format='%(asctime)s GMA %(levelname)s %(message)s')
 
-M = 121 # number of microservices
+M = 301 # number of microservices
 max_algotithms = 10
 
 trials = 50
@@ -50,7 +50,7 @@ lambda_step = 40   # user request rate step (req/s)
 lambda_range = list(range(lambda_min, lambda_max+lambda_step, lambda_step))  # user request rates (req/s)
 lambda_range = lambda_range + list(reversed(range(lambda_min, lambda_max+lambda_step, lambda_step)))  # user request rates (req/s)
 
-B =1e9    # bitrate cloud-edge
+B=1e9    # bitrate cloud-edge
 
 graph_algorithm = 'barabasi-pareto' # 'random' or 'barabasi' or
 barabasi=dict()
@@ -703,14 +703,6 @@ for k in range(trials):
         N = computeN(Fi, M, 2)
         Ucpu = result['Ucpu']
         Umem = result['Umem']
-    if show_plot:
-        markers = ['o', 's', 'D', '^', 'v', 'p', '*', 'h', 'x', '+']
-        for i in range(a+1):
-            line, = plt.plot(cost_v[k,:,0], cost_v[k,:,i], label=alg_type[i], linestyle='none', marker=markers[i])
-        plt.ylabel('cost')
-        plt.xlabel(f'cost of {alg_type[0]}')
-        plt.legend()
-        plt.show()
 
 a+=1
 for k in range(trials):
@@ -832,4 +824,4 @@ for k in range(trials):
 
 # Matlab save
 mdic = {"cost_v": cost_v, "cost_v_edge": cost_v_edge, "cost_v_cloud": cost_v_cloud, "delay_v": delay_v, "delta_cost_v": delta_cost_v, "p_time_v": p_time_v, "edge_ms_v": edge_ms_v, "rhoce_v": rhoce_v, "cost_v_traffic": cost_v_traffic, "lambda_v": lambda_v, "target_delay_v": target_delay_v, "n_microservices_v": n_microservices_v}
-savemat(f"res1_dyn_pareto{barabasi['pareto_shape']}.mat", mdic)
+savemat(f"res1_dyn_pareto{barabasi['pareto_shape']}_300.mat", mdic)
