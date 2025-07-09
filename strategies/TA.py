@@ -7,7 +7,7 @@ from collections import deque
 from utils import buildFi, computeDTot, computeN, computeCost, computeResourceShift, numpy_array_to_list
 
 
-# Adapted policy from Kim, E., Lee, K., & Yoo, C. (2023). Network SLO-aware container scheduling in Kubernetes. The Journal of Supercomputing, 79(10), 11478-11494.
+# Adapted policy from Marchese, Angelo, and Orazio Tomarchio. "Network-aware container placement in cloud-edge kubernetes clusters." 2022 22nd IEEE international symposium on cluster, cloud and internet computing (CCGrid). IEEE, 2022.
 # Original policy deploy a microservice on the node where there are microservices with which the microservice has the greatest traffic exchange
 # Our modified policy, for offloading, chose as candidate microservice to move to the edge the one that exchange more traffic with those microservice already at the edge; for unoffloading, remove all micro from the edge and re-add them one at a time as long as the delay increase is below a target value. 
 # 
@@ -96,39 +96,70 @@ def TA_heuristic(params):
     
     ## UNOFFLOAD  ##
     else:
-        ms_origin_edge = np.argwhere(S_b_new[M:2*M-1]==1).flatten()  # microservices at the edge 
         S_b_new = S_b_old.copy()
-        S_b_new[M:2*M-1] = 0  # remove all instances at the edge
-        Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
-        N_new = computeN(Fi_new, M, 2)
-        delay_void = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0]
-        delay_target = delay_old + delay_increase_target
-        delay_new = delay_void
-        while delay_new > delay_target:
-            # extract the microservices not at the edge
+        while True:
             ms_edge = np.argwhere(S_b_new[M:]==1).flatten()
-            ms_candidates = np.setdiff1d(ms_origin_edge, ms_edge)
-            max_traffic = 0
-            for msne in ms_candidates:
-                traffic_msne_mse_recv = np.multiply(N[msne]*(Fm[msne, ms_edge].flatten()),L[ms_edge])
-                traffic_msne_mse_recv = np.sum(traffic_msne_mse_recv)
-                traffic_msne_mse_snt = np.multiply(N[ms_edge],(Fm[ms_edge, msne].flatten()))
-                traffic_msne_mse_snt = traffic_msne_mse_snt*L[msne]
-                traffic_msne_mse_snt = np.sum(traffic_msne_mse_snt)
-                traffic_msne_mse = traffic_msne_mse_recv + traffic_msne_mse_snt
-               
-                if traffic_msne_mse > max_traffic:
-                    max_traffic = traffic_msne_mse
-                    candidate_ms = msne
-                
-            S_b_new[candidate_ms+M] = 1
-            
+            ms_candidates = np.argwhere(S_b_new[M:2*M-1]==1).flatten() 
+            min_traffic = np.inf
+            candidate_ms= None
+
+            for mse in ms_candidates:
+                traffic_mse_mse_recv = np.multiply(N[mse]*(Fm[mse, ms_edge].flatten()),L[ms_edge])
+                traffic_mse_mse_recv = np.sum(traffic_mse_mse_recv)
+                traffic_mse_mse_snt = np.multiply(N[ms_edge],(Fm[ms_edge, mse].flatten()))
+                traffic_mse_mse_snt = traffic_mse_mse_snt*L[mse]
+                traffic_mse_mse_snt = np.sum(traffic_mse_mse_snt)
+                traffic_mse_mse = traffic_mse_mse_recv + traffic_mse_mse_snt    
+                if traffic_mse_mse < min_traffic:
+                    min_traffic = traffic_mse_mse
+                    candidate_ms = mse
+            S_b_new[candidate_ms+M] = 0 # unoffload the candidate microservice from the edge
             Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
             N_new = computeN(Fi_new, M, 2)
             delay_new = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0] 
-            if np.all(S_b_new[M:] == 1):
-                # all instances at the edge
+            if delay_new - delay_old > delay_increase_target:
+                # if the delay increase is above the target, stop unoffloading
+                S_b_new[candidate_ms+M] = 1 # cancell the unoffload
                 break
+            if np.all(S_b_new[M:2*M-1] == 0):
+                # no edge microservice not possible to unoffload more
+                break
+           
+        
+        # ## UNOFFLOAD FROM CLOUD-ONLY ##
+        # ms_origin_edge = np.argwhere(S_b_new[M:2*M-1]==1).flatten()  # microservices at the edge 
+        # S_b_new = S_b_old.copy()
+        # S_b_new[M:2*M-1] = 0  # remove all instances at the edge
+        # Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
+        # N_new = computeN(Fi_new, M, 2)
+        # delay_void = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0]
+        # delay_target = delay_old + delay_increase_target
+        # delay_new = delay_void
+        # while delay_new > delay_target:
+        #     # extract the microservices not at the edge
+        #     ms_edge = np.argwhere(S_b_new[M:]==1).flatten()
+        #     ms_candidates = np.setdiff1d(ms_origin_edge, ms_edge)
+        #     max_traffic = 0
+        #     for msne in ms_candidates:
+        #         traffic_msne_mse_recv = np.multiply(N[msne]*(Fm[msne, ms_edge].flatten()),L[ms_edge])
+        #         traffic_msne_mse_recv = np.sum(traffic_msne_mse_recv)
+        #         traffic_msne_mse_snt = np.multiply(N[ms_edge],(Fm[ms_edge, msne].flatten()))
+        #         traffic_msne_mse_snt = traffic_msne_mse_snt*L[msne]
+        #         traffic_msne_mse_snt = np.sum(traffic_msne_mse_snt)
+        #         traffic_msne_mse = traffic_msne_mse_recv + traffic_msne_mse_snt
+               
+        #         if traffic_msne_mse > max_traffic:
+        #             max_traffic = traffic_msne_mse
+        #             candidate_ms = msne
+                
+        #     S_b_new[candidate_ms+M] = 1
+            
+        #     Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
+        #     N_new = computeN(Fi_new, M, 2)
+        #     delay_new = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0] 
+        #     if np.all(S_b_new[M:] == 1):
+        #         # all instances at the edge
+        #         break
     # compute final values
     Ucpu_new = np.zeros(2*M)
     Umem_new = np.zeros(2*M)
