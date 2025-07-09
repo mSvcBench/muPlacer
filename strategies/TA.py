@@ -57,14 +57,6 @@ def TA_heuristic(params):
     delay_decrease_new = 0
     S_b_new = S_b_old.copy()
 
-
-    # DEFINE DICTIONARY FOR INTERACTION AWARE MATRIX ##
-    best = {
-        "ms_i": 0,
-        "ms_j": 0,
-        "interaction_freq": -1
-    }
-
     if delay_decrease_target > 0:
         ## OFFLOAD ##
         while delay_decrease_target > delay_decrease_new:
@@ -96,7 +88,6 @@ def TA_heuristic(params):
     
     ## UNOFFLOAD  ##
     else:
-        S_b_new = S_b_old.copy()
         while True:
             ms_edge = np.argwhere(S_b_new[M:]==1).flatten()
             ms_candidates = np.argwhere(S_b_new[M:2*M-1]==1).flatten() 
@@ -125,41 +116,6 @@ def TA_heuristic(params):
                 # no edge microservice not possible to unoffload more
                 break
            
-        
-        # ## UNOFFLOAD FROM CLOUD-ONLY ##
-        # ms_origin_edge = np.argwhere(S_b_new[M:2*M-1]==1).flatten()  # microservices at the edge 
-        # S_b_new = S_b_old.copy()
-        # S_b_new[M:2*M-1] = 0  # remove all instances at the edge
-        # Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
-        # N_new = computeN(Fi_new, M, 2)
-        # delay_void = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0]
-        # delay_target = delay_old + delay_increase_target
-        # delay_new = delay_void
-        # while delay_new > delay_target:
-        #     # extract the microservices not at the edge
-        #     ms_edge = np.argwhere(S_b_new[M:]==1).flatten()
-        #     ms_candidates = np.setdiff1d(ms_origin_edge, ms_edge)
-        #     max_traffic = 0
-        #     for msne in ms_candidates:
-        #         traffic_msne_mse_recv = np.multiply(N[msne]*(Fm[msne, ms_edge].flatten()),L[ms_edge])
-        #         traffic_msne_mse_recv = np.sum(traffic_msne_mse_recv)
-        #         traffic_msne_mse_snt = np.multiply(N[ms_edge],(Fm[ms_edge, msne].flatten()))
-        #         traffic_msne_mse_snt = traffic_msne_mse_snt*L[msne]
-        #         traffic_msne_mse_snt = np.sum(traffic_msne_mse_snt)
-        #         traffic_msne_mse = traffic_msne_mse_recv + traffic_msne_mse_snt
-               
-        #         if traffic_msne_mse > max_traffic:
-        #             max_traffic = traffic_msne_mse
-        #             candidate_ms = msne
-                
-        #     S_b_new[candidate_ms+M] = 1
-            
-        #     Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
-        #     N_new = computeN(Fi_new, M, 2)
-        #     delay_new = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0] 
-        #     if np.all(S_b_new[M:] == 1):
-        #         # all instances at the edge
-        #         break
     # compute final values
     Ucpu_new = np.zeros(2*M)
     Umem_new = np.zeros(2*M)
@@ -182,7 +138,9 @@ def TA_heuristic(params):
     result_metrics['Cost_cloud'] = Cost_new_cloud
     result_metrics['Cost_traffic'] = Cost_traffic_new
     result_metrics['delay_decrease'] = delay_decrease_new
+    result_metrics['delay_increase'] = -delay_decrease_new
     result_metrics['cost_increase'] = cost_increase_new
+    result_metrics['cost_decrease'] = -cost_increase_new
     result_metrics['Ucpu'] = Ucpu_new
     result_metrics['Umem'] = Umem_new
     result_metrics['Fi'] = Fi_new

@@ -101,26 +101,22 @@ def Kahn_heuristic(params):
     
     ## UNOFFLOAD  ##
     else:
-        ms_origin_edge = np.argwhere(S_b_new[M:2*M-1]==1).flatten()  # microservices at the edge 
-        S_b_new = S_b_old.copy()
-        S_b_new[M:2*M-1] = 0  # remove all instances at the edge
-        Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
-        N_new = computeN(Fi_new, M, 2)
-        delay_void = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0]
-        delay_target = delay_old + delay_increase_target
-        delay_new = delay_void
-        while delay_new > delay_target:
+        
+        while True:
             ms_edge = np.argwhere(S_b_new[M:]==1).flatten()
-            ms_candidates = np.setdiff1d(ms_origin_edge, ms_edge)
-            best_ms_idx = np.argmin(kahan_value[ms_candidates])  # find the microservice with the lowest Kahn's value
+            ms_candidates = np.argwhere(S_b_new[M:2*M-1]==1).flatten() 
+            best_ms_idx = np.argmax(kahan_value[ms_candidates])  # find the microservice with the lowest Kahn's value
             best_ms = ms_candidates[best_ms_idx]  # get the microservice id
-            S_b_new[best_ms+M] = 1
+            S_b_new[best_ms+M] = 0
             Fi_new = np.matrix(buildFi(S_b_new, Fm, M))
             N_new = computeN(Fi_new, M, 2)
             delay_new = computeDTot(S_b_new, N_new, Fi_new, Di, L, RTT, B, lambd, M)[0] 
-            delay_decrease_new = delay_old - delay_new
-            if np.all(S_b_new[M:] == 0):
-                # no instances at the edge
+            if delay_new - delay_old > delay_increase_target:
+                # if the delay increase is above the target, stop unoffloading
+                S_b_new[best_ms+M] = 1 # cancell the unoffload
+                break
+            if np.all(S_b_new[M:2*M-1] == 0):
+                # no edge microservice not possible to unoffload more
                 break
 
     # compute final values
@@ -145,7 +141,9 @@ def Kahn_heuristic(params):
     result_metrics['Cost_cloud'] = Cost_new_cloud
     result_metrics['Cost_traffic'] = Cost_traffic_new
     result_metrics['delay_decrease'] = delay_decrease_new
+    result_metrics['delay_increase'] = -delay_decrease_new
     result_metrics['cost_increase'] = cost_increase_new
+    result_metrics['cost_decrease'] = -cost_increase_new
     result_metrics['Ucpu'] = Ucpu_new
     result_metrics['Umem'] = Umem_new
     result_metrics['Fi'] = Fi_new

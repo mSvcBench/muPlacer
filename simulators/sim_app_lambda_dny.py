@@ -483,116 +483,6 @@ for k in range(trials):
         N = computeN(Fi, M, 2)
         Ucpu = result['Ucpu']
         Umem = result['Umem']
-    
-a+=1
-for k in range(trials):
-    ## CO-PAMP ##
-    alg_type[a] = "CO-PAMP"
-    S_b = S_b_void.copy()
-    Ucpu = scenario['Ucpu_void'][k].copy()
-    Umem = scenario['Umem_void'][k].copy()
-    L = scenario['L'][k]
-    Di = scenario['Di'][k]
-    Fm = scenario['Fm'][k]
-    Fi = np.matrix(buildFi(S_b, Fm, M))
-    N = computeN(Fi, M, 2)
-
-    traces_b = None
-    
-    for lambda_i,lambda_val in enumerate(lambda_range):  
-
-        delay,_,_,rhoce = computeDTot(S_b, N, Fi, Di, np.tile(L, 2), RTT, B, lambda_val, M) # compute the delay of the void state without network delay, equals to full edge delay
-        if lambda_i>0:
-            Ucpu = Ucpu * lambda_val / lambda_range[lambda_i-1]
-            Umem = 2 * Ucpu
-        
-        # compute cost of cloud only deployment
-        Ucpu_void = np.zeros(2*M)
-        Umem_void = np.zeros(2*M)
-        Ucpu_void[:M] = Ucpu[:M]+Ucpu[M:]
-        Umem_void[:M] = Umem[:M]+Umem[M:]
-        B_void = L[0]*8*lambda_val
-        Cost_void = computeCost(Ucpu_void, Umem_void, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, B_void, Cost_network)[0]
-
-        if delay > offload_threshold:
-            delay_decrease_target = delay - target_delay
-            delay_increase_target = 0
-            mode = 'offload'
-        elif delay < unoffload_threshold and np.sum(S_b[M:2*M-1]):
-            delay_decrease_target = 0
-            delay_increase_target = target_delay - delay
-            mode = 'unoffload'
-        else:
-            mode = 'none'
-            
-        params = {
-            'S_edge_b': S_b[M:].copy(),
-            'Ucpu': Ucpu.copy(),
-            'Umem': Umem.copy(),
-            'Qcpu': Qcpu.copy(),
-            'Qmem': Qmem.copy(),
-            'Fm': Fm.copy(),
-            'M': M,
-            'lambd': lambda_val,
-            'L': L,
-            'Di': Di,
-            'delay_decrease_target': delay_decrease_target,
-            'delay_increase_target': delay_increase_target,
-            'RTT': RTT,
-            'B': B,
-            'Cost_cpu_edge': Cost_cpu_edge,
-            'Cost_mem_edge': Cost_mem_edge,
-            'Cost_cpu_cloud': Cost_cpu_cloud,
-            'Cost_mem_cloud': Cost_mem_cloud,
-            'Cost_network': Cost_network,
-            'sgs-builder': 'sgs_builder_COPAMP',
-            'expanding-depth': 2,
-            'max-sgs': 256,
-            'max-traces': 2048,
-            'input-binary-trace-file-npy': traces_b
-        }
-        tic = time.time()
-        if mode == 'offload':
-            result = sbmp_o(params)[2]
-            print(f"Result {alg_type[a]} for offload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, cost increase from void: {result['Cost']-Cost_void}, rhoce: {result['rhoce']}")
-        
-        elif mode == 'unoffload':
-            result = sbmp_u(params)[2]
-            print(f"Result {alg_type[a]} for unoffload \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, cost increase from void: {result['Cost']-Cost_void}, rhoce: {result['rhoce']}")
-        else:
-            Cost_sum, Cost_edge, Cost_cloud, Cost_traffic_ce = computeCost(Ucpu, Umem, Qcpu, Qmem, Cost_cpu_edge, Cost_mem_edge, Cost_cpu_cloud, Cost_mem_cloud, rhoce * B, Cost_network)
-            result['delay'] = delay
-            result['Ucpu'] = Ucpu
-            result['Umem'] = Umem
-            result['Cost'] = Cost_sum
-            result['Cost_edge'] = Cost_edge
-            result['Cost_cloud'] = Cost_cloud
-            result['Cost_traffic'] = Cost_traffic_ce
-            result['rhoce'] = rhoce
-
-            print(f"Result {alg_type[a]} for none \n {np.argwhere(result['S_edge_b']==1).squeeze()}, Cost: {result['Cost']}, delay: {result['delay']}, cost increase from void: {result['Cost']-Cost_void}, rhoce: {result['rhoce']}")
-        
-        toc = time.time()
-        print(f'processing time {alg_type[a]} {(toc-tic)} sec')
-                
-        cost_v[k,lambda_i,a] = result['Cost']
-        cost_v_edge[k,lambda_i,a] = result['Cost_edge']
-        cost_v_cloud[k,lambda_i,a] = result['Cost_cloud']
-        delay_v[k,lambda_i,a] = result['delay']
-        rhoce_v[k,lambda_i,a] = result['rhoce']
-        delta_cost_v[k,lambda_i,a] = result['Cost']-Cost_void
-        cost_v_traffic[k,lambda_i,a] = result['Cost_traffic']
-        p_time_v[k,lambda_i,a] = toc-tic
-        edge_ms_v[k,lambda_i,a] = np.sum(result['S_edge_b'])-1
-        lambda_v[k,lambda_i,a] = lambda_val
-        target_delay_v[k,lambda_i,a] = target_delay
-        n_microservices_v[k,lambda_i,a] = M
-
-        S_b[M:] = result['S_edge_b']
-        Fi = np.matrix(buildFi(S_b, Fm, M))
-        N = computeN(Fi, M, 2)
-        Ucpu = result['Ucpu']
-        Umem = result['Umem']
 
 a+=1
 for k in range(trials):
@@ -703,14 +593,6 @@ for k in range(trials):
         N = computeN(Fi, M, 2)
         Ucpu = result['Ucpu']
         Umem = result['Umem']
-    if show_plot:
-        markers = ['o', 's', 'D', '^', 'v', 'p', '*', 'h', 'x', '+']
-        for i in range(a+1):
-            line, = plt.plot(cost_v[k,:,0], cost_v[k,:,i], label=alg_type[i], linestyle='none', marker=markers[i])
-        plt.ylabel('cost')
-        plt.xlabel(f'cost of {alg_type[0]}')
-        plt.legend()
-        plt.show()
 
 a+=1
 for k in range(trials):

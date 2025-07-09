@@ -11,11 +11,15 @@ from utils import buildFi, computeDTot, computeN, computeCost, computeResourceSh
 from numpy import inf
 from SBMP_unoffload import sbmp_u
 from MFU import mfu
+from TA import TA_heuristic
+from Kahn import Kahn_heuristic
 
 
 def main():
     # small simulation to test the unoffload function
     strategy = sbmp_u
+    #strategy = TA_heuristic
+    #strategy = Kahn_heuristic
 
     RTT = 0.106    # RTT edge-cloud
     M = 100 # n. microservices
@@ -112,6 +116,7 @@ def main():
         'lambd': lambda_val,
         'L': L,
         'Di': Di,
+        'delay_decrease_target': -delay_increase_target,
         'delay_increase_target': delay_increase_target,
         'RTT': RTT,
         'B': B,
